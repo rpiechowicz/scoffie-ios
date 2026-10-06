@@ -1,8 +1,9 @@
 import Foundation
 
-// Filtry „tylko w tej kategorii” — arkusz otwierany przyciskiem obok
-// krzyżyka w liście kategorii (Śniadania, Obiady, …). Każda kategoria ma
-// swoje aspekty: śniadanie wybiera się po smaku i rodzaju dania, obiad po
+// Filtry „tylko w tej kategorii” — sekcja kategorii w arkuszu „Filtry” na
+// Przepisach (ekran kategorii albo jej zakładka w wynikach) i filtry wyboru
+// przepisu do planu (`RecipePlanFilterPage`). Każda kategoria ma swoje
+// aspekty: śniadanie wybiera się po smaku i rodzaju dania, obiad po
 // rodzaju dania i mięsie, przekąskę po smaku, rodzaju i porze.
 //
 // Rodzaj dania, kuchnia, okazje i pory roku przychodzą od katalogu 1000
@@ -35,14 +36,15 @@ enum RecipeFacetKind: String, Hashable, CaseIterable {
     var hidesEmptyOptions: Bool { self == .cuisine || self == .moment }
 }
 
-/// Półarkusz aspektu w filtrach kategorii (`sheet(item:)`).
-extension RecipeFacetKind: Identifiable {
-    var id: String { rawValue }
-}
-
 struct RecipeFacetOption: Identifiable, Hashable {
     let id: String
     let title: String
+    /// Krótka nazwa w jednej linii pod zdjęciem rodzaju dania w „Filtrach”
+    /// (6.10.2026, wariant R1: „Z ryżem lub kaszą” łamało się na dwie linie
+    /// i siatka po cztery stała nierówno). `nil` = pełna nazwa (śniadania —
+    /// pięć w rzędzie, każda w dwóch liniach, równo). Pełna nazwa zostaje
+    /// w podsumowaniach filtrów i dla VoiceOver.
+    var shortTitle: String? = nil
 }
 
 struct RecipeFacet: Identifiable {
@@ -55,7 +57,7 @@ struct RecipeFacet: Identifiable {
 
 // MARK: - Wybór w jednej kategorii
 
-/// Zaznaczone opcje w arkuszu filtrów kategorii. W obrębie aspektu opcje
+/// Zaznaczone opcje aspektów jednej kategorii. W obrębie aspektu opcje
 /// łączą się przez LUB („zupy albo makarony”), między aspektami — przez I
 /// („zupy z drobiem”). Tak działa każdy sklep z filtrami i tego oczekuje
 /// ręka: druga zaznaczona opcja w tym samym rzędzie POSZERZA wynik.
@@ -64,7 +66,8 @@ struct RecipeCategoryFilter: Equatable {
 
     var isActive: Bool { picks.values.contains { !$0.isEmpty } }
 
-    /// Liczba zaznaczonych opcji — plakietka na przycisku filtrów kategorii.
+    /// Liczba zaznaczonych opcji — plakietka na strzałce sekcji Przepisów
+    /// i na przycisku filtrów wyboru do planu.
     var activeCount: Int { picks.values.reduce(0) { $0 + $1.count } }
 
     func contains(_ option: String, in kind: RecipeFacetKind) -> Bool {
@@ -109,33 +112,33 @@ enum RecipeCategoryFacets {
         case .lunch:
             return [RecipeFacet(kind: .dish, title: "Rodzaj dania", options: [
                 .init(id: "soup", title: "Zupy"),
-                .init(id: "potatoes", title: "Z ziemniakami"),
-                .init(id: "grains", title: "Z ryżem lub kaszą"),
+                .init(id: "potatoes", title: "Z ziemniakami", shortTitle: "Ziemniaki"),
+                .init(id: "grains", title: "Z ryżem lub kaszą", shortTitle: "Ryż i kasze"),
                 .init(id: "pasta", title: "Makarony"),
-                .init(id: "dumplings", title: "Pierogi i kluski"),
-                .init(id: "stew", title: "Gulasze i curry"),
+                .init(id: "dumplings", title: "Pierogi i kluski", shortTitle: "Pierogi"),
+                .init(id: "stew", title: "Gulasze i curry", shortTitle: "Gulasze"),
                 .init(id: "bake", title: "Zapiekanki"),
-                .init(id: "sandwich", title: "Burgery i tortille")
+                .init(id: "sandwich", title: "Burgery i tortille", shortTitle: "Burgery")
             ]), proteinFacet, cuisineFacet, momentFacet]
         case .dinner:
             return [RecipeFacet(kind: .dish, title: "Rodzaj dania", options: [
                 .init(id: "salad", title: "Sałatki"),
-                .init(id: "sandwich", title: "Kanapki i wrapy"),
-                .init(id: "bake", title: "Zapiekanki i pizza"),
-                .init(id: "grains", title: "Makaron, ryż, kasze"),
-                .init(id: "potatoes", title: "Z ziemniakami"),
-                .init(id: "soup", title: "Zupy i kremy"),
-                .init(id: "pancakes", title: "Placki i naleśniki")
+                .init(id: "sandwich", title: "Kanapki i wrapy", shortTitle: "Kanapki"),
+                .init(id: "bake", title: "Zapiekanki i pizza", shortTitle: "Zapiekanki"),
+                .init(id: "grains", title: "Makaron, ryż, kasze", shortTitle: "Makaron i ryż"),
+                .init(id: "potatoes", title: "Z ziemniakami", shortTitle: "Ziemniaki"),
+                .init(id: "soup", title: "Zupy i kremy", shortTitle: "Zupy"),
+                .init(id: "pancakes", title: "Placki i naleśniki", shortTitle: "Placki")
             ]), proteinFacet, cuisineFacet, momentFacet]
         case .snacks:
             return [tasteFacet, RecipeFacet(kind: .dish, title: "Rodzaj", options: [
-                .init(id: "bake", title: "Ciasta i wypieki"),
+                .init(id: "bake", title: "Ciasta i wypieki", shortTitle: "Ciasta"),
                 .init(id: "spoon", title: "Desery"),
                 .init(id: "crunchy", title: "Chrupiące"),
-                .init(id: "bites", title: "Małe przekąski"),
-                .init(id: "dip", title: "Dipy i pasty"),
+                .init(id: "bites", title: "Małe przekąski", shortTitle: "Małe kąski"),
+                .init(id: "dip", title: "Dipy i pasty", shortTitle: "Dipy"),
                 .init(id: "salad", title: "Sałatki"),
-                .init(id: "drink", title: "Napoje i koktajle")
+                .init(id: "drink", title: "Napoje i koktajle", shortTitle: "Napoje")
             ]), RecipeFacet(kind: .slot, title: "Pora w planie", options: [
                 MealSlot.secondBreakfast, .afternoonSnack, .snack
             ].map { RecipeFacetOption(id: $0.rawValue, title: $0.title) }), cuisineFacet, momentFacet]

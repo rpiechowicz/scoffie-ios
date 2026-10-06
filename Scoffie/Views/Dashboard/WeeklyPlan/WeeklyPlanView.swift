@@ -32,8 +32,6 @@ struct WeeklyPlanView: View {
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.scTabBarChrome) private var tabBarChrome
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Dzień planowany w tej zakładce. Własny stan Planu — Kalendarz ma swój,
     /// wspólny zostaje tylko tydzień.
@@ -69,21 +67,8 @@ struct WeeklyPlanView: View {
     /// Szerokość obszaru zakładki — z niej liczy się szerokość pigułki.
     @State private var pageWidth: CGFloat = 0
 
-    /// Pigułka „Cel dnia" jest węższa od dolnego menu i to jest jedyna rzecz,
-    /// która mówi, co jest nawigacją, a co podglądem: dwa paski tej samej
-    /// szerokości jeden nad drugim czytały się jak dwa poziomy tego samego menu.
-    ///
-    /// Ile dokładnie — decydują podpisy w pigułce. Kolumna kalorii bierze
-    /// tyle, ile potrzebuje „kcal 2298/2300" (~90 pt), a trzy makra dzielą resztę
-    /// po równo i każde musi zmieścić „B 112/110" (~60 pt). Stąd 0,82, a nie
-    /// okrągłe dwie trzecie: przy nich makra miały po ~50 pt i podpis się
-    /// kurczył. Podłoga 310 pt trzyma to samo na wąskich telefonach
-    /// (375 pt: makra po ~62 pt); sufit zostawia pigułkę w marginesach strony.
-    private var goalBarWidth: CGFloat {
-        guard pageWidth > 0 else { return 0 }
-        let limit = pageWidth - SCPageMetrics.horizontal * 2
-        return min(max(pageWidth * 0.82, 310), limit)
-    }
+    /// Ta sama szerokość co na Pulpicie — jedna reguła (`PlanDayGoalBar.width`).
+    private var goalBarWidth: CGFloat { PlanDayGoalBar.width(in: pageWidth) }
 
     // Cel dnia mieszka w Ustawieniach → „Dieta i alergeny" i w profilu; tu
     // czytamy go tymi samymi kluczami, co Kalendarz, bo tylko `@AppStorage`
@@ -412,45 +397,29 @@ struct WeeklyPlanView: View {
             // Różnica jest w tym, co się dzieje z osią dnia pod spodem:
             // `overlay` zostawiał ostatni wiersz („Dodaj posiłek") POD szkłem,
             // gdzie było go widać, ale nie dało się w niego stuknąć.
-            // `safeAreaInset` doksięgowuje wysokość pigułki do wnętrza
+            // `safeAreaBar` doksięgowuje wysokość pigułki do wnętrza
             // `ScrollView`, więc treść nadal przelatuje pod szkłem przy
-            // przewijaniu, ale kończy się nad nim.
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                PlanDayGoalBar(
-                    nutrition: selectedDayNutrition,
-                    targets: dailyTargets(for: nutritionPersonId),
-                    action: {
-                        simpleSheet = .dayGoal
-                        // Cel domownika mógł się zmienić od ostatniego
-                        // odczytu — arkusz dociąga świeży w tle.
-                        Task { await refreshMemberPreferences() }
-                    }
-                )
-                .frame(width: goalBarWidth)
-                // Zwija się RAZEM z dolnym menu: ten sam moment, ten sam ruch
-                // (`SCFloatingTabBar.compaction`). Opada o tyle, o ile opada
-                // górna krawędź paska, więc odstęp między nimi zostaje, i lekko
-                // maleje od dołu — jak pasek, który zszedł z drogi treści.
-                // Przesunięcie i skala nie ruszają układu, więc treść nad
-                // pigułką nie skacze.
-                .scaleEffect(tabBarChrome.isCompact ? 0.92 : 1, anchor: .bottom)
-                .offset(y: tabBarChrome.isCompact ? SCFloatingTabBar.compactionDrop : 0)
-                .animation(SCFloatingTabBar.compaction(reduceMotion: reduceMotion), value: tabBarChrome.isCompact)
-                .padding(.bottom, 8)
-                // Pierwsza klatka nie zna jeszcze szerokości zakładki, a
-                // pigułka o zerowej szerokości mignęłaby jako kreska.
-                .opacity(goalBarWidth > 0 ? 1 : 0)
-                // Oś dnia chowa się pod pigułką i dolnym menu jak w Telegramie:
-                // rozmyty pas od 28 pt nad pigułką do krawędzi ekranu, także
-                // pod menu (to on gasi treść pod paskiem na tej zakładce —
-                // `NavigationMenu.ownBottomEdge`).
-                .frame(maxWidth: .infinity)
-                .background(alignment: .top) {
-                    SCScrollEdgeBlur(edge: .bottom, solidFraction: 0.6)
-                        .padding(.top, -28)
-                        .ignoresSafeArea(.container, edges: .bottom)
+            // przewijaniu, ale kończy się nad nim — a pod pigułką leży natywny
+            // efekt krawędzi przewijania. Nad systemowym paskiem zakładek
+            // stawia ją sam bezpieczny obszar.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                PlanDayGoalBar.dock(width: goalBarWidth) {
+                    PlanDayGoalBar(
+                        nutrition: selectedDayNutrition,
+                        targets: dailyTargets(for: nutritionPersonId),
+                        tab: .plan,
+                        action: {
+                            simpleSheet = .dayGoal
+                            // Cel domownika mógł się zmienić od ostatniego
+                            // odczytu — arkusz dociąga świeży w tle.
+                            Task { await refreshMemberPreferences() }
+                        }
+                    )
                 }
             }
+            // Miękki, jawnie — `.automatic` z Xcode Cloud wychodził jako
+            // `.hard` (kreska i kryjące tło, patrz `scSheetFooterEdge`).
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
             // Wymiary obszaru zakładki: wysokość idzie na sufit arkusza
             // „Cel dnia", szerokość na szerokość pigułki. Mierzone spod spodu,
             // żeby pomiar nie ruszał układu.
@@ -463,18 +432,13 @@ struct WeeklyPlanView: View {
                         }
                 }
             }
-            // Miejsce pod własnym paskiem zakładek — musi być WEWNĄTRZ
-            // `NavigationStack`, patrz `scReservesTabBarSpace`.
-            .scReservesTabBarSpace()
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Color.clear.frame(width: 1, height: 1)
-                }
-            }
-            // Pusta warstwa paska nawigacji zjadałaby stuknięcia w akcje
-            // nagłówka, które siedzą pod nią.
-            .background(NavBarHitTestPassthrough())
+            // Pasek nawigacji SCHOWANY — jak w Zakupach i na korzeniu Przepisów.
+            // Pusty, ale żywy pasek leżał na wierszu nagłówka i łapał
+            // stuknięcia; hak wyłączający mu dotyk (`NavBarHitTestPassthrough`)
+            // pod systemowym `TabView` przestał działać — koszyk i „…” były
+            // martwe (Rafał 6.10.2026). Plan nie wpycha żadnych ekranów, więc
+            // pasek nie ma tu nic do pokazania.
+            .toolbar(.hidden, for: .navigationBar)
             .task(id: datesViewModel.weekStartISO) {
                 await mealStore.loadWeekPlanFromBackend(
                     weekStart: datesViewModel.weekStartISO,
@@ -558,10 +522,30 @@ struct WeeklyPlanView: View {
             }
             // Skrót z karty asystenta: przełączenie zakładki to za mało,
             // bo lista zakupów jest arkuszem wewnątrz tego ekranu.
+            //
+            // Arkusz rusza chwilę PO przełączeniu: systemowy `TabView` buduje
+            // Plan przy pierwszym wyborze, a arkusz pokazany w tej samej
+            // aktualizacji co wstawienie zakładki do okna potrafi przepaść
+            // („not in the window hierarchy”).
             .onChange(of: sessionStore.opensShoppingList, initial: true) { _, wants in
                 guard wants else { return }
-                simpleSheet = .products
                 sessionStore.opensShoppingList = false
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    simpleSheet = .products
+                }
+            }
+            // „Zaplanuj” na pustej porze w „Dziś”: planowanie ma jedno miejsce,
+            // więc tamta zakładka tylko tu prowadzi — ten dzień w Planie i od
+            // razu wybór przepisu na tę porę, jak stuknięcie pustej pory na osi.
+            // Z tego samego powodu co lista zakupów — chwilę po przełączeniu.
+            .onChange(of: sessionStore.planSlotRequest, initial: true) { _, request in
+                guard let request else { return }
+                sessionStore.planSlotRequest = nil
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    openPlanRequest(request)
+                }
             }
             .sheet(item: $pickerTarget) { target in
                 PlanSlotPickerSheet(
@@ -788,6 +772,25 @@ struct WeeklyPlanView: View {
 
     // MARK: - Actions
 
+    /// Prośba z zakładki „Dziś” (`PlanSlotRequest`): tydzień i dzień z prośby,
+    /// a gdy dzień da się jeszcze planować — wybór przepisu na tę porę.
+    ///
+    /// Tydzień i dzień idą RAZEM do `datesViewModel` i do stanu ekranu: obie
+    /// obserwacje wyżej (`isActiveTab`, `weekStartISO`) czytają dzień
+    /// z modelu, więc w jakiejkolwiek kolejności SwiftUI je odpali, zostaje
+    /// dzień z prośby.
+    private func openPlanRequest(_ request: PlanSlotRequest) {
+        datesViewModel.show(day: request.date)
+        selectedDate = request.date
+        guard let slot = request.slot, datesViewModel.isEditable(request.date) else { return }
+        pickerTarget = PickerTarget(
+            date: request.date,
+            slot: slot,
+            editing: nil,
+            defaultParticipantIds: request.participantIds
+        )
+    }
+
     private func openDetail(date: Date, slot: MealSlot, meal: PlanMeal) {
         Task { @MainActor in
             let full = await recipeCatalogStore.loadRecipeDetail(recipeId: meal.recipe.id) ?? meal.recipe
@@ -931,41 +934,4 @@ struct WeeklyPlanView: View {
 
 #Preview {
     WeeklyPlanView()
-}
-
-// MARK: - Nav bar hit-test pass-through
-//
-// Ten sam prywatny pomocnik, co na każdym ekranie v2 (Kalendarz, Przepisy,
-// Produkty, Ustawienia): warstwa paska narzędzi zostaje żywa, więc systemowe
-// rozmycie przy przewijaniu dalej działa, ale przestaje łapać dotknięcia na
-// swojej ~44-punktowej wysokości — inaczej zjadałaby stuknięcia w akcje
-// nagłówka i strzałki tygodnia, które siedzą pod nią.
-private struct NavBarHitTestPassthrough: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        BarUnlocker()
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {}
-
-    private final class BarUnlocker: UIView {
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            // Defer one runloop tick so the navigation controller is wired up.
-            DispatchQueue.main.async { [weak self] in
-                self?.findNavigationBar()?.isUserInteractionEnabled = false
-            }
-        }
-
-        private func findNavigationBar() -> UINavigationBar? {
-            var responder: UIResponder? = self
-            while let r = responder {
-                if let vc = r as? UIViewController,
-                   let bar = vc.navigationController?.navigationBar {
-                    return bar
-                }
-                responder = r.next
-            }
-            return nil
-        }
-    }
 }

@@ -8,8 +8,9 @@ import SwiftUI
 /// Przepisach, i stoi na tych samych klockach (`RecipeListKit.swift`):
 /// nagłówek z kafelkiem pory i datą, szukanie, wiersze `EditorialRecipeRow`
 /// — tu z kółkiem wyboru — a w stopce „Dla kogo” nad przyciskiem. Zawężanie
-/// („Ulubione” i filtry kategorii tej pory) mieszka w arkuszu pod przyciskiem
-/// filtrów; pigułek pod szukaniem i „Wszystkich pór” nie ma od rundy 10
+/// („Ulubione” i filtry kategorii tej pory) mieszka na podstronie wpychanej
+/// przyciskiem filtrów w stos TEGO arkusza (`RecipePlanFilterPage`, 6.10.2026 —
+/// wcześniej drugi arkusz na arkuszu); pigułek pod szukaniem i „Wszystkich pór” nie ma od rundy 10
 /// (Rafał: „nie chcę jeść obiadu na śniadanie”, „od tego mamy filtry”). Wcześniej
 /// arkusz miał własny nagłówek, własne pole szukania, przełącznik „Pasujące /
 /// Wszystkie / Ulubione” i własne wiersze. Rafał: „żeby wszystko trzymało się
@@ -84,13 +85,14 @@ struct PlanSlotPickerSheet: View {
     @State private var searchText = ""
     @State private var debouncedSearch = ""
     @State private var searchDebounceTask: Task<Void, Never>?
-    /// Tylko ulubione — kafelek „Ulubione” w arkuszu filtrów (dawniej segment
+    /// Tylko ulubione — kafelek „Ulubione” na stronie filtrów (dawniej segment
     /// „Ulubione”, potem pigułka pod szukaniem).
     @State private var favouritesOnly = false
     /// Filtry kategorii tej pory (smak, rodzaj dania, mięso) — te same opcje,
-    /// co w liście kategorii na Przepisach, ale własne dla tego wyboru.
+    /// co sekcja kategorii w Filtrach Przepisów, ale własne dla tego wyboru.
     @State private var categoryFilter = RecipeCategoryFilter()
-    @State private var isFilterSheetPresented = false
+    /// Strona filtrów wpchnięta w stos arkusza.
+    @State private var isFilterPagePresented = false
     @State private var isSaving = false
     /// Pusty zbiór znaczy „Wspólne" — je całe gospodarstwo.
     @State private var selectedParticipants: Set<String> = []
@@ -115,7 +117,7 @@ struct PlanSlotPickerSheet: View {
         return favouritesOnly ? base.filter { $0.favourite } : base
     }
 
-    /// Filtry z arkusza (aspekty i „Ulubione”) — plakietka na przycisku.
+    /// Filtry ze strony filtrów (aspekty i „Ulubione”) — plakietka na przycisku.
     private var activeFilterCount: Int {
         categoryFilter.activeCount + (favouritesOnly ? 1 : 0)
     }
@@ -136,8 +138,7 @@ struct PlanSlotPickerSheet: View {
         personalization.hiddenCount(in: scopeCatalog)
     }
 
-    /// Pula po dopasowaniu, przed filtrami kategorii i szukaniem — na niej
-    /// liczy kafelki arkusz filtrów.
+    /// Pula po dopasowaniu, przed filtrami kategorii i szukaniem.
     ///
     /// Ta sama kolejność, co na Przepisach: najpierw preferencje (dieta
     /// i alergeny odsiewają, cel porządkuje), potem reszta.
@@ -247,21 +248,37 @@ struct PlanSlotPickerSheet: View {
         let available = pool
         let rows = visibleRecipes(in: available)
 
-        ZStack {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
+        // Stos arkusza: lista wyboru, a nad nią — pushem, nie drugim
+        // arkuszem — strona filtrów z systemowym „wstecz”.
+        NavigationStack {
+            ZStack {
+                SCPageBackground(scheme: scheme)
+                    .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Przypięta góra — ta sama, co w liście kategorii.
-                RecipeListSheetTop(searchPrompt: "Szukaj przepisu", searchText: $searchText) {
-                    header
+                VStack(spacing: 0) {
+                    // Przypięta góra: nagłówek z kafelkiem pory i szukanie.
+                    RecipeListSheetTop(searchPrompt: "Szukaj przepisu", searchText: $searchText) {
+                        header
+                    }
+
+                    // Stopka przyklejona do przewijania (`safeAreaBar`): lista
+                    // przejeżdża pod szklanymi przyciskami, jak w każdym arkuszu
+                    // (Rafał 4.10.2026). Dawniej stała pod listą w `VStack`.
+                    list(rows: rows, poolIsEmpty: available.isEmpty)
+                        .scSheetFooter { footer(visible: rows) }
                 }
-
-                // Stopka przyklejona do przewijania (`safeAreaBar`): lista
-                // przejeżdża pod szklanymi przyciskami, jak w każdym arkuszu
-                // (Rafał 4.10.2026). Dawniej stała pod listą w `VStack`.
-                list(rows: rows, poolIsEmpty: available.isEmpty)
-                    .scSheetFooter { footer(visible: rows) }
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $isFilterPagePresented) {
+                RecipePlanFilterPage(
+                    slot: slot,
+                    filter: $categoryFilter,
+                    favouritesOnly: $favouritesOnly,
+                    // Pula BEZ „tylko ulubionych” — kafelek „Ulubione” liczy,
+                    // ile z niej zostanie po zaznaczeniu.
+                    recipes: personalization.apply(to: recipeCatalogStore.recipes.filter { $0.fits(slot) }),
+                    onDone: { isFilterPagePresented = false }
+                )
             }
         }
         .task { await recipeCatalogStore.loadIfNeeded() }
@@ -279,19 +296,6 @@ struct PlanSlotPickerSheet: View {
             }
         }
         .onDisappear { searchDebounceTask?.cancel() }
-        .sheet(isPresented: $isFilterSheetPresented) {
-            RecipeCategoryFilterSheet(
-                category: category,
-                // Pula BEZ „tylko ulubionych” — kafelek „Ulubione” w arkuszu
-                // liczy, ile z niej zostanie po zaznaczeniu.
-                recipes: personalization.apply(to: recipeCatalogStore.recipes.filter { $0.fits(slot) }),
-                filter: $categoryFilter,
-                slot: slot,
-                favouritesOnly: $favouritesOnly
-            )
-            .presentationDetents([.large])
-            .dashboardLiquidSheet()
-        }
     }
 
     // MARK: - Nagłówek
@@ -306,7 +310,7 @@ struct PlanSlotPickerSheet: View {
             onClose: { dismiss() }
         ) {
             RecipeListFilterButton(count: activeFilterCount, accent: accent) {
-                isFilterSheetPresented = true
+                isFilterPagePresented = true
             }
         }
     }
@@ -336,14 +340,13 @@ struct PlanSlotPickerSheet: View {
 
                 // Karta nad listą — ta sama, co w liście kategorii. Bez niej
                 // krótka lista wygląda na brak przepisów, a nie na skutek
-                // ustawień z zupełnie innego ekranu. Nad pustym stanem jej
-                // nie ma — ten mówi o diecie sam.
-                if !rows.isEmpty,
-                   let diet = RecipeListContextCard.Row.personalization(
-                       personalization,
-                       hidden: hiddenByPersonalizationCount
-                   ) {
-                    RecipeListContextCard(rows: [diet])
+                // ustawień z zupełnie innego ekranu. Wiersza diety nad pustym
+                // stanem nie ma — ten mówi o diecie sam; „Bez dopasowania”
+                // stoi zawsze, gdy dopasowanie wyłączono (jak żeton na
+                // Przepisach).
+                let context = contextRows(listIsEmpty: rows.isEmpty)
+                if !context.isEmpty {
+                    RecipeListContextCard(rows: context)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 8)
                 }
@@ -390,6 +393,18 @@ struct PlanSlotPickerSheet: View {
         // i stopka z „Dla kogo” stoją, bo obie odpowiadają na pytanie
         // „co się stanie, gdy stuknę”, i muszą być widoczne w tej chwili.
         .frame(maxHeight: .infinity)
+    }
+
+    /// Wiersze karty nad listą: dieta, gdy coś ukrywa (nad pustym stanem
+    /// nie), albo „Bez dopasowania · Włącz”, gdy dopasowanie wyłączono.
+    private func contextRows(listIsEmpty: Bool) -> [RecipeListContextCard.Row] {
+        let off = RecipeListContextCard.Row.personalizationOff(personalization) {
+            withAnimation(.smooth(duration: 0.25)) { isPersonalizationEnabled = true }
+        }
+        let diet = listIsEmpty
+            ? nil
+            : RecipeListContextCard.Row.personalization(personalization, hidden: hiddenByPersonalizationCount)
+        return [off, diet].compactMap { $0 }
     }
 
     /// Pusty stan mówi, co opróżniło listę, a przycisk zdejmuje dokładnie to
@@ -521,7 +536,7 @@ struct PlanSlotPickerSheet: View {
             EditorialRecipeCover(recipe: recipe, size: 28, cornerRadius: 8)
 
             Text(recipe.name)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .tracking(-0.2)
                 .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
@@ -551,11 +566,11 @@ struct PlanSlotPickerSheet: View {
         } else {
             HStack(spacing: 8) {
                 Image(systemName: "person.fill")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .foregroundStyle(Color.scFaint(scheme))
 
                 Text("Dla Ciebie · domowników dodasz w Ustawieniach")
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.sc(size: 12.5, weight: .medium))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -622,6 +637,7 @@ struct PlanSlotPickerSheet: View {
         let day = date
         let mealSlot = slot
         let week = weekStartISO
+        let isNewMeal = editing == nil
         Task { @MainActor in
             let saved = await store.upsertWeekSlot(
                 recipe: recipe,
@@ -666,6 +682,11 @@ struct PlanSlotPickerSheet: View {
                 }
             }
             completion?()
+            // Pierwsze danie w planie = prośba o zgodę na przypomnienia
+            // o posiłkach (po pierwszym pytaniu nic nie robi).
+            if isNewMeal {
+                await NotificationPermission.requestAfterPlanning()
+            }
         }
         dismiss()
     }

@@ -147,7 +147,7 @@ struct OnboardingHeroPattern: View {
             )
             .overlay(
                 Image(systemName: tile.symbol)
-                    .font(.system(size: 30, weight: .semibold))
+                    .font(.sc(size: 30, weight: .semibold))
                     .foregroundStyle(tile.color)
             )
             .frame(width: tileSize, height: tileSize)
@@ -173,7 +173,7 @@ struct OnboardingHeroPattern: View {
             SCScoffieMark(size: 22)
 
             Text("Scoffie")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(Color.scLabel(colorScheme))
         }
         .padding(.vertical, 6)

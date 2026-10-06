@@ -424,7 +424,7 @@ struct PlanPersonSwitcher: View {
                 MemberAvatar(member: member, members: members, size: Self.avatarSize)
             } else {
                 Image(systemName: "person.fill")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.sc(size: 10, weight: .bold))
                     .foregroundStyle(Color.scMuted(scheme))
                     .frame(width: Self.avatarSize, height: Self.avatarSize)
             }
@@ -659,7 +659,7 @@ struct PlanGoalMealRow: View {
                         Image(systemName: entry.isEaten
                             ? "checkmark.circle.fill"
                             : "circle.dashed")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.sc(size: 11, weight: .bold))
                             .foregroundStyle(
                                 entry.isEaten
                                     ? Color.scChecked(scheme)
@@ -759,7 +759,7 @@ struct PlanGoalMealRow: View {
             }
 
             Image(systemName: entry.slot.icon)
-                .font(.system(size: 14, weight: .light))
+                .font(.sc(size: 14, weight: .light))
                 .foregroundStyle(
                     entry.isPlanned ? Color.white.opacity(0.85) : Color.scFaint(scheme)
                 )

@@ -94,7 +94,7 @@ struct CalendarMealCheck: View {
                     .strokeBorder(Color.scChecked(scheme).opacity(0.4), lineWidth: 1.5)
 
                 Image(systemName: "checkmark")
-                    .font(.system(size: size * 0.46, weight: .bold))
+                    .font(.sc(size: size * 0.46, weight: .bold))
                     .foregroundStyle(Color.scChecked(scheme).opacity(0.85))
             } else {
                 // Kryjące tło i cichy, szary ptaszek (Rafał 4.10.2026: „check
@@ -113,7 +113,7 @@ struct CalendarMealCheck: View {
                     )
 
                 Image(systemName: "checkmark")
-                    .font(.system(size: size * 0.42, weight: .bold))
+                    .font(.sc(size: size * 0.42, weight: .bold))
                     .foregroundStyle(Color.scFaint(scheme).opacity(0.7))
             }
         }

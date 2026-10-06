@@ -21,7 +21,8 @@ enum RecipesConstants {
         }
     }
 
-    /// Podpowiedź pola szukania w liście kategorii — „Szukaj w śniadaniach”.
+    /// Podpowiedź pola szukania w kategorii na Przepisach (pływający pasek
+    /// na ekranie kategorii) — „Szukaj w śniadaniach”.
     ///
     /// Składana dotąd z „Szukaj w ” i nazwy w mianowniku dawała „Szukaj
     /// w śniadania”, „Szukaj w obiady”. Miejscownik i sam przyimek („we

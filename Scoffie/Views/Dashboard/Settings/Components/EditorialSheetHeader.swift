@@ -95,14 +95,14 @@ struct EditorialSheetHeader<Accessory: View>: View {
                     VStack(alignment: .leading, spacing: hasLeading ? 2 : 4) {
                         if !eyebrow.isEmpty {
                             Text(eyebrow.uppercased())
-                                .font(.system(size: 10.5, weight: .bold))
+                                .font(.sc(size: 10.5, weight: .bold))
                                 .tracking(1.4)
                                 .foregroundStyle(accent)
                                 .lineLimit(1)
                         }
 
                         Text(title)
-                            .font(.system(size: compact ? 19 : 24, weight: compact ? .bold : .heavy))
+                            .font(.sc(size: compact ? 19 : 24, weight: compact ? .bold : .heavy))
                             .tracking(compact ? -0.3 : -0.4)
                             .foregroundStyle(Color.scLabel(scheme))
                             // Kompaktowy (półarkusz) — zawsze jedna linia.
@@ -124,7 +124,7 @@ struct EditorialSheetHeader<Accessory: View>: View {
 
             if let subtitle {
                 Text(subtitle)
-                    .font(.system(size: 13))
+                    .font(.sc(size: 13))
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .contentTransition(subtitleTransition)
@@ -177,7 +177,7 @@ struct SCHeaderIconWell: View {
             .frame(width: size, height: size)
             .overlay(
                 Image(systemName: icon)
-                    .font(.system(size: size * 0.41, weight: .semibold))
+                    .font(.sc(size: size * 0.41, weight: .semibold))
                     .foregroundStyle(accent)
             )
             .accessibilityHidden(true)
@@ -194,7 +194,7 @@ struct EditorialSheetSectionLabel: View {
 
     var body: some View {
         Text(title.uppercased())
-            .font(.system(size: 10.5, weight: .bold))
+            .font(.sc(size: 10.5, weight: .bold))
             .tracking(1.4)
             .foregroundStyle(Color.scFaint(scheme))
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -224,7 +224,7 @@ private struct AssistantGreeting: View {
                 .accessibilityHidden(true)
 
             SCTypedText(briefing.headline, playKey: playKey, rate: headlineRate, delay: Self.lead)
-                .font(.system(size: 28, weight: .semibold))
+                .font(.sc(size: 28, weight: .semibold))
                 .tracking(-0.5)
                 .lineSpacing(2)
                 .foregroundStyle(AssistantLook.ink(scheme))
@@ -234,7 +234,7 @@ private struct AssistantGreeting: View {
                 .accessibilityAddTraits(.isHeader)
 
             SCTypedText(briefing.supporting, playKey: playKey, rate: supportRate, delay: supportDelay)
-                .font(.system(size: 17))
+                .font(.sc(size: 17))
                 .tracking(-0.3)
                 .lineSpacing(3)
                 .foregroundStyle(AssistantLook.muted(scheme))
@@ -380,13 +380,13 @@ private struct GreetingPrimary: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.sc(size: 17, weight: .semibold))
                     .tracking(-0.3)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                     .contentTransition(.numericText())
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.sc(size: 15, weight: .bold))
             }
             .foregroundStyle(AssistantLook.terra(scheme))
             .padding(.leading, 22)
@@ -449,7 +449,7 @@ private struct GreetingPlates: View {
                         )
 
                     Text(plate.title)
-                        .font(.system(size: 11.5, weight: plate.isFocus ? .bold : .semibold))
+                        .font(.sc(size: 11.5, weight: plate.isFocus ? .bold : .semibold))
                         .tracking(-0.1)
                         .foregroundStyle(plate.isFocus ? AssistantLook.terra(scheme) : AssistantLook.faint(scheme))
                         .lineLimit(1)
@@ -473,7 +473,7 @@ private struct GreetingPlates: View {
                         ZStack {
                             AssistantLook.terraTint(scheme)
                             Image(systemName: "fork.knife")
-                                .font(.system(size: 15, weight: .medium))
+                                .font(.sc(size: 15, weight: .medium))
                                 .foregroundStyle(AssistantLook.terra(scheme).opacity(0.7))
                         }
                     }
@@ -493,7 +493,7 @@ private struct GreetingPlates: View {
                     .overlay {
                         if plate.isFocus {
                             Image(systemName: "plus")
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.sc(size: 15, weight: .bold))
                                 .foregroundStyle(AssistantLook.terra(scheme))
                         }
                     }
@@ -529,20 +529,20 @@ private struct GreetingMeal: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(meal.eyebrow)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .tracking(0.9)
                     .textCase(.uppercase)
                     .foregroundStyle(AssistantLook.terra(scheme))
                     .lineLimit(1)
                 Text(meal.title)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.sc(size: 16, weight: .semibold))
                     .tracking(-0.3)
                     .foregroundStyle(AssistantLook.ink(scheme))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 if let meta, revealed {
                     SCCountingText(meta)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.sc(size: 13, weight: .medium))
                         .foregroundStyle(AssistantLook.muted(scheme))
                 }
             }
@@ -577,16 +577,16 @@ private struct GreetingBalance: View {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     if revealed {
                         SCCountingText("\(current) \(unit)")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.sc(size: 17, weight: .semibold))
                             .foregroundStyle(AssistantLook.ink(scheme))
                     }
                     Text("średnio dziennie")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.sc(size: 14, weight: .medium))
                         .foregroundStyle(AssistantLook.faint(scheme))
                 }
                 Spacer(minLength: 8)
                 Text("cel \(target) \(unit)")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(AssistantLook.faint(scheme))
             }

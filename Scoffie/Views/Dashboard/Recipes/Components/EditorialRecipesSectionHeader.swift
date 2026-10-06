@@ -10,7 +10,9 @@ import SwiftUI
 //   Trailing chevron pill — 32pt circle, `color-mix(in oklch, accent,
 //   transparent 82%)` fill + border. Chevron 14pt accent.
 //
-// Tapping the chevron / row opens the category sheet (RecipeCategorySheet).
+// Cały nagłówek (tytuł i strzałka) to JEDEN przycisk, który wpycha kategorię
+// do stosu Przepisów (`RecipesView`, push zamiast arkusza — 6.10.2026).
+// Strzałka jest już tylko znakiem, nie osobnym przyciskiem.
 struct EditorialRecipesSectionHeader: View {
     let eyebrow: String
     let title: String
@@ -24,6 +26,25 @@ struct EditorialRecipesSectionHeader: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        if let action {
+            Button(action: action) {
+                row(showsChevron: true)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PlanPressStyle(scale: 0.985))
+            .accessibilityLabel(filterCount > 0
+                ? "\(title), filtry: \(filterCount)"
+                : title)
+            .accessibilityHint("Otwiera całą kategorię")
+            .accessibilityAddTraits(.isHeader)
+        } else {
+            row(showsChevron: false)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    private func row(showsChevron: Bool) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Capsule(style: .continuous)
                 .fill(accent)
@@ -32,35 +53,29 @@ struct EditorialRecipesSectionHeader: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(eyebrow.uppercased())
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .tracking(1.4)
                     .foregroundStyle(accent)
                     .lineLimit(1)
 
                 Text(title)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.sc(size: 22, weight: .bold))
                     .tracking(-0.3)
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let action {
-                Button(action: action) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .heavy))
-                        .foregroundStyle(accent)
-                        // Rozmiar krzyżyka arkusza (`SCSheetIconLabel.size`,
-                        // Rafał 4.10.2026: „takiej samej wielkości jak X”).
-                        .frame(width: SCSheetIconLabel.size, height: SCSheetIconLabel.size)
-                        // Szkło w tincie kategorii (Liquid Glass, 4.10.2026).
-                        .scChromeGlass(in: Circle(), tint: accent.opacity(scheme == .dark ? 0.3 : 0.22))
-                }
-                .buttonStyle(PlanPressStyle(scale: 0.9))
-                .scCountBadge(filterCount, color: accent)
-                .accessibilityLabel(filterCount > 0
-                    ? "Zobacz wszystkie – \(title), filtry: \(filterCount)"
-                    : "Zobacz wszystkie – \(title)")
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.sc(size: 12, weight: .heavy))
+                    .foregroundStyle(accent)
+                    // Rozmiar krzyżyka arkusza (`SCSheetIconLabel.size`,
+                    // Rafał 4.10.2026: „takiej samej wielkości jak X”).
+                    .frame(width: SCSheetIconLabel.size, height: SCSheetIconLabel.size)
+                    // Szkło w tincie kategorii (Liquid Glass, 4.10.2026).
+                    .scChromeGlass(in: Circle(), tint: accent.opacity(scheme == .dark ? 0.3 : 0.22))
+                    .scCountBadge(filterCount, color: accent)
             }
         }
     }

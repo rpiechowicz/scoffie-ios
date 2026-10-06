@@ -265,7 +265,7 @@ struct AssistantStatusChip: View {
 
     var body: some View {
         Text(status.title)
-            .font(.system(size: 11, weight: .bold))
+            .font(.sc(size: 11, weight: .bold))
             .tracking(0.3)
             .lineLimit(1)
             .foregroundStyle(status.tint(scheme))
@@ -286,7 +286,7 @@ struct AssistantWorkingChip: View {
             AssistantSpinningMark(size: 10)
             Text("W toku")
         }
-        .font(.system(size: 11, weight: .bold))
+        .font(.sc(size: 11, weight: .bold))
         .foregroundStyle(AssistantLook.indigo(scheme))
         .padding(.leading, 6)
         .padding(.trailing, 8)
@@ -382,7 +382,7 @@ struct AssistantCardHead<Right: View>: View {
 
             if let title, !title.isEmpty {
                 Text(title)
-                    .font(.system(size: 21, weight: .bold))
+                    .font(.sc(size: 21, weight: .bold))
                     .tracking(-0.5)
                     .lineSpacing(1)
                     .foregroundStyle(AssistantLook.ink(scheme))
@@ -393,7 +393,7 @@ struct AssistantCardHead<Right: View>: View {
 
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.system(size: 14))
+                    .font(.sc(size: 14))
                     .lineSpacing(2)
                     .foregroundStyle(AssistantLook.muted(scheme))
                     .opacity(tone == .muted ? 0.7 : 1)
@@ -415,14 +415,14 @@ struct AssistantCardHead<Right: View>: View {
                         .accessibilityHidden(true)
                 }
                 Text(eyebrow)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .tracking(0.9)
                     .textCase(.uppercase)
                     .foregroundStyle(eyeColor)
                     .lineLimit(1)
                 if let inlineDetail {
                     Text("· " + inlineDetail)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.sc(size: 12, weight: .semibold))
                         .foregroundStyle(AssistantLook.faint(scheme))
                         .lineLimit(1)
                 }
@@ -441,11 +441,11 @@ struct AssistantCardHead<Right: View>: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 if icon {
                     Image(systemName: "calendar")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.sc(size: 12, weight: .semibold))
                         .accessibilityHidden(true)
                 }
                 Text(String(detail.prefix(1)).uppercased() + String(detail.dropFirst()))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(AssistantLook.muted(scheme))
@@ -528,7 +528,7 @@ struct AssistantCardLabel: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11.5, weight: .semibold))
+            .font(.sc(size: 11.5, weight: .semibold))
             .tracking(0.5)
             .textCase(.uppercase)
             .foregroundStyle(color ?? AssistantLook.faint(scheme))
@@ -553,7 +553,7 @@ struct AssistantCardSummary: View {
                 }
                 Spacer(minLength: 0)
             }
-            .font(.system(size: 13))
+            .font(.sc(size: 13))
             .foregroundStyle(AssistantLook.muted(scheme))
             .padding(.horizontal, AssistantCardMetrics.inset)
             .padding(.vertical, 10)
@@ -574,11 +574,11 @@ struct AssistantCardSummaryRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(label)
-                .font(.system(size: 13))
+                .font(.sc(size: 13))
                 .foregroundStyle(AssistantLook.muted(scheme))
             Spacer(minLength: 8)
             Text(value)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(valueColor ?? AssistantLook.ink(scheme))
         }
@@ -602,7 +602,7 @@ struct AssistantThumbnail: View {
                 ZStack {
                     AssistantLook.wash(scheme)
                     Image(systemName: "fork.knife")
-                        .font(.system(size: size * 0.36))
+                        .font(.sc(size: size * 0.36))
                         .foregroundStyle(AssistantLook.faint(scheme))
                 }
             }
@@ -640,14 +640,14 @@ struct AssistantMealRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 if let slot, !slot.isEmpty {
                     Text(slot)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.sc(size: 11, weight: .semibold))
                         .tracking(0.4)
                         .textCase(.uppercase)
                         .foregroundStyle(AssistantLook.faint(scheme))
                         .lineLimit(1)
                 }
                 Text(title)
-                    .font(.system(size: 15, weight: titleWeight))
+                    .font(.sc(size: 15, weight: titleWeight))
                     .tracking(-0.25)
                     .foregroundStyle(AssistantLook.ink(scheme))
                     // Dwie linie: „Kurczak w sosie curry z ryżem…” ucięte
@@ -664,7 +664,7 @@ struct AssistantMealRow: View {
                     CountingNumber(target: kcal, loadAnimation: kcalAnimation)
                     Text("kcal")
                 }
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(AssistantLook.muted(scheme))
                 .fixedSize()
             }
@@ -1038,13 +1038,13 @@ struct AssistantCardActions: View {
             Button(action: primary.action) {
                 HStack(spacing: 12) {
                     Text(primary.title)
-                        .font(.system(size: 15.5, weight: .semibold))
+                        .font(.sc(size: 15.5, weight: .semibold))
                         .tracking(-0.3)
                         .foregroundStyle(AssistantLook.ink(scheme))
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.sc(size: 13, weight: .bold))
                         .foregroundStyle(AssistantLook.ink(scheme).opacity(0.35))
                 }
                 .padding(.horizontal, AssistantCardMetrics.inset)
@@ -1083,7 +1083,7 @@ private struct AssistantButtonLabel: View {
         HStack(spacing: 6) {
             if !trailsIcon { glyph }
             Text(title)
-                .font(.system(size: size.fontSize, weight: .semibold))
+                .font(.sc(size: size.fontSize, weight: .semibold))
                 .tracking(-0.2)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -1104,7 +1104,7 @@ private struct AssistantButtonLabel: View {
         if let icon {
             ZStack {
                 Image(systemName: icon)
-                    .font(.system(size: size.iconSize, weight: .bold))
+                    .font(.sc(size: size.iconSize, weight: .bold))
                     .opacity(isBusy ? 0 : 1)
                 if isBusy { spinner }
             }
@@ -1174,7 +1174,7 @@ struct AssistantIconActionButton: View {
                         .tint(AssistantLook.muted(scheme))
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: size.iconSize + 3, weight: .bold))
+                        .font(.sc(size: size.iconSize + 3, weight: .bold))
                         .foregroundStyle(AssistantLook.muted(scheme))
                 }
             }
@@ -1238,10 +1238,10 @@ struct AssistantStateNote: View {
         if let note = status.note(until: until) {
             HStack(spacing: 9) {
                 Image(systemName: "clock")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.sc(size: 14, weight: .medium))
                     .foregroundStyle(AssistantLook.faint(scheme))
                 Text(note)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.sc(size: 14, weight: .medium))
                     .foregroundStyle(AssistantLook.ink(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
@@ -1292,7 +1292,7 @@ struct AssistantProposalFooter: View {
         switch status {
         case .pending where state.canApply:
             // Zapis w szałwii — kolorze „zapisane”, tym samym co zgoda
-            // na stronie „Wszystko pasuje?” (`ProposalAcceptButton`).
+            // w stopce przeglądu propozycji (`ProposalAcceptButton`).
             AssistantCardActions(
                 primary: AssistantCardAction(title: applyLabel, icon: applyIcon) { onApply(false) },
                 secondary: AssistantCardAction(title: reviseLabel, icon: reviseIcon, action: onRevise),
@@ -1374,12 +1374,12 @@ struct AssistantChip: View {
             HStack(spacing: 6) {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.sc(size: 13, weight: .semibold))
                 }
                 Text(title)
                     .lineLimit(1)
             }
-            .font(.system(size: 14.5, weight: .semibold))
+            .font(.sc(size: 14.5, weight: .semibold))
             .tracking(-0.2)
             .foregroundStyle(highlighted ? AssistantLook.terra(scheme) : AssistantLook.ink(scheme))
             .padding(.horizontal, 15)

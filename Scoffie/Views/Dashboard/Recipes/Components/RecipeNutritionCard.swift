@@ -31,7 +31,7 @@ struct NutritionCard: View {
 
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(value)
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(.sc(size: 15, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
                         .monospacedDigit()
                         .lineLimit(1)

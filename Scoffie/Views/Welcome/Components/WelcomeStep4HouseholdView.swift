@@ -93,12 +93,12 @@ struct WelcomeStep4HouseholdView: View {
                         .autocorrectionDisabled()
                         .focused($isHouseholdFieldFocused)
                         .submitLabel(.done)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.sc(size: 18, weight: .bold))
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(colorScheme))
 
                     Image(systemName: "pencil")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.sc(size: 12, weight: .bold))
                         .foregroundStyle(isHouseholdFieldFocused ? SCPalette.terracotta : Color.scFaint(colorScheme))
                 }
 
@@ -128,7 +128,7 @@ struct WelcomeStep4HouseholdView: View {
 
                 HStack(spacing: 6) {
                     Text(firstName.isEmpty ? "Ty" : firstName)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .tracking(-0.2)
                         .foregroundStyle(Color.scLabel(colorScheme))
                         .lineLimit(1)
@@ -147,7 +147,7 @@ struct WelcomeStep4HouseholdView: View {
 
             HStack(spacing: 12) {
                 Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.sc(size: 14, weight: .semibold))
                     .foregroundStyle(Color.scMuted(colorScheme))
                     .frame(width: 40, height: 40)
                     .background(Circle().fill(Color.scChipBg(colorScheme)))
@@ -160,10 +160,10 @@ struct WelcomeStep4HouseholdView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Domownicy dołączą z linku")
-                        .font(.system(size: 14.5, weight: .semibold))
+                        .font(.sc(size: 14.5, weight: .semibold))
                         .foregroundStyle(Color.scLabel(colorScheme))
                     Text("Wyślesz go z Ustawień po utworzeniu")
-                        .font(.system(size: 12))
+                        .font(.sc(size: 12))
                         .foregroundStyle(Color.scMuted(colorScheme))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -178,7 +178,7 @@ struct WelcomeStep4HouseholdView: View {
     /// Plakietka przy imieniu — ta sama, co w Ustawieniach → Gospodarstwo.
     private func badge(_ text: String, color: Color) -> some View {
         Text(text)
-            .font(.system(size: 9.5, weight: .heavy))
+            .font(.sc(size: 9.5, weight: .heavy))
             .tracking(0.8)
             .foregroundStyle(color)
             .padding(.horizontal, 6)
@@ -194,10 +194,10 @@ struct WelcomeStep4HouseholdView: View {
             SCHeaderIconWell(icon: "link", accent: SCPalette.sage, size: 40)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Otwórz link od domownika")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.sc(size: 15, weight: .semibold))
                     .foregroundStyle(Color.scLabel(colorScheme))
                 Text("Scoffie dołączy Cię do jego domu.")
-                    .font(.system(size: 12.5))
+                    .font(.sc(size: 12.5))
                     .foregroundStyle(Color.scMuted(colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -217,16 +217,16 @@ struct WelcomeStep4HouseholdView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(invitation.householdName)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .foregroundStyle(Color.scLabel(colorScheme))
                     Text(invitation.subtitle)
-                        .font(.system(size: 12.5))
+                        .font(.sc(size: 12.5))
                         .foregroundStyle(Color.scMuted(colorScheme))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text("Dołącz")
-                    .font(.system(size: 13.5, weight: .bold))
+                    .font(.sc(size: 13.5, weight: .bold))
                     .foregroundStyle(SCPalette.terracotta)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)

@@ -194,7 +194,11 @@ struct MacroMeter: View {
                 // 0.85, nie 0.8: przy 0.8 cel schodził poniżej 9 pt na węższych
                 // ekranach, a po podniesieniu baz i tak rzadko dochodzi do skalowania.
                 .minimumScaleFactor(0.85)
-                .contentTransition(.numericText())
+                // Z wartością: rosnąca liczba roluje w górę, malejąca w dół.
+                .contentTransition(.numericText(value: Double(value)))
+                // Cyfry tym samym ruchem co tor pod nimi — liczba i pasek
+                // lądują razem.
+                .animation(animation, value: value)
 
             if let progress {
                 MacroProgressTrack(
@@ -218,17 +222,17 @@ struct MacroMeter: View {
     /// są tu celowe: tylko one dają się złożyć w jeden napis.
     private var label: Text {
         let letterText = Text(letter)
-            .font(.system(size: letterSize, weight: .bold))
+            .font(.sc(size: letterSize, weight: .bold))
             .foregroundStyle(color)
         let valueText = Text(verbatim: String(value))
-            .font(.system(size: valueSize, weight: .bold).monospacedDigit())
+            .font(.sc(size: valueSize, weight: .bold).monospacedDigit())
             .foregroundStyle(isOverTarget ? color : Color.scLabel(scheme))
 
         // Interpolacja, nie `+`: iOS 26 wycofał sklejanie `Text` plusem.
         guard let target else { return Text("\(letterText) \(valueText)") }
 
         let targetText = Text(verbatim: "/\(target)")
-            .font(.system(size: targetSize, weight: .semibold).monospacedDigit())
+            .font(.sc(size: targetSize, weight: .semibold).monospacedDigit())
             .foregroundStyle(Color.scMuted(scheme))
         return Text("\(letterText) \(valueText)\(targetText)")
     }

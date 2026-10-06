@@ -38,9 +38,9 @@ struct TourDoneView: View {
 
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "lock.fill")
-                        .font(.system(size: 10.5, weight: .semibold))
+                        .font(.sc(size: 10.5, weight: .semibold))
                     Text("Zmienisz to w każdej chwili w Ustawieniach.")
-                        .font(.system(size: 12.5))
+                        .font(.sc(size: 12.5))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .foregroundStyle(Color.scFaint(scheme))

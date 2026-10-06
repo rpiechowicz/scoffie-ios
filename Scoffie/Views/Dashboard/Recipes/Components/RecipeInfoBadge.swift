@@ -55,11 +55,11 @@ struct RecipeMetricBadge: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.sc(size: 11, weight: .semibold))
                 .frame(width: 11)
 
             Text(text)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.sc(size: 11, weight: .semibold))
                 .monospacedDigit()
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -106,14 +106,14 @@ struct RecipeCategoryBadge: View {
     var body: some View {
         HStack(spacing: horizontalSpacing) {
             Image(systemName: RecipesConstants.icon(for: category))
-                .font(.system(size: iconFontSize, weight: .semibold))
+                .font(.sc(size: iconFontSize, weight: .semibold))
                 .foregroundStyle(iconColor)
 
             Text(RecipesConstants.shortDisplayName(for: category))
                 .lineLimit(1)
                 .foregroundStyle(labelColor)
         }
-        .font(.system(size: labelFontSize, weight: .semibold))
+        .font(.sc(size: labelFontSize, weight: .semibold))
         .padding(.horizontal, horizontalPadding)
         .padding(.vertical, verticalPadding)
         .background(backgroundFill, in: Capsule())
@@ -206,7 +206,7 @@ struct RecipeStatusCircle: View {
 
     var body: some View {
         Image(systemName: systemName)
-            .font(.system(size: 13, weight: .bold))
+            .font(.sc(size: 13, weight: .bold))
             .foregroundStyle(tint)
             .frame(width: 30, height: 30)
             .background(
@@ -229,13 +229,13 @@ struct RecipeFavoriteBadge: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: isFavorite ? "heart.fill" : "heart")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.sc(size: 11, weight: .semibold))
 
             Text(isFavorite ? "Ulubione" : "Do ulubionych")
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }
-        .font(.system(size: 12, weight: .semibold))
+        .font(.sc(size: 12, weight: .semibold))
         .foregroundStyle(labelColor)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

@@ -142,11 +142,11 @@ struct ShoppingAisleSection: View {
         Button(action: { if isCollapsible { onToggleSection() } }) {
             HStack(spacing: 7) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.sc(size: 12, weight: .bold))
                     .foregroundStyle(accent)
 
                 Text(department.uppercased())
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .tracking(1.1)
                     .foregroundStyle(accent)
                     .lineLimit(1)
@@ -165,7 +165,7 @@ struct ShoppingAisleSection: View {
 
                 if isCollapsible {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.sc(size: 11, weight: .bold))
                         .foregroundStyle(Color.scFaint(scheme))
                         .rotationEffect(.degrees(isCollapsed ? -90 : 0))
                         .padding(.leading, 2)
@@ -186,7 +186,7 @@ struct ShoppingAisleSection: View {
         switch mode {
         case .today:
             SCCountingText("\(items.count) na dziś")
-                .font(.system(size: 12.5, weight: .regular))
+                .font(.sc(size: 12.5, weight: .regular))
                 .monospacedDigit()
                 .foregroundStyle(Color.scMuted(scheme))
                 .lineLimit(1)
@@ -197,16 +197,16 @@ struct ShoppingAisleSection: View {
                 HStack(spacing: 4) {
                     Text("Kupione")
                     Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .heavy))
+                        .font(.sc(size: 10, weight: .heavy))
                 }
-                .font(.system(size: 12.5, weight: .regular))
+                .font(.sc(size: 12.5, weight: .regular))
                 .foregroundStyle(SCPalette.sage)
                 .lineLimit(1)
                 .fixedSize()
                 .transition(.opacity.combined(with: .scale(scale: 0.92)))
             } else {
                 SCCountingText("\(boughtCount) z \(items.count)")
-                    .font(.system(size: 12.5, weight: .regular))
+                    .font(.sc(size: 12.5, weight: .regular))
                     .monospacedDigit()
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)

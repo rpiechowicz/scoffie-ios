@@ -17,7 +17,7 @@ struct CookSectionHeader: View {
         HStack(spacing: 7) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.sc(size: 12, weight: .bold))
                     .foregroundStyle(color)
                     .accessibilityHidden(true)
             }
@@ -27,7 +27,7 @@ struct CookSectionHeader: View {
             Spacer(minLength: 8)
             if let count {
                 Text("\(count)")
-                    .font(.system(size: 13))
+                    .font(.sc(size: 13))
                     .monospacedDigit()
                     .foregroundStyle(SCCook.Palette.caption(scheme))
             }
@@ -40,7 +40,9 @@ struct CookSectionHeader: View {
 
 // MARK: - Timery
 
-/// Arkusz Timery (ST5, Y3T1–3) — z kapsuły i plakietki „+N”. Arkusz systemu
+/// Arkusz Timery (ST5, Y3T1–3) — z kapsuły i plakietki. JEDYNE miejsce pauzy,
+/// wznowienia, „+1 min”, „Pomiń” i „Gotowe” (stuknięcie w timer w doku tylko
+/// włącza timer do włączenia, inaczej otwiera ten arkusz). Arkusz systemu
 /// (runda 3 testów: karta rozwijana z doku „trochę się bugowała”), a jego
 /// wysokość idzie za treścią: tyle wierszy, ile timerów, bez pustego dołu.
 ///
@@ -159,9 +161,10 @@ struct CookTimersSheet: View {
 }
 
 /// Wiersz arkusza Timery — ten sam układ w każdym stanie: pierścień-przycisk
-/// (glif ruchu w środku), nazwa z podpisem i czas. Zmienia się glif, podpis
-/// i wypełnienie, nie miejsce; kolor jest kolorem timera (wstrzymany —
-/// przygaszony).
+/// (glif ruchu w środku), nazwa z podpisem i czas — a w jego miejscu
+/// „Pomiń” (do włączenia) albo „+1 min” (po czasie). Zmienia się glif,
+/// podpis i wypełnienie, nie miejsce; kolor jest kolorem timera
+/// (wstrzymany — przygaszony).
 private struct CookTimerRow: View {
     let item: CookDockTimer
     let onTimer: (CookTimerAction) -> Void
@@ -188,33 +191,35 @@ private struct CookTimerRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.timer.label)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.sc(size: 16, weight: .bold))
                     .foregroundStyle(isPaused ? Color.scMuted(scheme) : Color.scLabel(scheme))
                     .lineLimit(1)
                 Text(captionText)
-                    .font(.system(size: 12))
+                    .font(.sc(size: 12))
                     .foregroundStyle(isOverdue ? color : SCCook.Palette.caption(scheme))
                     .lineLimit(1)
-                    .cookRoll(captionText)
+                    // Krzywa podpisu = krzywa ZEGARA (`cookTicking`, 0,3 s),
+                    // bo „po czasie +1:20” zmienia się co sekundę; reszta
+                    // stanów zmienia się rzadko, ale tą samą drogą — jeden
+                    // modyfikator, bez podmiany widoku przy zmianie stanu.
+                    .cookTicking(captionText, countsDown: false)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if isPending {
                 // Pominięty przy „Dalej” timer zostaje w doku (runda 4) —
                 // stąd się go odprawia, gdy nie jest potrzebny.
-                Button { onTimer(.skip(item.id)) } label: {
-                    Text("Pomiń")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .padding(.horizontal, 14)
-                        .frame(height: 34)
-                        .scChromeGlass(in: Capsule())
-                        .contentShape(Capsule())
-                        .scTapHeight(44, drawn: 34)
+                sideButton("Pomiń", ink: Color.scMuted(scheme), label: "Pomiń: \(item.timer.label)") {
+                    onTimer(.skip(item.id))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Pomiń: \(item.timer.label)")
-                .transition(.opacity)
+            } else if isOverdue {
+                // Po czasie i wyciszony („Tylko wycisz” na ekranie końca
+                // timera): stuknięcie w kapsułę prowadzi tutaj, więc obok
+                // „Gotowe” w pierścieniu musi być i „jeszcze chwilę”. Licznik
+                // po czasie przechodzi do podpisu.
+                sideButton("+1 min", ink: Color.scLabel(scheme), label: "Dodaj minutę: \(item.timer.label)") {
+                    onTimer(.extend(item.id, 60))
+                }
             } else {
                 Text(time)
                     .cookText(SCCook.Typography.sheetTime)
@@ -236,9 +241,30 @@ private struct CookTimerRow: View {
         case .pending: "Start: \(item.timer.startLabel.lowercasedFirst) · \(CookClock.duration(item.timer))"
         case .running: "krok \(item.stepIndex + 1) · z \(CookClock.duration(item.timer))"
         case .paused: "wstrzymany — nie zadzwoni"
-        case .overdue: "po czasie · krok \(item.stepIndex + 1)"
+        case let .overdue(over, _, _): "po czasie \(CookClock.overdueText(over)) · krok \(item.stepIndex + 1)"
         case .finished: ""
         }
+    }
+
+    /// Przycisk obok wiersza — „Pomiń” (do włączenia), „+1 min” (po czasie):
+    /// neutralne szkło 34 pt, dotyk 44 pt.
+    private func sideButton(_ title: String, ink: Color, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.sc(size: 14, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(ink)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 14)
+                .frame(height: 34)
+                .scChromeGlass(in: Capsule())
+                .contentShape(Capsule())
+                .scTapHeight(44, drawn: 34)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .transition(.opacity)
     }
 
     /// Pierścień-przycisk 46 pt: łuk pozostałego czasu (trwa, wstrzymany)
@@ -254,7 +280,7 @@ private struct CookTimerRow: View {
                 CookTimerRing(fraction: item.status.remainingFraction, color: tone, lineWidth: SCCook.Stroke.sheetTimerRing)
                     .opacity(isRunning || isPaused ? 1 : 0)
                 Image(systemName: item.primaryIcon)
-                    .font(.system(size: 14, weight: .heavy))
+                    .font(.sc(size: 14, weight: .heavy))
                     .foregroundStyle(filled ? Color.scPageBase(scheme) : (isPaused ? Color.scLabel(scheme) : tone))
                     .offset(x: item.primaryIcon == "play.fill" ? 1 : 0)
                     .contentTransition(.symbolEffect(.replace))
@@ -406,9 +432,9 @@ struct CookIngredientsSheet: View {
         } label: {
             HStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 14, weight: selected ? .bold : .semibold))
+                    .font(.sc(size: 14, weight: selected ? .bold : .semibold))
                 Text("\(count)")
-                    .font(.system(size: 14, weight: selected ? .bold : .semibold))
+                    .font(.sc(size: 14, weight: selected ? .bold : .semibold))
                     .monospacedDigit()
                     .opacity(0.7)
             }
@@ -445,19 +471,19 @@ struct CookIngredientsSheet: View {
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(line.name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.sc(size: 16, weight: .semibold))
                     .foregroundStyle(isDone ? dim : Color.scLabel(scheme))
                     .lineLimit(1)
                 if let caption {
                     HStack(spacing: 4) {
                         if isDone {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .heavy))
+                                .font(.sc(size: 10, weight: .heavy))
                                 .accessibilityHidden(true)
                         }
                         Text(caption)
                     }
-                    .font(.system(size: 12, weight: isNow ? .semibold : .regular))
+                    .font(.sc(size: 12, weight: isNow ? .semibold : .regular))
                     .foregroundStyle(isNow ? SCPalette.terracotta : dim)
                     .lineLimit(1)
                 }
@@ -465,7 +491,7 @@ struct CookIngredientsSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(line.amountText)
-                .font(.system(size: 16, weight: .bold))
+                .font(.sc(size: 16, weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(isDone ? dim : Color.scLabel(scheme))
                 .lineLimit(1)
@@ -496,14 +522,14 @@ private struct CookStepNoIngredients: View {
     var body: some View {
         VStack(spacing: 0) {
             Image(systemName: "basket")
-                .font(.system(size: 30, weight: .light))
+                .font(.sc(size: 30, weight: .light))
                 .foregroundStyle(Color.scFaint(scheme))
             Text("Ten krok bez składników")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.sc(size: 17, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .padding(.top, 14)
             Text(hint)
-                .font(.system(size: 14))
+                .font(.sc(size: 14))
                 .foregroundStyle(Color.scMuted(scheme))
                 .padding(.top, 4)
         }

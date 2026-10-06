@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
+  <!-- Znak Scoffie (dysk z kęsem) jako ikona zakładki „Mój dzień”: geometria z SCScoffieMark.markPath
+       przeskalowana do dysku R = 11 w środku (13, 13); kęs r = 5,176 w (20,777, 5,223). -->
+  <path fill="#000000" d="M23.474 9.640 A11 11 0 1 1 16.360 2.526 A5.176 5.176 0 0 0 23.474 9.640 Z"/>
+</svg>

@@ -1,15 +1,14 @@
 import SwiftUI
 
-// „Kto co je” i „co się zmieni” w propozycji planu (27.09.2026, Rafał: „jak
-// wchodzi więcej dań, więcej osób, to robi się totalne zamieszanie i user
-// gubi się w sekundę” oraz „»Zniknie z planu« jest nieczytelne — pokaż
-// dokładnie, co się zmieni na co”).
+// „Kto co je” w propozycji planu (27.09.2026, Rafał: „jak wchodzi więcej dań,
+// więcej osób, to robi się totalne zamieszanie i user gubi się w sekundę”).
 //
-// Klocki wspólne dla karty w rozmowie, arkusza przeglądu dań
-// (`AssistantOptionsStorySheet`) i półarkusza zmian: JEDNA etykieta „dla kogo”
+// Klocki wspólne dla karty w rozmowie i przeglądu propozycji
+// (`AssistantProposalReviewSheet`): JEDNA etykieta „dla kogo”
 // (`ProposalAudience`), JEDNA pigułka z awatarami (`ProposalAudiencePill`,
-// na `PlanWhoBadge` z Planu), filtr osób (`ProposalPersonFilter`) i model
-// zmian (`ProposalChanges`).
+// na `PlanWhoBadge` z Planu) i filtr osób (`ProposalPersonFilter`). To, co
+// propozycja zmienia w planie, mówi od 6.10.2026 sam wiersz przeglądu
+// („Nowe”, „Zamiast: …”, usunięcie) — półarkusz „Co się zmieni” odpadł.
 
 // MARK: - Dla kogo
 
@@ -67,7 +66,7 @@ struct ProposalAudiencePill: View {
             HStack(spacing: 6) {
                 PlanWhoBadge(participantIds: participantIds, members: members, size: size)
                 Text(label)
-                    .font(.system(size: filled ? 13.5 : 12.5, weight: .semibold))
+                    .font(.sc(size: filled ? 13.5 : 12.5, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(filled ? AssistantLook.ink(scheme) : AssistantLook.muted(scheme))
                     .lineLimit(1)
@@ -107,7 +106,7 @@ struct ProposalPersonFilter: View {
             HStack(spacing: 8) {
                 chip(id: nil, title: "Wszyscy", accent: AssistantLook.terra(scheme)) {
                     Image(systemName: "house.fill")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.sc(size: 10, weight: .bold))
                         .foregroundStyle(AssistantLook.terra(scheme))
                         .frame(width: 20, height: 20)
                 }
@@ -140,7 +139,7 @@ struct ProposalPersonFilter: View {
             HStack(spacing: 6) {
                 avatar()
                 Text(title)
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.sc(size: 13.5, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(isOn ? accent : AssistantLook.ink(scheme))
                     .lineLimit(1)
@@ -153,325 +152,5 @@ struct ProposalPersonFilter: View {
         }
         .buttonStyle(PlanPressStyle(scale: 0.96))
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-    }
-}
-
-// MARK: - Co się zmieni
-
-/// Zmiany propozycji pora po porze: zamiana (stare → nowe), samo usunięcie
-/// (z powodem od modelu) i nowe danie. Dania, które zostają (`KEPT`), nie
-/// są zmianą — nie ma ich tutaj.
-struct ProposalChanges {
-    struct Dish: Identifiable {
-        let id: String
-        let title: String
-        let imageURL: URL?
-        let participantIds: [String]
-    }
-
-    enum Kind { case replace, remove, add }
-
-    struct Meal: Identifiable {
-        let id: String
-        let slot: MealSlot?
-        let mealLabel: String
-        let removed: [Dish]
-        let added: [Dish]
-        /// Jedno słowo powodu od modelu („powtórka”, „ponad cel”).
-        let reason: String?
-
-        var kind: Kind {
-            if removed.isEmpty { return .add }
-            return added.isEmpty ? .remove : .replace
-        }
-    }
-
-    struct Day: Identifiable {
-        let id: String
-        let label: String?
-        let meals: [Meal]
-    }
-
-    let days: [Day]
-
-    var replaced: Int { days.flatMap(\.meals).filter { $0.kind == .replace }.count }
-    var removedOnly: Int { days.flatMap(\.meals).filter { $0.kind == .remove }.count }
-    var added: Int { days.flatMap(\.meals).filter { $0.kind == .add }.count }
-
-    /// „2 zamiany · 1 usunięcie · 3 nowe” — pod wierszem w karcie.
-    var summary: String {
-        var parts: [String] = []
-        if replaced > 0 { parts.append("\(replaced) \(Self.word(replaced, "zamiana", "zamiany", "zamian"))") }
-        if removedOnly > 0 { parts.append("\(removedOnly) \(Self.word(removedOnly, "usunięcie", "usunięcia", "usunięć"))") }
-        if added > 0 { parts.append("\(added) \(Self.word(added, "nowe", "nowe", "nowych"))") }
-        return parts.joined(separator: " · ")
-    }
-
-    private static func word(_ count: Int, _ one: String, _ few: String, _ many: String) -> String {
-        if count == 1 { return one }
-        let tens = count % 100
-        let units = count % 10
-        return (2...4).contains(units) && !(12...14).contains(tens) ? few : many
-    }
-
-    /// Z dni propozycji (tydzień: `card.days`; dzień: jeden „dzień” z jego
-    /// porami) i listy usunięć. Para usunięcie ↔ nowe danie = ta sama pora
-    /// tego samego dnia. Zdjęcie usuwanego dania bierze się z katalogu.
-    init(
-        days: [(key: String, label: String?, slots: [PlanWeekCardSlotDTO])],
-        removed: [PlanWeekCardRemovalDTO],
-        image: (String?) -> URL?
-    ) {
-        var result: [Day] = []
-        var usedRemovals = Set<Int>()
-        for day in days {
-            var meals: [Meal] = []
-            var mealOrder: [String] = []
-            var addedByMeal: [String: [Dish]] = [:]
-            var labels: [String: (slot: MealSlot?, label: String)] = [:]
-            for (slotIndex, slot) in day.slots.enumerated() where slot.isNew {
-                if addedByMeal[slot.mealLabel] == nil { mealOrder.append(slot.mealLabel) }
-                addedByMeal[slot.mealLabel, default: []].append(Dish(
-                    // Z indeksem: to samo danie w tej porze dla dwóch osób
-                    // miało dwa razy ten sam `slot.id`.
-                    id: "\(day.key)-\(slot.id)-\(slotIndex)",
-                    title: slot.title,
-                    imageURL: slot.imageUrl.flatMap(URL.init(string:)),
-                    participantIds: slot.participantIds
-                ))
-                labels[slot.mealLabel] = (MealSlot(backendMealType: slot.mealType), slot.mealLabel)
-            }
-            var removedByMeal: [String: [(Dish, String?)]] = [:]
-            for (index, removal) in removed.enumerated() where !usedRemovals.contains(index) {
-                guard day.label == nil || Self.sameDay(removal.dayLabel, day.label) else { continue }
-                usedRemovals.insert(index)
-                if addedByMeal[removal.mealLabel] == nil, removedByMeal[removal.mealLabel] == nil {
-                    mealOrder.append(removal.mealLabel)
-                }
-                removedByMeal[removal.mealLabel, default: []].append((
-                    Dish(
-                        id: "\(day.key)-\(removal.id)",
-                        title: removal.title,
-                        imageURL: image(removal.recipeId),
-                        participantIds: []
-                    ),
-                    removal.reason
-                ))
-                if labels[removal.mealLabel] == nil {
-                    labels[removal.mealLabel] = (removal.mealType.flatMap(MealSlot.init(backendMealType:)), removal.mealLabel)
-                }
-            }
-            // Porządek dnia: po porze (śniadanie → kolacja), gdy znana.
-            // Nieznana pora za znanymi — porządek przechodni.
-            let sortedOrder = mealOrder.enumerated().sorted { left, right in
-                switch (labels[left.element]?.slot, labels[right.element]?.slot) {
-                case let (a?, b?) where a != b: return a < b
-                case (.some, .none): return true
-                case (.none, .some): return false
-                default: return left.offset < right.offset
-                }
-            }.map { $0.element }
-            for meal in sortedOrder {
-                let removedHere = removedByMeal[meal] ?? []
-                meals.append(Meal(
-                    id: "\(day.key)-\(meal)",
-                    slot: labels[meal]?.slot,
-                    mealLabel: labels[meal]?.label ?? meal,
-                    removed: removedHere.map { $0.0 },
-                    added: addedByMeal[meal] ?? [],
-                    reason: removedHere.compactMap { $0.1 }.first { !$0.isEmpty }
-                ))
-            }
-            if !meals.isEmpty {
-                result.append(Day(id: day.key, label: day.label, meals: meals))
-            }
-        }
-        self.days = result
-    }
-
-    /// „Wtorek” z usunięcia vs „Wtorek” z dnia propozycji — bez wielkości liter.
-    private static func sameDay(_ removal: String, _ day: String?) -> Bool {
-        guard let day else { return true }
-        return removal.compare(day, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
-    }
-}
-
-/// Półarkusz „Co się zmieni”: dzień → pora; zamiana to stare (szare,
-/// przekreślone) nad nowym ze strzałką, usunięcie — przekreślone z powodem,
-/// nowe danie — z plakietką „nowe”. Przy każdym daniu „dla kogo” (dom z kilku
-/// osób). Tylko najważniejsze: bez akapitów, kolor i ikony mówią rodzaj zmiany.
-struct AssistantPlanChangesSheet: View {
-    let changes: ProposalChanges
-    let members: [HouseholdMemberSnapshot]
-    let me: String?
-
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var scheme
-    @State private var appeared = false
-
-    private static let thumb: CGFloat = 30
-
-    var body: some View {
-        AssistantSheetScaffold(
-            eyebrow: "Propozycja",
-            title: "Co się zmieni",
-            subtitle: changes.summary,
-            icon: "arrow.left.arrow.right",
-            compact: true,
-            onClose: { dismiss() }
-        ) {
-            VStack(alignment: .leading, spacing: 18) {
-                ForEach(Array(changes.days.enumerated()), id: \.element.id) { order, day in
-                    VStack(alignment: .leading, spacing: 8) {
-                        if let label = day.label {
-                            EditorialSheetSectionLabel(title: label)
-                                .padding(.leading, 4)
-                        }
-                        dayCard(day)
-                    }
-                    .scReveal(appeared, order: min(order, 6))
-                }
-            }
-            .padding(.top, 6)
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(40)
-        .presentationBackground(Color.scPageBase(scheme))
-        .task {
-            try? await Task.sleep(for: .milliseconds(60))
-            appeared = true
-        }
-    }
-
-    private func dayCard(_ day: ProposalChanges.Day) -> some View {
-        let shape = RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
-        return VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(day.meals.enumerated()), id: \.element.id) { index, meal in
-                if index > 0 {
-                    Rectangle()
-                        .fill(Color.scTileStroke(scheme))
-                        .frame(height: 1)
-                        .padding(.leading, 14)
-                }
-                mealBlock(meal)
-            }
-        }
-        .background(shape.fill(Color.scTileBg(scheme)))
-        .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
-    }
-
-    /// Pora jako JEDEN zwarty blok (runda 10, Rafał: „ściana tekstu i nic
-    /// nie rozumiem”): nagłówek pory z rodzajem zmiany, a pod nim „stare →
-    /// nowe” OBOK SIEBIE — dwie kolumny zamiast czterech pięter (stare,
-    /// strzałka w dół, nowe, pigułka).
-    private func mealBlock(_ meal: ProposalChanges.Meal) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                if let slot = meal.slot {
-                    Image(systemName: slot.icon)
-                        .font(.system(size: 10.5, weight: .bold))
-                        .foregroundStyle(slot.cozyAccent)
-                }
-                Text((meal.slot?.title ?? meal.mealLabel).uppercased())
-                    .font(.system(size: 10.5, weight: .bold))
-                    .tracking(1.1)
-                    .foregroundStyle(meal.slot?.cozyAccent ?? AssistantLook.muted(scheme))
-                Spacer(minLength: 8)
-                kindTag(meal)
-            }
-
-            switch meal.kind {
-            case .replace:
-                HStack(alignment: .center, spacing: 8) {
-                    column(meal.removed, removed: true)
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(AssistantLook.faint(scheme))
-                        .accessibilityHidden(true)
-                    column(meal.added, removed: false)
-                }
-            case .remove:
-                column(meal.removed, removed: true)
-            case .add:
-                column(meal.added, removed: false)
-            }
-        }
-        .padding(12)
-    }
-
-    private func column(_ dishes: [ProposalChanges.Dish], removed: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(dishes) { dish in
-                dishRow(dish, removed: removed)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Rodzaj zmiany: zamiana (terakota), usunięcie z powodem (szary),
-    /// nowe (szałwia).
-    @ViewBuilder
-    private func kindTag(_ meal: ProposalChanges.Meal) -> some View {
-        switch meal.kind {
-        case .replace:
-            tag(meal.reason ?? "Zamiana", icon: "arrow.triangle.2.circlepath", color: AssistantLook.terra(scheme))
-        case .remove:
-            tag(meal.reason ?? "Usunięte", icon: "minus", color: AssistantLook.muted(scheme))
-        case .add:
-            tag("Nowe", icon: "plus", color: AssistantLook.sage(scheme))
-        }
-    }
-
-    private func tag(_ title: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 9.5, weight: .bold))
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .lineLimit(1)
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 8)
-        .frame(height: 22)
-        .background(Capsule(style: .continuous).fill(color.opacity(scheme == .dark ? 0.16 : 0.1)))
-        .fixedSize()
-    }
-
-    /// Danie w kolumnie: mała miniatura (szara, gdy znika), nazwa do dwóch
-    /// linii (przekreślona, gdy znika), przy nowym — awatary jedzących, gdy
-    /// to nie cały dom.
-    private func dishRow(_ dish: ProposalChanges.Dish, removed: Bool) -> some View {
-        let people = members.filter { dish.participantIds.contains($0.id) }
-        let showsPeople = !removed && members.count > 1
-            && !ProposalAudience.isShared(dish.participantIds, members: members)
-        var spoken = removed ? "Zniknie: \(dish.title)" : "Będzie: \(dish.title)"
-        if showsPeople, let who = ProposalAudience.label(dish.participantIds, members: members, me: me) {
-            spoken += ", \(who)"
-        }
-        return HStack(alignment: .center, spacing: 8) {
-            AssistantThumbnail(url: dish.imageURL, size: Self.thumb, dimmed: removed)
-                .saturation(removed ? 0 : 1)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(dish.title)
-                    .font(.system(size: 13.5, weight: removed ? .regular : .semibold))
-                    .tracking(-0.2)
-                    .foregroundStyle(removed ? AssistantLook.faint(scheme) : AssistantLook.ink(scheme))
-                    .strikethrough(removed, color: AssistantLook.faint(scheme))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                if showsPeople {
-                    HStack(spacing: -5) {
-                        ForEach(people.prefix(3)) { member in
-                            MemberAvatar(member: member, members: members, size: 16)
-                                .overlay(Circle().strokeBorder(Color.scTileBg(scheme), lineWidth: 1.2))
-                        }
-                    }
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(spoken)
     }
 }

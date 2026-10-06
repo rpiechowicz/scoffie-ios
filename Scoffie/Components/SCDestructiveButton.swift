@@ -42,13 +42,13 @@ struct SCDestructiveButton: View {
                     // VoiceOver czyta sam tytuł — nazwa glifu („link badge
                     // plus”) nic nie mówi.
                     Image(systemName: icon)
-                        .font(.system(size: 13, weight: .heavy))
+                        .font(.sc(size: 13, weight: .heavy))
                         .rotationEffect(iconRotation)
                         .accessibilityHidden(true)
                 }
 
                 Text(title)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .tracking(-0.1)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)

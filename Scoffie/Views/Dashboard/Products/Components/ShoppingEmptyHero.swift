@@ -35,7 +35,7 @@ struct ShoppingEmptyHero: View {
                     let color = ProductConstants.departmentColor(for: entry.department)
                     let radians = entry.angle * .pi / 180
                     Image(systemName: ProductConstants.departmentIcon(for: entry.department))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.sc(size: 16, weight: .semibold))
                         .foregroundStyle(color)
                         .frame(width: 42, height: 42)
                         .background(Circle().fill(color.opacity(scheme == .dark ? 0.18 : 0.14)))
@@ -51,7 +51,7 @@ struct ShoppingEmptyHero: View {
                 }
 
                 Image(systemName: "basket.fill")
-                    .font(.system(size: 34, weight: .semibold))
+                    .font(.sc(size: 34, weight: .semibold))
                     .foregroundStyle(SCPalette.terracotta)
                     .frame(width: 92, height: 92)
                     .scChromeGlass(in: Circle(), tint: SCPalette.terracotta.opacity(scheme == .dark ? 0.26 : 0.18))
@@ -60,14 +60,14 @@ struct ShoppingEmptyHero: View {
             .accessibilityHidden(true)
 
             Text(title)
-                .font(.system(size: 24, weight: .heavy))
+                .font(.sc(size: 24, weight: .heavy))
                 .tracking(-0.5)
                 .foregroundStyle(Color.scLabel(scheme))
                 .multilineTextAlignment(.center)
                 .padding(.top, 14)
 
             Text(message)
-                .font(.system(size: 14.5))
+                .font(.sc(size: 14.5))
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -81,7 +81,7 @@ struct ShoppingEmptyHero: View {
             if let secondaryTitle, let onSecondary {
                 Button(action: onSecondary) {
                     Text(secondaryTitle)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.sc(size: 14, weight: .semibold))
                         .foregroundStyle(Color.scMuted(scheme))
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .contentShape(Rectangle())

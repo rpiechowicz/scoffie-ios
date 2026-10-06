@@ -154,11 +154,6 @@ final class SessionStore {
     /// serwer. Zamknięty ekran nie może tego przegapić.
     var subscriptionStore: SubscriptionStore?
     var datesViewModel = DatesViewModel()
-    /// Tydzień i dzień KALENDARZA — osobno od Planu (Rafał 4.10.2026: „date
-    /// component powinien mieć różne stany na planowaniu oraz na kalendarzu,
-    /// nie mogę tu przewijać i tam się zmienia”). `datesViewModel` zostaje
-    /// Planowi i jego arkuszom (Zakupy, „Dodaj do planu”, Asystent).
-    var calendarDatesViewModel = DatesViewModel()
     /// Zakładka dolnego menu. Tu, a nie w `NavigationMenu`, bo przełącza ją
     /// też asystent — skrót „Otwórz" po zapisaniu planu.
     var dashboardTab: DashboardTab = .calendar
@@ -169,6 +164,10 @@ final class SessionStore {
     /// przycisk. Flagę zdejmuje ekran, który ją obsłużył — inaczej arkusz
     /// otwierałby się przy każdym powrocie na Plan.
     var opensShoppingList = false
+    /// Prośba zakładki „Dziś” o zaplanowanie pory (pusta pora → „Zaplanuj”):
+    /// Plan pokazuje ten dzień i otwiera wybór przepisu. Zdejmuje ją Plan,
+    /// który ją obsłużył — jak `opensShoppingList`.
+    var planSlotRequest: PlanSlotRequest?
     private var realtimeSocket: RecipeSocketClient?
     private var pendingPushDeviceToken: String?
     private let appleSignInCoordinator = AppleSignInCoordinator()
@@ -180,13 +179,15 @@ final class SessionStore {
     /// listy jest wysoki: to od niej zależy liczba porcji i podział posiłków.
     private let householdMembersFreshness: TimeInterval = 60
     private let startupTimeoutSeconds: Double = 6
-    /// Loader nie znika szybciej niż po tym czasie — nawet przy cieplutkim starcie
-    /// (wszystko z cache). Wartość bierze się wprost z choreografii
-    /// `StartupLoaderView` (`LoaderMotion.waveEnd`): moment, w którym niedziela
-    /// (ostatni kafelek) ma pełne wypełnienie, dorysowany ptaszek i domknięty pop.
-    /// Crossfade do dashboardu startuje dokładnie wtedy — żaden kafelek się nie
-    /// urywa przed zapełnieniem, a użytkownik widzi „pełny tydzień".
-    private let startupMinimumDisplaySeconds: Double = StartupLoaderView.waveCompletionSeconds
+    /// Start z pamięci podręcznej czeka na miniatury bieżącego tygodnia
+    /// najwyżej tyle. Z dysku to ułamek tego; zdjęcie, którego na dysku nie
+    /// ma, nie trzyma pulpitu za loaderem — doczyta się nad nim.
+    ///
+    /// Minimalnego czasu loadera już nie ma (był tu `startupMinimumDisplaySeconds`
+    /// = cała fala dni, 1,34 s, i to przy KAŻDYM zimnym starcie, także
+    /// z katalogiem i tygodniem w pamięci podręcznej). Pełną falę gra tylko
+    /// wejście do aplikacji po logowaniu (`ScoffieApp.enterAppUnderLoader`).
+    private let cachedStartupImageBudgetSeconds: Double = 0.5
 
     init() {
         pendingPushDeviceToken = UserDefaults.standard.string(forKey: Keys.pushDeviceToken)
@@ -580,6 +581,7 @@ final class SessionStore {
         // Następne logowanie ma zacząć od Kalendarza, a nie od zakładki,
         // na której ktoś zostawił poprzednią sesję.
         dashboardTab = .calendar
+        planSlotRequest = nil
     }
 
     /// Trwale usuwa konto: wypisuje z gospodarstwa, kasuje użytkownika po
@@ -781,13 +783,13 @@ final class SessionStore {
         }
         let datesViewModel = DatesViewModel()
         self.datesViewModel = datesViewModel
-        calendarDatesViewModel = DatesViewModel()
         // Każde wejście do sesji (logowanie, restore po zimnym starcie,
         // zmiana gospodarstwa) zaczyna się od Kalendarza. Bez tego zakładka
         // zostawała tam, gdzie stała poprzednia sesja na tym telefonie —
         // wylogowanie i ponowne logowanie wrzucało użytkownika w Plan
         // tygodnia albo w Ustawienia zamiast na ekran „co dziś jem".
         dashboardTab = .calendar
+        planSlotRequest = nil
         // Stary warmup (katalog na starym sockecie, poprzednie gospodarstwo)
         // nie ma już czego dociągać.
         startupTask?.cancel()
@@ -1034,7 +1036,6 @@ final class SessionStore {
         dataExportClient = nil
         subscriptionStore = nil
         datesViewModel = DatesViewModel()
-        calendarDatesViewModel = DatesViewModel()
         startupTask?.cancel()
         startupTask = nil
         householdMembersTask?.cancel()
@@ -1706,6 +1707,10 @@ final class SessionStore {
         mealCalendarStore?.resetLocalPlanningState()
         await registerPushDeviceIfPossible()
         isAuthenticated = true
+        // Domownik z zaproszenia to ten, do kogo idą powiadomienia o zmianach
+        // planu — o zgodę pytamy, gdy zobaczy pulpit (`DashboardView`), nie
+        // przy starcie aplikacji (6.10.2026).
+        asksNotificationsOnReveal = true
         // Przyjęte zaproszenie znika ze skrzynki, a razem z nim wszystkie inne
         // do tego samego domu.
         await refreshPendingInvitations()
@@ -1844,6 +1849,9 @@ final class SessionStore {
     /// gdy loader startu zejdzie). W pamięci — do obserwowania przez widok;
     /// na dysku leży równolegle w `storedDeepLink`, dopóki się nie otworzy.
     private(set) var pendingRecipeLink: RecipeLinkTarget?
+    /// Po dołączeniu do domu z zaproszenia: prośba o zgodę na powiadomienia,
+    /// gdy pulpit się odsłoni. Zdejmuje ją `DashboardView`.
+    var asksNotificationsOnReveal = false
 
     /// Stuknięcie w Live Activity gotowania przed końcem startu — tryb Gotuj
     /// otwiera się nad gotowym pulpitem (`resumeCookingIfRequested`).
@@ -2283,8 +2291,15 @@ final class SessionStore {
     // MARK: - Smart startup loader
 
     /// Jedno wejście dla warmupu po logowaniu / restore sesji.
-    /// Idempotent — dla ciepłego startu i tak szybko wchodzi w `.ready`
-    /// (cache przepisów, cache dysku obrazów, snapshot domowników).
+    ///
+    /// Dwie drogi do `.ready`:
+    /// - z pamięci podręcznej (katalog z pliku i bieżący tydzień z planu na
+    ///   dysku, `loadStartupDataFromCache`) — od razu, gdy miniatury tygodnia
+    ///   są w pamięci (z dysku), bez sieci i bez minimalnego czasu; świeże
+    ///   dane (`prepareStartupData`) dochodzą już nad pulpitem;
+    /// - bez niej (świeża instalacja, pusty albo nieaktualny tydzień w pliku) —
+    ///   `prepareStartupData` pod loaderem, z limitem `startupTimeoutSeconds`,
+    ///   też bez minimalnego czasu.
     @MainActor
     func runStartupIfNeeded(force: Bool = false) async {
         guard isAuthenticated else {
@@ -2300,22 +2315,20 @@ final class SessionStore {
         if !force, startupPhase == .ready { return }
 
         startupTask?.cancel()
-        let minimumDisplay = startupMinimumDisplaySeconds
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
             self.startupPhase = .warmingUp
-            let startedAt = Date()
-            await self.runStartupWithTimeout()
+            // Zimny start z danymi w pamięci podręcznej: pierwszy ekran ma
+            // z czego się narysować, więc loader nie czeka ani na sieć, ani
+            // na żaden minimalny czas — tylko na miniatury tygodnia z dysku.
+            let fromCache = self.loadStartupDataFromCache()
+            if fromCache {
+                await self.runCachedStartupWithTimeout()
+            } else {
+                await self.runStartupWithTimeout()
+            }
             // Anulowany warmup (bootstrap nowego gospodarstwa w trakcie) nie
             // decyduje o fazie — nowy task sam przejdzie warmingUp → ready.
-            guard !Task.isCancelled else { return }
-            // Minimum display — jeśli warmup poszedł z cache w <2 s, dotrzymujemy
-            // loaderowi 2 s, żeby przejście Auth/Loader/Dashboard było płynne a nie migotało.
-            let elapsed = Date().timeIntervalSince(startedAt)
-            if elapsed < minimumDisplay {
-                let remaining = minimumDisplay - elapsed
-                try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
-            }
             guard !Task.isCancelled else { return }
             // Nawet jeśli któryś krok się nie udał (offline / timeout),
             // wchodzimy w .ready — dashboard ma własne skeletony / cache.
@@ -2329,9 +2342,85 @@ final class SessionStore {
                 await self?.resumeCookingIfRequested()
                 await self?.prefetchCookScenarios()
             }
+            self.prepareUnbuiltTabs()
+            // Z pamięci podręcznej: świeży katalog, domownicy, tydzień z serwera
+            // i pierwsze miniatury katalogu dochodzą już nad pulpitem — ta sama
+            // praca co pod loaderem, w tej samej kolejności i z tymi samymi
+            // limitami rozgrzewki zdjęć. W `startupTask`, więc wylogowanie
+            // i zmiana gospodarstwa ją przerywają.
+            if fromCache {
+                await self.prepareStartupData()
+            }
         }
         startupTask = task
         await task.value
+    }
+
+    /// Pulpit z pamięci podręcznej, bez sieci: katalog z pliku (synchronizacja
+    /// rusza obok, jak w `RecipeCatalogStore.loadIfNeeded`) i bieżący tydzień
+    /// z pliku planu (`MealCalendarStore` wczytuje go przy powstaniu).
+    /// `true` = pierwszy ekran ma z czego się narysować.
+    ///
+    /// Pusty tydzień w pliku nie wystarcza: bywa nieaktualny (nowy tydzień,
+    /// plan ułożony na innym telefonie), a Kalendarz, który po chwili sam się
+    /// wypełnia, wyglądałby jak błąd — wtedy start czeka na serwer jak bez
+    /// pamięci podręcznej.
+    private func loadStartupDataFromCache() -> Bool {
+        guard let catalog = recipeCatalogStore, let mealStore = mealCalendarStore else { return false }
+        guard catalog.loadFromCacheIfPossible() else { return false }
+        return datesViewModel.dates.contains { date in
+            MealSlot.allCases.contains { slot in !mealStore.meals(for: date, slot: slot).isEmpty }
+        }
+    }
+
+    /// Miniatury bieżącego tygodnia z pliku planu, najwyżej
+    /// `cachedStartupImageBudgetSeconds` — talerz Kalendarza ma zdjęcie
+    /// w klatce, w której loader gaśnie.
+    private func runCachedStartupWithTimeout() async {
+        let timeoutSeconds = cachedStartupImageBudgetSeconds
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { [weak self] in
+                await self?.prefetchCachedWeekThumbnails()
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+            }
+            _ = await group.next()
+            group.cancelAll()
+        }
+    }
+
+    private func prefetchCachedWeekThumbnails() async {
+        guard let mealStore = mealCalendarStore else { return }
+        let urls = datesViewModel.dates
+            .flatMap { date in MealSlot.allCases.flatMap { mealStore.meals(for: date, slot: $0) } }
+            .compactMap(\.recipe.imageURL)
+        await ImagePrefetcher.prefetchAwaiting(urls)
+    }
+
+    /// To, co zakładki robiły same, gdy budowały się wszystkie pod loaderem.
+    ///
+    /// Systemowy `TabView` (od 6.10.2026) buduje zakładkę dopiero przy jej
+    /// pierwszym wyborze, a start pokazuje Kalendarz. Bez tego rozmowa
+    /// asystenta czekałaby na pierwsze wejście w zakładkę: tura, która biegła,
+    /// gdy aplikację zamknięto, nie dawałaby plakietki ani kapsuły „Asystent
+    /// odpowiedział”, a pula byłaby nieznana do pierwszego kliknięcia.
+    /// `AssistantView` woła to samo przy pierwszym wyborze — powtórka jest
+    /// bezpieczna (otwarta rozmowa tylko sprawdza świeżość, tura w biegu nie
+    /// jest śledzona drugi raz), a gdy zakładka Asystenta już stoi (start
+    /// z powiadomienia „Asystent odpowiedział”), robi to sama.
+    ///
+    /// Pula osobno od rozmowy: `openIfNeeded` czeka na koniec tury w biegu
+    /// (do kilku minut), a pula ma być znana od razu.
+    ///
+    /// Reszta zakładek nie potrzebuje niczego przed pierwszym wejściem:
+    /// tydzień, zakupy (plakietka koszyka), domownicy i zgody ładuje start
+    /// sesji, a cele domowników, link zaproszenia i stan widoków ładują
+    /// ekrany przy pierwszym wyborze (`.task`, `onChange(of:initial:)`).
+    private func prepareUnbuiltTabs() {
+        guard let agentStore, dashboardTab != .assistant else { return }
+        Task { _ = await agentStore.loadUsage() }
+        Task { await agentStore.openIfNeeded() }
     }
 
     private func runStartupWithTimeout() async {

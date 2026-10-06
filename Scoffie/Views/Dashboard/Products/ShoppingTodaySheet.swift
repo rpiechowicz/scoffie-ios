@@ -168,14 +168,14 @@ struct ShoppingTodaySheet: View {
         return HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(Self.shortDayFormatter.string(from: dish.date).uppercased()) · \(dish.slot.title.uppercased())")
-                    .font(.system(size: 10.5, weight: .bold))
+                    .font(.sc(size: 10.5, weight: .bold))
                     .tracking(1.2)
                     .foregroundStyle(dish.slot.cozyAccent)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
 
                 Text(dish.title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.sc(size: 17, weight: .semibold))
                     .tracking(-0.35)
                     .foregroundStyle(Color.scLabel(scheme))
                     // Tytuł dania jest jedyną rzeczą w arkuszu, która MOŻE
@@ -185,7 +185,7 @@ struct ShoppingTodaySheet: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 SCCountingText("\(PolishPlural.ingredients(dishItems.count)) · \(isComplete ? "wszystko kupione" : PolishPlural.bought(bought))")
-                    .font(.system(size: 12.5, weight: .regular))
+                    .font(.sc(size: 12.5, weight: .regular))
                     .monospacedDigit()
                     .foregroundStyle(isComplete ? SCPalette.sage : Color.scMuted(scheme))
                     .lineLimit(1)
@@ -234,7 +234,7 @@ struct ShoppingTodaySheet: View {
         ZStack {
             dish.slot.cozyAccent.opacity(scheme == .dark ? 0.22 : 0.14)
             Image(systemName: dish.slot.icon)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.sc(size: 18, weight: .semibold))
                 .foregroundStyle(dish.slot.cozyAccent)
         }
     }

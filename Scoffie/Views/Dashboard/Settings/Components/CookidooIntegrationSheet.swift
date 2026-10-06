@@ -16,7 +16,8 @@ struct CookidooIntegrationSheet: View {
     @State private var passwordDraft = ""
     @State private var isPasswordVisible = false
     @State private var errorMessage: String?
-    @State private var showInfoSheet = false
+    /// „Jak to działa” — ekran wepchnięty w ten arkusz, nie arkusz na nim.
+    @State private var showsThermomixInfo = false
     @State private var showDisconnectAlert = false
 
     @FocusState private var focusedField: Field?
@@ -33,51 +34,50 @@ struct CookidooIntegrationSheet: View {
     }
 
     var body: some View {
-        ZStack {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
+        NavigationStack {
+            ZStack {
+                SCPageBackground(scheme: scheme)
+                    .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    EditorialSheetHeader(
-                        eyebrow: "Integracje",
-                        title: "Cookidoo",
-                        icon: "app.connected.to.app.below.fill",
-                        accent: SCPalette.sage,
-                        onClose: onClose
-                    )
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        EditorialSheetHeader(
+                            eyebrow: "Integracje",
+                            title: "Cookidoo",
+                            icon: "app.connected.to.app.below.fill",
+                            accent: SCPalette.sage,
+                            onClose: onClose
+                        )
 
-                    switch store?.status {
-                    case .connected(let login):
-                        connectedCard(login: login)
-                        subscriptionWarningCard
-                        howItWorksLink
-                        disconnectButton
-                    case .authFailed(let login):
-                        authFailedBanner
-                        connectForm(prefilledEmail: login)
-                    case .notConnected, .unknown, .disabled, nil:
-                        introCard
-                        howItWorksLink
-                        connectForm(prefilledEmail: nil)
+                        switch store?.status {
+                        case .connected(let login):
+                            connectedCard(login: login)
+                            subscriptionWarningCard
+                            howItWorksLink
+                            disconnectButton
+                        case .authFailed(let login):
+                            authFailedBanner
+                            connectForm(prefilledEmail: login)
+                        case .notConnected, .unknown, .disabled, nil:
+                            introCard
+                            howItWorksLink
+                            connectForm(prefilledEmail: nil)
+                        }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 22)
+                    .padding(.bottom, 40)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 22)
-                .padding(.bottom, 40)
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
             }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showsThermomixInfo) {
+                ThermomixInfoSheet(isPushed: true)
+            }
         }
         .task {
             await store?.refresh()
-        }
-        .sheet(isPresented: $showInfoSheet) {
-            ThermomixInfoSheet {
-                showInfoSheet = false
-            }
-            .presentationDetents([.medium, .large])
-            .dashboardLiquidSheet()
         }
         .alert("Rozłączyć Cookidoo?", isPresented: $showDisconnectAlert) {
             Button("Anuluj", role: .cancel) {}
@@ -96,13 +96,13 @@ struct CookidooIntegrationSheet: View {
     private var introCard: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "flame.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)))
 
             Text("Połącz konto Cookidoo, aby wysyłać przepisy prosto na swojego Thermomixa. Przepis wyląduje w \u{201E}Mój tydzień\u{201D} i będzie czekał na ekranie urządzenia.")
-                .font(.system(size: 13, weight: .regular))
+                .font(.sc(size: 13, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -120,13 +120,13 @@ struct CookidooIntegrationSheet: View {
 
     private var howItWorksLink: some View {
         Button {
-            showInfoSheet = true
+            showsThermomixInfo = true
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "questionmark.circle.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                 Text("Jak to działa?")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
             }
             .foregroundStyle(SCPalette.terracotta)
         }
@@ -142,7 +142,7 @@ struct CookidooIntegrationSheet: View {
 
             VStack(spacing: 0) {
                 TextField("E-mail", text: $emailDraft)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.sc(size: 15, weight: .medium))
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -168,7 +168,7 @@ struct CookidooIntegrationSheet: View {
                             SecureField("Hasło", text: $passwordDraft)
                         }
                     }
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.sc(size: 15, weight: .medium))
                     .textContentType(.password)
                     .focused($focusedField, equals: .password)
                     .submitLabel(.done)
@@ -178,7 +178,7 @@ struct CookidooIntegrationSheet: View {
                         isPasswordVisible.toggle()
                     } label: {
                         Image(systemName: isPasswordVisible ? "eye.slash.fill" : "eye.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.sc(size: 13, weight: .semibold))
                             .foregroundStyle(Color.scFaint(scheme))
                     }
                     .buttonStyle(.plain)
@@ -215,7 +215,7 @@ struct CookidooIntegrationSheet: View {
             .padding(.top, 4)
 
             Text("Dane logowania są przechowywane w postaci zaszyfrowanej i używane wyłącznie do połączenia z Cookidoo.")
-                .font(.system(size: 11.5, weight: .regular))
+                .font(.sc(size: 11.5, weight: .regular))
                 .foregroundStyle(Color.scFaint(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 6)
@@ -254,17 +254,17 @@ struct CookidooIntegrationSheet: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Połączono z Cookidoo")
-                    .font(.system(size: 15.5, weight: .heavy))
+                    .font(.sc(size: 15.5, weight: .heavy))
                     .foregroundStyle(Color.scLabel(scheme))
 
                 Text(login)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.sc(size: 13, weight: .medium))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
 
                 if let verified = store?.lastVerifiedAt {
                     Text("Ostatnia weryfikacja: \(Self.verifiedFormatter.string(from: verified))")
-                        .font(.system(size: 11.5, weight: .regular))
+                        .font(.sc(size: 11.5, weight: .regular))
                         .foregroundStyle(Color.scFaint(scheme))
                 }
             }
@@ -287,11 +287,11 @@ struct CookidooIntegrationSheet: View {
         if store?.subscriptionInactive == true {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .foregroundStyle(SCPalette.butter)
 
                 Text("Subskrypcja Cookidoo wygląda na nieaktywną — połączenie działa, ale Thermomix może nie pozwolić na gotowanie z przepisów.")
-                    .font(.system(size: 12.5, weight: .regular))
+                    .font(.sc(size: 12.5, weight: .regular))
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -332,11 +332,11 @@ struct CookidooIntegrationSheet: View {
     private var authFailedBanner: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(SCInlineErrorText.tint)
 
             Text("Hasło do Cookidoo się zmieniło albo sesja wygasła. Zaloguj się ponownie, aby przywrócić wysyłanie na Thermomixa.")
-                .font(.system(size: 12.5, weight: .medium))
+                .font(.sc(size: 12.5, weight: .medium))
                 .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
         }

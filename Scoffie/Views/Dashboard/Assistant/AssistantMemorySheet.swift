@@ -116,7 +116,7 @@ struct AssistantMemorySheet: View {
                 CountingNumber(target: store.memory.count)
                 Text("z \(Self.memoryLimit) notatek")
             }
-            .font(.system(size: 12.5))
+            .font(.sc(size: 12.5))
             .foregroundStyle(AssistantLook.faint(scheme))
             .frame(maxWidth: .infinity)
 
@@ -125,7 +125,7 @@ struct AssistantMemorySheet: View {
                     showsForgetAllAlert = true
                 } label: {
                     Text("Usuń wszystkie notatki")
-                        .font(.system(size: 13.5, weight: .semibold))
+                        .font(.sc(size: 13.5, weight: .semibold))
                         .foregroundStyle(AssistantLook.terra(scheme))
                         .frame(maxWidth: .infinity)
                         .frame(height: 36)
@@ -153,13 +153,13 @@ struct AssistantMemorySheet: View {
                 .accessibilityHidden(true)
 
             Text("Na razie nic")
-                .font(.system(size: 16, weight: .heavy))
+                .font(.sc(size: 16, weight: .heavy))
                 .tracking(-0.3)
                 .foregroundStyle(AssistantLook.ink(scheme))
                 .padding(.top, 14)
 
             Text("Gdy powiesz asystentowi coś trwałego o swoim domu — „w środy jemy u teściów”, „Kuba nie je ryb” — zapisze to tutaj i będzie o tym wiedział w kolejnych rozmowach.")
-                .font(.system(size: 13))
+                .font(.sc(size: 13))
                 .lineSpacing(3)
                 .foregroundStyle(AssistantLook.muted(scheme))
                 .multilineTextAlignment(.center)

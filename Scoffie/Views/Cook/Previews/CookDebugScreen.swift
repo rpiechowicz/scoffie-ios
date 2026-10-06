@@ -15,6 +15,8 @@ import SwiftUI
 /// - `gotuj-kroki` — krok 8 z otwartym arkuszem Kroki (runda 6);
 /// - `gotuj-alarm` — kotlety po czasie (ST4);
 /// - `gotuj-alarm-dwa` — ziemniaki i kotlety dzwonią naraz (przełącznik, runda 8);
+/// - `gotuj-wyciszony` — kotlety po czasie po „Tylko wycisz”, otwarty arkusz
+///   Timery (✓ Gotowe i „+1 min” w wierszu);
 /// - `gotuj-wyjscie` — arkusz „Wychodzisz z gotowania?” z dwoma timerami (XW2);
 /// - `gotuj-koniec` — zakończenie (EF8).
 struct CookDebugScreen: View {
@@ -41,7 +43,7 @@ struct CookDebugScreen: View {
 
     private static func sheet(for mode: String) -> CookSheet? {
         switch mode {
-        case "gotuj-timery": .timers
+        case "gotuj-timery", "gotuj-wyciszony": .timers
         case "gotuj-skladniki": .ingredients
         case "gotuj-wyjscie": .exit
         case "gotuj-kroki": .steps
@@ -81,6 +83,13 @@ struct CookDebugScreen: View {
             session.startTimer("t-potatoes", now: minutesAgo(5.47))
             session.jump(to: 7)
             session.startTimer("t-cutlets", now: minutesAgo(10.3))
+        case "gotuj-wyciszony":
+            session.begin(now: minutesAgo(45))
+            session.jump(to: 2)
+            session.startTimer("t-potatoes", now: minutesAgo(5.47))
+            session.jump(to: 7)
+            session.startTimer("t-cutlets", now: minutesAgo(10.3))
+            session.silenceTimer("t-cutlets")
         case "gotuj-alarm-dwa":
             session.begin(now: minutesAgo(45))
             session.jump(to: 2)

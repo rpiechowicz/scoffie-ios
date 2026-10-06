@@ -309,9 +309,10 @@ struct RecipeFilterOptions: Equatable {
     var moments: Set<RecipeMoment> = []
     var excludedIngredients: Set<IngredientExclusion> = []
 
-    /// Filtry „tylko w tej kategorii” — z arkusza otwieranego w liście
-    /// kategorii. Mieszkają TU, a nie obok, żeby jedna reguła (`matches`)
-    /// liczyła i listę, i stopkę Filtrów: „Pokaż 132” zawsze znaczy 132 na
+    /// Filtry „tylko w tej kategorii” — sekcja kategorii w arkuszu „Filtry”
+    /// (gdy lista stoi w kategorii albo na jej zakładce w wynikach).
+    /// Mieszkają TU, a nie obok, żeby jedna reguła (`matches`) liczyła i listę,
+    /// i liczby w Filtrach: „128 przepisów” w arkuszu zawsze znaczy 128 na
     /// liście, także gdy śniadania są zawężone do słodkich.
     var categoryFilters: [RecipesCategory: RecipeCategoryFilter] = [:]
 
@@ -330,9 +331,10 @@ struct RecipeFilterOptions: Equatable {
 
     // MARK: - Stan
 
-    /// Liczba aktywnych grup filtrów — plakietka przy przycisku filtra
-    /// w nagłówku Przepisów. Jedna sekcja arkusza = jedna grupa, niezależnie
-    /// od tego, ile kafelków w niej zaznaczono.
+    /// Liczba aktywnych grup filtrów WSZYSTKICH przepisów (bez filtrów
+    /// kategorii). Jedna sekcja arkusza = jedna grupa, niezależnie od tego,
+    /// ile kafelków w niej zaznaczono. Rozstrzyga o stanie wyników na
+    /// Przepisach; plakietka filtrów liczy `activeCount(in:)`.
     var activeCount: Int {
         var count = 0
         if maxPrepTimeMinutes != nil       { count += 1 }
@@ -347,16 +349,82 @@ struct RecipeFilterOptions: Equatable {
     }
 
     /// Czy cokolwiek zawęża listę — filtry wszystkich przepisów albo którejś
-    /// kategorii. `activeCount` (plakietka w nagłówku Przepisów) liczy tylko
-    /// te pierwsze; filtry kategorii mają plakietkę na swoim przycisku.
+    /// kategorii.
     var isActive: Bool { activeCount > 0 || hasCategoryFilters }
 
     var hasCategoryFilters: Bool { categoryFilters.values.contains { $0.isActive } }
 
-    /// Co zawęża listę, krótko — „do 30 min”, „do 600 kcal”, „Wege” — do
-    /// karty nad listą kategorii (`RecipeListContextCard`). Kolejność jak
-    /// sekcje arkusza „Filtry”; filtrów kategorii tu nie ma — te widać na
-    /// pigułkach w samej liście.
+    // MARK: - Zakres listy
+
+    /// Kategorie, których filtry działają na listę w danym zakresie: jedna
+    /// (ekran kategorii, zakładka kategorii w wynikach) albo wszystkie
+    /// (`nil`, „Ulubione” — lista z każdej kategorii).
+    static func categories(in scope: RecipesCategory?) -> [RecipesCategory] {
+        guard let scope, RecipesCategory.catalogSections.contains(scope) else {
+            return RecipesCategory.catalogSections
+        }
+        return [scope]
+    }
+
+    /// Ile grup filtrów zawęża listę w zakresie — plakietka na przycisku
+    /// filtrów: grupy „Filtrów” i aspekty kategorii (rodzaj dania, smak…)
+    /// z zaznaczoną opcją.
+    func activeCount(in scope: RecipesCategory?) -> Int {
+        var total: Int = activeCount
+        for category in Self.categories(in: scope) {
+            guard let chosen = categoryFilters[category] else { continue }
+            total += chosen.picks.values.filter { !$0.isEmpty }.count
+        }
+        return total
+    }
+
+    /// Czy cokolwiek zawęża listę w zakresie — „Wyczyść” ma co czyścić.
+    func isActive(in scope: RecipesCategory?) -> Bool {
+        activeCount(in: scope) > 0
+    }
+
+    /// KAŻDY filtr, który zawęża listę w zakresie — nagłówek wyników, karta
+    /// nad listą kategorii: filtry wszystkich przepisów, a po nich filtry
+    /// kategorii. W jednej kategorii same opcje („zupy”), w kilku — z nazwą
+    /// kategorii („obiady: zupy, drób”).
+    func summaryLabels(in scope: RecipesCategory?) -> [String] {
+        let categories = Self.categories(in: scope)
+        let prefixed = categories.count > 1
+        return summaryLabels + categories.flatMap { categoryLabels(for: $0, prefixed: prefixed) }
+    }
+
+    /// Wybrane opcje aspektów jednej kategorii, małą literą, w kolejności
+    /// aspektów i opcji z `RecipeCategoryFacets`.
+    private func categoryLabels(for category: RecipesCategory, prefixed: Bool) -> [String] {
+        guard let chosen = categoryFilters[category], chosen.isActive else { return [] }
+        let titles = RecipeCategoryFacets.facets(for: category).flatMap { facet in
+            facet.options
+                .filter { chosen.contains($0.id, in: facet.kind) }
+                .map { option in
+                    RecipeMoment(rawValue: option.id)?.summaryTitle ?? option.title.lowercased()
+                }
+        }
+        guard !titles.isEmpty else { return [] }
+        guard prefixed else { return titles }
+        let name = RecipesConstants.shortDisplayName(for: category).lowercased()
+        return ["\(name): " + titles.joined(separator: ", ")]
+    }
+
+    /// „Wyczyść” — zdejmuje WSZYSTKO, co działa na listę w zakresie: filtry
+    /// wszystkich przepisów i filtry kategorii z zakresu. Ten sam ruch
+    /// w arkuszu, w nagłówku wyników, na karcie kategorii i w pustym stanie.
+    mutating func reset(in scope: RecipesCategory?) {
+        let kept = categoryFilters
+        self = RecipeFilterOptions()
+        categoryFilters = kept
+        for category in Self.categories(in: scope) {
+            categoryFilters[category] = nil
+        }
+    }
+
+    /// Co zawęża listę z filtrów WSZYSTKICH przepisów, krótko — „do 30 min”,
+    /// „do 600 kcal”, „wege”. Kolejność jak sekcje arkusza „Filtry”. Z filtrami
+    /// kategorii — `summaryLabels(in:)`.
     var summaryLabels: [String] {
         var labels: [String] = []
         if let maxPrepTimeMinutes { labels.append("do \(maxPrepTimeMinutes) min") }
@@ -387,14 +455,6 @@ struct RecipeFilterOptions: Equatable {
             labels.append(count == 1 ? "bez 1 składnika" : "bez \(count) składników")
         }
         return labels
-    }
-
-    /// Te same filtry bez zawężenia jednej kategorii — pula, na której arkusz
-    /// tej kategorii liczy swoje kafelki.
-    func withoutCategoryFilter(for category: RecipesCategory) -> RecipeFilterOptions {
-        var next = self
-        next.categoryFilters[category] = nil
-        return next
     }
 
     // MARK: - Filtrowanie
@@ -437,15 +497,23 @@ struct RecipeFilterOptions: Equatable {
         self = RecipeFilterOptions()
     }
 
-    /// „Wyczyść” w arkuszu Filtrów czyści tylko swoje piętro — filtry
-    /// kategorii zostają, czyści je „Wyczyść” w arkuszu danej kategorii.
-    mutating func resetGlobal() {
-        let kept = categoryFilters
-        self = RecipeFilterOptions()
-        categoryFilters = kept
+    // MARK: - Mutacje
+
+    /// Zaznacza albo odznacza opcję aspektu kategorii — pusty wybór znika ze
+    /// słownika, żeby `isActive` nie widziało pustych wpisów.
+    mutating func toggle(_ option: String, in kind: RecipeFacetKind, for category: RecipesCategory) {
+        var filter = categoryFilters[category] ?? RecipeCategoryFilter()
+        filter.toggle(option, in: kind)
+        categoryFilters[category] = filter.isActive ? filter : nil
     }
 
-    // MARK: - Mutacje
+    /// Jedna opcja aspektu kategorii albo żadna (`nil`) — przełącznik „Smak”
+    /// w Filtrach, gdzie „każdy” znaczy tyle co oba naraz.
+    mutating func select(_ option: String?, in kind: RecipeFacetKind, for category: RecipesCategory) {
+        var filter = categoryFilters[category] ?? RecipeCategoryFilter()
+        filter.picks[kind] = option.map { [$0] }
+        categoryFilters[category] = filter.isActive ? filter : nil
+    }
 
     mutating func toggle(diet: RecipeDietFilter) {
         if diets.contains(diet) { diets.remove(diet) } else { diets.insert(diet) }

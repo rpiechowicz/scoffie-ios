@@ -185,7 +185,7 @@ struct AssistantOptionsDebugScreen: View {
             // kroki, `tour-6` przejście do kreatora.
             debugTour(phase: phase)
         } else if mode == "propozycja" {
-            ProposalEndDebugScreen()
+            ProposalReviewDebugScreen()
         } else if mode == "wynik" {
             // Karty porażki tury: nie dokończył, za długo, nie doszła.
             ScrollView {
@@ -231,6 +231,22 @@ struct AssistantOptionsDebugScreen: View {
                 .padding(.top, 50)
             }
             .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
+        } else if mode == "podpowiedz" {
+            // Półarkusz po kciuku w dół („Co nie zagrało?”).
+            SCPageBackground(scheme: scheme).ignoresSafeArea()
+                .sheet(isPresented: .constant(true)) {
+                    AssistantSuggestionSheet(
+                        message: AgentChatMessage(
+                            id: "debug-answer",
+                            author: .assistant,
+                            text: Self.debugAnswer,
+                            createdAt: nil,
+                            feedback: .down
+                        ),
+                        onSubmit: { _, _ in nil }
+                    )
+                    .interactiveDismissDisabled()
+                }
         } else if mode == "asystent-jak" {
             SCPageBackground(scheme: scheme).ignoresSafeArea()
                 .sheet(isPresented: .constant(true)) {

@@ -32,7 +32,8 @@ struct AssistantHeader<MenuContent: View>: View {
     /// Kapsuła limitu po lewej od ⋯ — tylko na próbie, w obu nagłówkach
     /// (w kompaktowym krótsza, bez słowa „wiadomości”).
     var accessory: AnyView?
-    /// Nastrój znaku w kompaktowym pasku — myśli, gdy tura biegnie.
+    /// Nastrój znaku w kompaktowym pasku — w trakcie tury spokojnie
+    /// nasłuchuje (`.attentive`), nie kręci się obok łuku w rozmowie.
     var markMood: SCLivingMark.Mood = .idle
     /// Podbicie = podskok znaku (tura skończyła się odpowiedzią).
     var markCheer: Int = 0
@@ -58,12 +59,13 @@ struct AssistantHeader<MenuContent: View>: View {
         case .compact:
             ZStack {
                 HStack(spacing: 7) {
-                    // Żywy znak: oddycha w spoczynku, kręci się w tempie łuku,
-                    // gdy tura biegnie, podskakuje przy odpowiedzi. Bez
-                    // poświaty — przy 15 pt zlewała się ze słowem obok.
+                    // Żywy znak: oddycha w spoczynku, w trakcie tury tylko
+                    // nasłuchuje (kręci się jeden łuk — w wierszu „myślę”),
+                    // podskakuje przy odpowiedzi. Bez poświaty — przy 15 pt
+                    // zlewała się ze słowem obok.
                     SCLivingMark(mood: markMood, color: AssistantLook.terraFill(scheme), size: 15, cheer: markCheer, glows: false)
                     Text("Asystent")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.sc(size: 17, weight: .semibold))
                         .tracking(-0.4)
                         .foregroundStyle(AssistantLook.ink(scheme))
                 }
@@ -169,7 +171,7 @@ struct AssistantQuotaPill: View {
                 // Po „z” dopełniacz — „z 5 wiadomości”, „z 1 wiadomości”.
                 Text(compact ? "z \(max(limit, remaining))" : "z \(max(limit, remaining)) wiadomości")
             }
-            .font(.system(size: 12, weight: .semibold))
+            .font(.sc(size: 12, weight: .semibold))
             .tracking(-0.1)
             .foregroundStyle(isEmpty ? AssistantLook.terra(scheme) : AssistantLook.muted(scheme))
             .lineLimit(1)
@@ -212,7 +214,7 @@ struct AssistantUserBubble: View {
         HStack {
             Spacer(minLength: 40)
             Text(text)
-                .font(.system(size: 16))
+                .font(.sc(size: 16))
                 .tracking(-0.3)
                 .lineSpacing(3)
                 .foregroundStyle(AssistantLook.ink(scheme))
@@ -265,21 +267,23 @@ struct AssistantVoice<Content: View>: View {
 
 // MARK: - Pisanie odpowiedzi
 
-/// Odpowiedź, która jeszcze się pisze — szkic w trakcie tury ALBO gotowa
-/// odpowiedź, która dopisuje się dalej od szkicu. JEDEN widok dla obu
-/// (27.09.2026): szkic i gotowa odpowiedź stoją w slocie pod tym samym
-/// kluczem (`AgentChatMessage.liveKey`), więc koniec tury nie podmienia widoku
-/// na nowy, który zaczyna pisać od siebie, tylko ten sam tekst płynie dalej.
+/// Świeża odpowiedź — szkic w trakcie tury ALBO gotowa odpowiedź tej tury.
+/// JEDEN widok dla obu (27.09.2026): szkic i gotowa odpowiedź stoją w slocie
+/// pod tym samym kluczem (`AgentChatMessage.liveKey`), więc koniec tury nie
+/// podmienia widoku na nowy, tylko ten sam tekst domyka się w miejscu.
 ///
-/// Serwer zapisuje szkic najwyżej raz na sekundę, więc bez zegara tekst
-/// wskakiwałby porcjami. Ile znaków widać, mówi `clock` — zegar z wiadomości
-/// (`AgentStore.draftReveal`, potem `AgentRevealClock.finishing`): przebudowa
+/// Pisze się na żywo tylko szkic: serwer zapisuje go najwyżej raz na sekundę,
+/// więc bez zegara tekst wskakiwałby porcjami. Gotowa odpowiedź najwyżej
+/// domyka szkic (≤ 0,6 s), a przyszła cała — stoi od razu (`AgentRevealClock
+/// .whole`, 6.10.2026). Ile znaków widać, mówi `clock` — zegar z wiadomości
+/// (`AgentStore.draftReveal`, potem `finishing` / `whole`): przebudowa
 /// wiersza nie zaczyna pisania od nowa, bo stan nie żyje w widoku. Układ
 /// stoi od pierwszej klatki, nienapisane jest przezroczyste
 /// (`AssistantAnswer(revealed:)`).
 ///
 /// `onDone` (tylko gotowa odpowiedź) pada raz, gdy wszystko jest na ekranie —
-/// wtedy pod tekstem wchodzą karta i pasek akcji. Reduce Motion: od razu całość.
+/// sklep zdejmuje wtedy zegar (`markRevealed`), a po domknięciu szkicu pod
+/// tekstem wchodzą karta i pasek akcji. Reduce Motion: od razu całość.
 struct AssistantRevealedAnswer: View {
     let text: String
     let clock: AgentRevealClock

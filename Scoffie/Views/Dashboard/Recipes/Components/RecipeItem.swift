@@ -26,13 +26,13 @@ struct RecipeItemView: View {
                                         .aspectRatio(contentMode: .fill)
                                 case .failure:
                                     Image(systemName: "fork.knife.circle")
-                                        .font(.system(size: 40))
+                                        .font(.sc(size: 40))
                                         .foregroundStyle(.secondary)
                                 case .empty:
                                     ProgressView()
                                 @unknown default:
                                     Image(systemName: "fork.knife.circle")
-                                        .font(.system(size: 40))
+                                        .font(.sc(size: 40))
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -116,7 +116,7 @@ struct RecipeItemView: View {
             .frame(height: imageHeight)
             .overlay(
                 Image(systemName: "fork.knife.circle")
-                    .font(.system(size: 40))
+                    .font(.sc(size: 40))
                     .foregroundStyle(.secondary)
             )
     }

@@ -37,20 +37,20 @@ struct EditorialStepsBar: View {
 
         VStack(alignment: .leading, spacing: 6) {
             Text("KROKI")
-                .font(.system(size: 10.5, weight: .bold))
+                .font(.sc(size: 10.5, weight: .bold))
                 .tracking(1.4)
                 .foregroundStyle(faint)
 
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 CountingNumber(target: steps ?? 0)
-                    .font(.system(size: 20, weight: .heavy))
+                    .font(.sc(size: 20, weight: .heavy))
                     .tracking(-0.5)
                     .foregroundStyle(hasData ? label : faint)
                     .lineLimit(1)
                     .fixedSize()
 
                 Text(verbatim: "/ \(goal)")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.sc(size: 11, weight: .semibold))
                     .tracking(0.3)
                     .foregroundStyle(muted)
                     .lineLimit(1)
@@ -75,14 +75,14 @@ struct EditorialStepsBar: View {
 
             HStack {
                 progressFootnote
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.sc(size: 11.5, weight: .medium))
                     .foregroundStyle(muted)
 
                 Spacer()
 
                 if source == .garmin {
                     Text("Źródło: Garmin")
-                        .font(.system(size: 11.5, weight: .medium))
+                        .font(.sc(size: 11.5, weight: .medium))
                         .foregroundStyle(muted)
                 }
             }

@@ -78,7 +78,7 @@ struct WelcomeStep4MealsView: View {
             }
 
             Text(MealSlot.core.map(\.title).joined(separator: " · "))
-                .font(.system(size: 14, weight: .semibold))
+                .font(.sc(size: 14, weight: .semibold))
                 .foregroundStyle(Color.scLabel(colorScheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -110,11 +110,11 @@ struct WelcomeStep4MealsView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(slot.title)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.sc(size: 16, weight: .semibold))
                         .foregroundStyle(isEnabled ? Color.scLabel(colorScheme) : Color.scMuted(colorScheme))
 
                     Text(slot.settingsSubtitle)
-                        .font(.system(size: 12))
+                        .font(.sc(size: 12))
                         .foregroundStyle(Color.scMuted(colorScheme))
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)

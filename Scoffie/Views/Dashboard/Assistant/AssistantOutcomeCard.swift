@@ -129,7 +129,7 @@ struct AssistantOutcomeCard: View {
 
                 if let detail {
                     Text(detail)
-                        .font(.system(size: 15))
+                        .font(.sc(size: 15))
                         .lineSpacing(3)
                         .foregroundStyle(AssistantLook.muted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
@@ -172,19 +172,19 @@ struct AssistantOutcomeCard: View {
                 .frame(width: 38, height: 38)
                 .overlay(
                     Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.sc(size: 16, weight: .semibold))
                         .foregroundStyle(AssistantLook.muted(scheme))
                 )
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(eyebrow.uppercased())
-                    .font(.system(size: 10.5, weight: .bold))
+                    .font(.sc(size: 10.5, weight: .bold))
                     .tracking(1.4)
                     .foregroundStyle(AssistantLook.faint(scheme))
                     .lineLimit(1)
                 Text(headline)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.sc(size: 17, weight: .semibold))
                     .tracking(-0.3)
                     .foregroundStyle(AssistantLook.ink(scheme))
                     .fixedSize(horizontal: false, vertical: true)

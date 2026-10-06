@@ -101,7 +101,7 @@ private struct CalendarCookTimerPill: View {
                 .foregroundStyle(color)
                 .cookTicking(time, countsDown: !item.status.isOverdue)
         }
-        .font(.system(size: 12.5, weight: .bold))
+        .font(.sc(size: 12.5, weight: .bold))
         .tracking(-0.15)
         .lineLimit(1)
         .minimumScaleFactor(0.75)

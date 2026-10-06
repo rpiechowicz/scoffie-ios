@@ -32,7 +32,7 @@ struct SCCircleIconLabel: View {
     /// Sąsiednie krążki w jednym rzędzie stawiać w `GlassEffectContainer`.
     var body: some View {
         Image(systemName: icon)
-            .font(.system(size: iconSize, weight: .semibold))
+            .font(.sc(size: iconSize, weight: .semibold))
             .foregroundStyle(highlighted ? accent : Color.scLabel(scheme))
             .frame(width: size, height: size)
             .scChromeGlass(

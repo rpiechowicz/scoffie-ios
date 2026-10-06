@@ -25,6 +25,20 @@ extension CookTimerAccent {
     func tint(_ scheme: ColorScheme) -> Color {
         color.opacity(scheme == .dark ? 0.16 : 0.12)
     }
+
+    /// Pismo NA pełnym kolorze timera („Gotowe” na alarmie). Zwykle tło
+    /// strony (jak „Gotuj” na terakocie), ale dwa skraje palety go nie niosą:
+    /// musztarda w jasnym motywie jest najjaśniejsza (krem na niej ~3,6 : 1,
+    /// a szkło z tintem jeszcze ją rozjaśnia) — dostaje ciemne pismo; indygo
+    /// w ciemnym motywie jest najciemniejsze (szkło nad czernią je przygasza)
+    /// — dostaje jasne.
+    func ink(_ scheme: ColorScheme) -> Color {
+        switch (self, scheme) {
+        case (.butter, .light): Color.scLabel(.light)
+        case (.indigo, .dark): Color.scLabel(.dark)
+        default: Color.scPageBase(scheme)
+        }
+    }
 }
 
 extension View {
@@ -682,11 +696,11 @@ struct CookTimerPill: View {
             CookTimerRing(fraction: item.status.remainingFraction, color: color, lineWidth: 3)
                 .frame(width: SCCook.Size.pillRing, height: SCCook.Size.pillRing)
             Text(item.timer.label)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.sc(size: 14, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
             Text(time)
-                .font(.system(size: 15, weight: .heavy))
+                .font(.sc(size: 15, weight: .heavy))
                 .monospacedDigit()
                 .foregroundStyle(color)
                 .cookTicking(time, countsDown: !item.status.isOverdue)

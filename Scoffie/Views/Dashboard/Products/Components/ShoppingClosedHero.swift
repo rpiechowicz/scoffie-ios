@@ -30,14 +30,14 @@ struct ShoppingClosedHero: View {
             }
 
             Text("Lista na ten tydzień jest zamknięta")
-                .font(.system(size: 20, weight: .bold))
+                .font(.sc(size: 20, weight: .bold))
                 .tracking(-0.5)
                 .foregroundStyle(Color.scLabel(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text("\(bought) z \(total) kupione. Gdy w Planie coś dojdzie, nowa lista ułoży się sama.")
-                .font(.system(size: 14, weight: .regular))
+                .font(.sc(size: 14, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)

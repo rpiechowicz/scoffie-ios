@@ -17,6 +17,10 @@ struct DashboardView: View {
     var body: some View {
         ZStack {
             NavigationMenu()
+                // Rozmiary z makiet liczą się przy budowaniu widoku
+                // (`Font.sc`) — zmiana rozmiaru tekstu w trakcie działania
+                // przebudowuje pulpit, żeby weszła od razu.
+                .scRefreshesOnDynamicType()
         }
         .sheet(item: $recipeLink) { request in
             RecipeLinkSheet(request: request) {
@@ -26,6 +30,14 @@ struct DashboardView: View {
         }
         .task(id: recipeLinkTaskKey) {
             await openPendingRecipeLink()
+        }
+        // Zgoda na powiadomienia w kontekście: świeżo dołączony domownik,
+        // pulpit już widać (6.10.2026 — start aplikacji o nią nie pyta).
+        .task(id: isRevealed) {
+            guard isRevealed, sessionStore.asksNotificationsOnReveal else { return }
+            sessionStore.asksNotificationsOnReveal = false
+            try? await Task.sleep(for: .milliseconds(600))
+            await NotificationPermission.requestIfNotAsked()
         }
     }
 

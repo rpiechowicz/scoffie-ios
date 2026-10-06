@@ -30,7 +30,7 @@ struct SCSearchField: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.sc(size: 15, weight: .semibold))
                 .foregroundStyle(Color.scMuted(scheme).opacity(0.7))
                 .accessibilityHidden(true)
 
@@ -38,7 +38,7 @@ struct SCSearchField: View {
                 Text(prompt)
                     .foregroundStyle(Color.scMuted(scheme).opacity(0.7))
             }
-            .font(.system(size: 16))
+            .font(.sc(size: 16))
             .tracking(-0.2)
             .foregroundStyle(Color.scLabel(scheme))
             .tint(SCPalette.terracotta)
@@ -53,7 +53,7 @@ struct SCSearchField: View {
                     text = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(.sc(size: 16))
                         .foregroundStyle(Color.scMuted(scheme))
                 }
                 .buttonStyle(.plain)

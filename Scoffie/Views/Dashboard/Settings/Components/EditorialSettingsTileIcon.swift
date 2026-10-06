@@ -39,7 +39,7 @@ struct EditorialSettingsTileIcon: View {
                 )
 
             Image(systemName: icon)
-                .font(.system(size: size * 0.52, weight: .bold))
+                .font(.sc(size: size * 0.52, weight: .bold))
                 .foregroundStyle(.white)
         }
         .frame(width: size, height: size)
@@ -60,7 +60,7 @@ struct EditorialSettingsInfoTile: View {
                 .stroke(Color.scFaint(scheme), lineWidth: 1.4)
 
             Text("i")
-                .font(.system(size: 14, weight: .semibold, design: .serif))
+                .font(.sc(size: 14, weight: .semibold, design: .serif))
                 .italic()
                 .foregroundStyle(Color.scFaint(scheme))
         }

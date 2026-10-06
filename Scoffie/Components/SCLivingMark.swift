@@ -15,9 +15,10 @@ import SwiftUI
 /// o pół obrotu.
 ///
 /// Myślenie kręci się z okresem łuku z „Oddechu łuku” (2,4 s) i oddycha jego
-/// oddechem (1,8 s) — znak w nagłówku i łuk w wierszu tury idą jednym tempem.
-/// Wiersz tury (`AssistantThoughtLine`) NIE dostaje żywego znaku: tam
-/// mówi łuk, a dwa kręcące się elementy obok siebie byłyby szumem.
+/// oddechem (1,8 s). Od 6.10.2026 nie bierze go nagłówek Asystenta: w trakcie
+/// tury kręci się JEDEN łuk (wiersz „myślę”, `AssistantThoughtLine`), a znak
+/// w nagłówku tylko nasłuchuje (`.attentive`) — dwa kręcące się elementy
+/// naraz byłyby szumem. Wiersz tury też nie dostaje żywego znaku.
 ///
 /// Zegar staje na niewybranej zakładce (`scTabIsActive`) i przy „Ogranicz
 /// ruch” — wtedy znak stoi w pozie spoczynku, bez podskoków.

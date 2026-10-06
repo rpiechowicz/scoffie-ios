@@ -17,8 +17,10 @@ import SwiftUI
 /// po czym rozwija się w dół. Złudzenie jest pełne, a kosztuje jeden plik
 /// zamiast nowego targetu i tłumaczenia się przy przeglądzie w App Store.
 ///
-/// Toast jest wyłącznie informacyjny — nie ma akcji ani celu nawigacji.
-/// Stuknięcie i machnięcie w górę tylko go zamykają.
+/// Toast jest informacyjny — bez celu nawigacji. Stuknięcie i machnięcie
+/// w górę tylko go zamykają. Jedyny wyjątek to JEDNA akcja odwracająca to,
+/// co właśnie się stało (`action`, „Cofnij” po dodaniu do planu — 6.10.2026):
+/// przycisk po prawej stronie kapsuły, nic więcej.
 struct SCToast: Identifiable, Equatable {
     let id = UUID()
     let style: Style
@@ -27,18 +29,35 @@ struct SCToast: Identifiable, Equatable {
     let title: String
     /// Doprecyzowanie pod tytułem. `nil` zostawia kapsułę niską.
     let message: String?
+    /// Przycisk po prawej („Cofnij”). `nil` = sam komunikat.
+    let action: Action?
 
-    init(style: Style, title: String, message: String? = nil) {
+    init(style: Style, title: String, message: String? = nil, action: Action? = nil) {
         self.style = style
         self.title = title
         self.message = message
+        self.action = action
+    }
+
+    /// Akcja toastu: krótki tytuł i to, co ma się stać. Kapsuła zamyka się
+    /// PRZED wykonaniem — skutek przychodzi jako następny toast.
+    struct Action {
+        /// Jedna operacja = jeden identyfikator. Dwa „Dodano do planu ·
+        /// Jutro · Obiad” z „Cofnij” (dwa dania dla dwóch osób) to RÓŻNE
+        /// toasty — inaczej tłumienie powtórek zostawiłoby na ekranie
+        /// pierwszy, a jego „Cofnij” zdjęłoby nie to danie (Codex 6.10.2026).
+        let id = UUID()
+        let title: String
+        let perform: @MainActor () -> Void
     }
 
     /// Dwa toasty są „tym samym", gdy niosą tę samą treść — identyfikator
     /// jest z definicji różny, więc nie może brać udziału w porównaniu.
-    /// Na tym stoi tłumienie powtórek w `SCToastCenter`.
+    /// Na tym stoi tłumienie powtórek w `SCToastCenter`. Toast z akcją jest
+    /// zawsze osobną operacją — porównuje się identyfikator akcji.
     static func == (lhs: SCToast, rhs: SCToast) -> Bool {
         lhs.style == rhs.style && lhs.title == rhs.title && lhs.message == rhs.message
+            && lhs.action?.id == rhs.action?.id
     }
 
     /// Ile toast zostaje na ekranie.
@@ -54,7 +73,9 @@ struct SCToast: Identifiable, Equatable {
         }
         let characters = title.count + (message?.count ?? 0)
         let read = 1.5 + Double(characters) * 0.05
-        return .seconds(min(6.5, max(base, read)))
+        // Z akcją dłużej: trzeba zdążyć przeczytać i sięgnąć kciukiem do góry.
+        let floor = action == nil ? base : 5.5
+        return .seconds(min(6.5, max(floor, read)))
     }
 
     /// Waga zdarzenia. Wybiera barwę akcentu, glif i dotyk.
@@ -191,8 +212,8 @@ final class SCToastCenter {
 
     // MARK: Wygodne wejścia
 
-    func success(_ title: String, _ message: String? = nil) {
-        show(SCToast(style: .success, title: title, message: message))
+    func success(_ title: String, _ message: String? = nil, action: SCToast.Action? = nil) {
+        show(SCToast(style: .success, title: title, message: message, action: action))
     }
 
     func info(_ title: String, _ message: String? = nil) {

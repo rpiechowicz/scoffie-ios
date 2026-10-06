@@ -59,7 +59,7 @@ struct SCStepper: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 12, weight: .bold))
+                .font(.sc(size: 12, weight: .bold))
                 .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 34, height: 30)
                 .contentShape(Rectangle())
@@ -120,7 +120,7 @@ private struct SCStepperPreviewHost: View {
     ) -> some View {
         HStack(spacing: 12) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
 

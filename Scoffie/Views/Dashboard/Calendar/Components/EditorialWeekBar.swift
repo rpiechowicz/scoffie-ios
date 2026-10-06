@@ -181,7 +181,7 @@ struct EditorialWeekBar: View {
             changeWeek(step)
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .bold))
+                .font(.sc(size: 10, weight: .bold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 26, height: 26)
                 // Szklany krążek (Liquid Glass, 4.10.2026: „wszystkie małe

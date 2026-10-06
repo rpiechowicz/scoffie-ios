@@ -1,15 +1,16 @@
 import SwiftUI
 
-// Wykluczanie składników — dwa arkusze nad arkuszem „Filtry”, oba piszą do
-// jego kopii roboczej:
+// Wykluczanie składników — dwie podstrony wpychane w stos arkusza „Filtry”
+// (6.10.2026: push zamiast arkuszy na arkuszu), obie piszą od razu do filtrów
+// Przepisów:
 //
-// - `RecipeExcludeSheet` — kafelek „Wyklucz składniki” w Filtrach: pole
+// - `RecipeExcludePage` — kafelek „Wyklucz składniki” w Filtrach: pole
 //   szukania (wyniki od drugiej litery, pogrupowane po działach, „Cofnij”
 //   nad klawiaturą), karta „Wykluczone” i działy sklepu z ich ikonami.
-// - `RecipeExcludeCategorySheet` — stuknięty dział („Warzywa”): składniki
+// - `RecipeExcludeDepartmentPage` — stuknięty dział („Warzywa”): składniki
 //   jako chmura pigułek od najczęstszych w przepisach.
 //
-// Oba nagłówki stoją przypięte nad przewijaną treścią (`scScrollEdgeFade`).
+// Obie mają systemowy pasek z tytułem, „wstecz” i „Wyczyść”.
 //
 // Makieta (`FFSearch`, `FFCategory` w `filtry-final.jsx`) miała listę
 // wierszy z przyciskiem „Wyklucz” przy każdym składniku. W dziale „Warzywa”
@@ -18,19 +19,19 @@ import SwiftUI
 // niesie stan sama (terakota = wykluczony), dział mieści się na półtora
 // ekranu, a działy mają te same ikony i barwy co alejki Zakupów.
 //
-// Odejście od makiety: w arkuszu działu stoi krzyżyk, a nie strzałka
-// „wstecz” — arkusz się ZAMYKA (`SCSheetCloseButton`), jak każdy arkusz
-// nałożony na arkusz.
+// Dział ma znowu „wstecz”, jak w makiecie — jest podstroną, nie arkuszem
+// nałożonym na arkusz.
 
 // MARK: - Dział
 
-struct RecipeExcludeCategorySheet: View {
+struct RecipeExcludeDepartmentPage: View {
     let department: IngredientDepartment
     let index: RecipeFilterIndex
     @Binding var filters: RecipeFilterOptions
     let fit: Bool
+    /// „Gotowe” — zamyka cały arkusz Filtrów (zmiany już działają).
+    let onDone: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
     @State private var query = ""
@@ -54,11 +55,6 @@ struct RecipeExcludeCategorySheet: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, 20)
-                    .padding(.top, 18)
-                    .padding(.bottom, 12)
-
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         SCSearchField(
@@ -83,35 +79,24 @@ struct RecipeExcludeCategorySheet: View {
                 }
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
-                .scScrollEdgeFade()
+                // Pod systemowym paskiem — miękka krawędź, bez kreski.
+                .scrollEdgeEffectStyle(.soft, for: .top)
                 .scSheetFooter { footer }
             }
         }
         .sensoryFeedback(.selection, trigger: filters.excludedIngredients)
-    }
-
-    // MARK: Nagłówek
-
-    /// Wspólny nagłówek arkusza z kafelkiem działu — ta sama ikona i barwa,
-    /// co przy alejce na Zakupach. „Wyczyść” obok krzyżyka zdejmuje naraz
-    /// wszystko, co wykluczono w TYM dziale (Rafał, 23.09.2026) — ten sam
-    /// przycisk, co w arkuszach filtrów, i tylko wtedy, gdy jest co czyścić.
-    private var header: some View {
-        EditorialSheetHeader(
-            eyebrow: "Wyklucz składniki",
-            title: department.name,
-            icon: ProductConstants.departmentIcon(for: department.name),
-            accent: ProductConstants.departmentColor(for: department.name),
-            onClose: { dismiss() }
-        ) {
-            if !excludedHere.isEmpty {
-                RecipeFilterClearButton(accessibilityLabel: "Wyczyść wykluczenia w tym dziale") {
-                    clearDepartment()
-                }
-                .transition(.scale(scale: 0.85).combined(with: .opacity))
+        .navigationTitle(department.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        // „Wyczyść” zdejmuje naraz wszystko, co wykluczono w TYM dziale
+        // (Rafał, 23.09.2026) — wyszarzone, gdy nie ma czego czyścić.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Wyczyść") { clearDepartment() }
+                    .disabled(excludedHere.isEmpty)
+                    .accessibilityLabel("Wyczyść wykluczenia w tym dziale")
             }
         }
-        .animation(.smooth(duration: 0.22), value: excludedHere.isEmpty)
     }
 
     private func clearDepartment() {
@@ -218,7 +203,7 @@ struct RecipeExcludeCategorySheet: View {
         sectionLabel("Wyniki")
         if results.isEmpty {
             Text("W tym dziale nie ma takiego składnika.")
-                .font(.system(size: 13.5))
+                .font(.sc(size: 13.5))
                 .foregroundStyle(Color.scMuted(scheme))
                 .padding(.horizontal, 6)
         } else {
@@ -246,7 +231,7 @@ struct RecipeExcludeCategorySheet: View {
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: count == 0 ? "Nic nie wykluczasz" : PolishPlural.excluded(count))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.sc(size: 15, weight: .bold))
                     .tracking(-0.3)
                     .monospacedDigit()
                     .foregroundStyle(Color.scLabel(scheme))
@@ -255,7 +240,7 @@ struct RecipeExcludeCategorySheet: View {
                 Text(verbatim: hidden == 0
                      ? "Wszystkie przepisy zostają"
                      : "łącznie ukrywa \(PolishPlural.recipes(hidden))")
-                    .font(.system(size: 12.5))
+                    .font(.sc(size: 12.5))
                     .monospacedDigit()
                     .foregroundStyle(Color.scMuted(scheme))
                     .contentTransition(.numericText(value: Double(hidden)))
@@ -265,7 +250,7 @@ struct RecipeExcludeCategorySheet: View {
             .animation(.smooth(duration: 0.25), value: hidden)
             .accessibilityElement(children: .combine)
 
-            RecipeFilterFooterButton(title: "Gotowe", trailingIcon: nil) { dismiss() }
+            RecipeFilterFooterButton(title: "Gotowe", trailingIcon: nil, action: onDone)
         }
         .padding(.leading, 4)
     }
@@ -273,23 +258,24 @@ struct RecipeExcludeCategorySheet: View {
 
 // MARK: - Wykluczanie
 
-/// Arkusz „Wyklucz składniki” — otwierany kafelkiem z arkusza „Filtry”.
+/// Podstrona „Wyklucz składniki” — wpychana kafelkiem z arkusza „Filtry”.
 ///
 /// Od góry: pole szukania, karta „Wykluczone” (chipy, stuknięcie przywraca)
 /// i działy sklepu. Od drugiej litery w polu karta i działy ustępują wynikom —
 /// pigułkom pogrupowanym po działach; szukanie jest tutaj, w miejscu, a nie
-/// w kolejnym arkuszu. Wykluczenie z wyników potwierdza „Cofnij” nad
-/// klawiaturą (albo dołem arkusza); nowy chip czeka w karcie podświetlony
-/// jeszcze przez chwilę po wyjściu z szukania. Dział otwiera
-/// `RecipeExcludeCategorySheet`.
-struct RecipeExcludeSheet: View {
+/// na kolejnej stronie. Wykluczenie z wyników potwierdza „Cofnij” nad
+/// klawiaturą (albo dołem ekranu); nowy chip czeka w karcie podświetlony
+/// jeszcze przez chwilę po wyjściu z szukania. Dział wpycha
+/// `RecipeExcludeDepartmentPage`.
+struct RecipeExcludePage: View {
     let index: RecipeFilterIndex
     @Binding var filters: RecipeFilterOptions
     let fit: Bool
     /// Alergeny i dieta z profilu — w karcie „Wykluczone” z kłódką.
     let profileChips: [RecipeFilterChipLine.Chip]
+    /// „Gotowe” na stronie działu — zamyka cały arkusz Filtrów.
+    let onDone: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
     @State private var query = ""
@@ -329,28 +315,6 @@ struct RecipeExcludeSheet: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // „Wyczyść” jak w arkuszu działu — tutaj zdejmuje wszystkie
-                // wykluczenia naraz (profil z kłódką zostaje, bo nie jest
-                // wykluczeniem z tego arkusza). Kafelek ten sam, co w sekcji
-                // „Wyklucz składniki” w Filtrach, która tu prowadzi.
-                EditorialSheetHeader(
-                    eyebrow: "Filtry",
-                    title: "Wyklucz składniki",
-                    icon: "nosign",
-                    onClose: { dismiss() }
-                ) {
-                    if !filters.excludedIngredients.isEmpty {
-                        RecipeFilterClearButton(accessibilityLabel: "Wyczyść wykluczenia") {
-                            clearAll()
-                        }
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
-                    }
-                }
-                .animation(.smooth(duration: 0.22), value: filters.excludedIngredients.isEmpty)
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 12)
-
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         SCSearchField(
@@ -384,10 +348,11 @@ struct RecipeExcludeSheet: View {
                 }
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
-                .scScrollEdgeFade()
+                // Pod systemowym paskiem — miękka krawędź, bez kreski.
+                .scrollEdgeEffectStyle(.soft, for: .top)
             }
         }
-        // Nad klawiaturą — bezpieczny obszar arkusza kończy się na niej.
+        // Nad klawiaturą — bezpieczny obszar kończy się na niej.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             toast
         }
@@ -395,16 +360,34 @@ struct RecipeExcludeSheet: View {
         .task {
             chipOrder = filters.excludedIngredients.sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
         }
-        .onDisappear { undoTask?.cancel() }
-        .sheet(item: $openDepartment) { department in
-            RecipeExcludeCategorySheet(
+        // Także przy wejściu w dział (push) — „Cofnij” i podświetlenie mówią
+        // o ostatnim ruchu na TEJ stronie i nie mogą czekać na powrót.
+        .onDisappear {
+            undoTask?.cancel()
+            undo = nil
+            freshChip = nil
+        }
+        // Ta sama nazwa co wiersz, który tu prowadzi (lista „Filtrów”).
+        .navigationTitle("Bez składników")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        // „Wyczyść” zdejmuje wszystkie wykluczenia naraz (profil z kłódką
+        // zostaje, bo nie jest wykluczeniem z tej strony).
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Wyczyść") { clearAll() }
+                    .disabled(filters.excludedIngredients.isEmpty)
+                    .accessibilityLabel("Wyczyść wykluczenia")
+            }
+        }
+        .navigationDestination(item: $openDepartment) { department in
+            RecipeExcludeDepartmentPage(
                 department: department,
                 index: index,
                 filters: $filters,
-                fit: fit
+                fit: fit,
+                onDone: onDone
             )
-            .presentationDetents([.large])
-            .dashboardLiquidSheet()
         }
     }
 
@@ -425,7 +408,7 @@ struct RecipeExcludeSheet: View {
 
                 if list.isEmpty {
                     Text("Przepisy nie mają jeszcze listy składników.")
-                        .font(.system(size: 13))
+                        .font(.sc(size: 13))
                         .foregroundStyle(Color.scMuted(scheme))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(14)
@@ -460,13 +443,13 @@ struct RecipeExcludeSheet: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(department.name)
-                        .font(.system(size: 15.5, weight: .semibold))
+                        .font(.sc(size: 15.5, weight: .semibold))
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
 
                     Text(subtitle)
-                        .font(.system(size: 12.5, weight: excluded.isEmpty ? .regular : .medium))
+                        .font(.sc(size: 12.5, weight: excluded.isEmpty ? .regular : .medium))
                         .foregroundStyle(excluded.isEmpty ? Color.scMuted(scheme) : SCPalette.terracotta)
                         .lineLimit(1)
                         .contentTransition(.opacity)
@@ -479,7 +462,7 @@ struct RecipeExcludeSheet: View {
                 }
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.sc(size: 12, weight: .bold))
                     .foregroundStyle(Color.scFaint(scheme))
             }
             .padding(.vertical, 11)
@@ -527,7 +510,7 @@ struct RecipeExcludeSheet: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text("Wykluczone")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.sc(size: 14, weight: .semibold))
                     .tracking(-0.25)
                     .foregroundStyle(Color.scLabel(scheme))
 
@@ -539,7 +522,7 @@ struct RecipeExcludeSheet: View {
                     (Text("ukrywa ")
                         + Text(verbatim: "\(hidden)").fontWeight(.semibold).foregroundStyle(Color.scLabel(scheme))
                         + Text(verbatim: " \(PolishPlural.recipesNoun(hidden))"))
-                        .font(.system(size: 12.5))
+                        .font(.sc(size: 12.5))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
@@ -626,7 +609,7 @@ struct RecipeExcludeSheet: View {
 
         if sections.isEmpty {
             Text("Żaden przepis nie ma takiego składnika.")
-                .font(.system(size: 13.5))
+                .font(.sc(size: 13.5))
                 .foregroundStyle(Color.scMuted(scheme))
                 .padding(.horizontal, 6)
                 .padding(.top, 22)
@@ -713,17 +696,17 @@ struct RecipeExcludeSheet: View {
             if let undo {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .heavy))
+                        .font(.sc(size: 12, weight: .heavy))
                         .foregroundStyle(SCPalette.terracotta)
 
                     (Text("Wykluczono: ") + Text(undo.exclusion.chipTitle).fontWeight(.bold))
-                        .font(.system(size: 13.5))
+                        .font(.sc(size: 13.5))
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
 
                     Button(action: performUndo) {
                         Text("Cofnij")
-                            .font(.system(size: 13.5, weight: .semibold))
+                            .font(.sc(size: 13.5, weight: .semibold))
                             .foregroundStyle(SCPalette.terracotta)
                             .padding(.horizontal, 12)
                             .frame(height: 32)
@@ -753,8 +736,8 @@ struct RecipeExcludeSheet: View {
 // MARK: - Trafienie szukania
 
 /// Trafienie szukania jako pigułka: składnik albo cała grupa
-/// („Papryka · wszystkie”). Co zrobić po stuknięciu, decyduje arkusz —
-/// arkusz „Wyklucz składniki” dokłada do tego „Cofnij”.
+/// („Papryka · wszystkie”). Co zrobić po stuknięciu, decyduje strona —
+/// „Wyklucz składniki” dokłada do tego „Cofnij”.
 struct RecipeExclusionResultPill: View {
     let result: IngredientSearchResult
     let filters: RecipeFilterOptions

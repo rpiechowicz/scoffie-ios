@@ -166,17 +166,17 @@ struct CookNoteCard: View {
         let isWarning = kind == .warning
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .bold))
+                .font(.sc(size: 12, weight: .bold))
                 .foregroundStyle(tint)
                 .frame(width: SCCook.Size.noteIcon, height: SCCook.Size.noteIcon)
                 .background(Circle().fill(tint.opacity(scheme == .dark ? 0.18 : 0.14)))
             VStack(alignment: .leading, spacing: 2) {
                 Text(eyebrow)
-                    .font(.system(size: 10.5, weight: .bold))
+                    .font(.sc(size: 10.5, weight: .bold))
                     .tracking(1)
                     .foregroundStyle(tint)
                 Text(text)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.sc(size: 14, weight: .medium))
                     .lineSpacing(2)
                     .foregroundStyle(Color.scLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)

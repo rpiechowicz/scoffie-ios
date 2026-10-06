@@ -31,12 +31,12 @@ struct ShoppingTodayRow: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: hasEverything ? "checkmark.circle.fill" : "clock")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.sc(size: 15, weight: .semibold))
                     .foregroundStyle(accent)
                     .contentTransition(.symbolEffect(.replace))
 
                 SCCountingText(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.sc(size: 15, weight: .semibold))
                     .tracking(-0.3)
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
@@ -66,20 +66,20 @@ struct ShoppingTodayRow: View {
         if isFiltered {
             HStack(spacing: 5) {
                 Text("Cała lista")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .foregroundStyle(SCPalette.terracotta)
                     .lineLimit(1)
                     .fixedSize()
 
                 Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .foregroundStyle(SCPalette.terracotta)
             }
         } else {
             HStack(spacing: 8) {
                 if dishes > 0 && !hasEverything {
                     SCCountingText(PolishPlural.dishes(dishes))
-                        .font(.system(size: 13, weight: .regular))
+                        .font(.sc(size: 13, weight: .regular))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
@@ -87,7 +87,7 @@ struct ShoppingTodayRow: View {
                 }
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.sc(size: 12, weight: .bold))
                     .foregroundStyle(accent)
             }
         }

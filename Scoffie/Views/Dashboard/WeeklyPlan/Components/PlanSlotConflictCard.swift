@@ -45,14 +45,14 @@ struct PlanSlotConflictCard: View {
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text("\(slot.title.uppercased()) · \(whoHasIt)")
-                            .font(.system(size: 10.5, weight: .bold))
+                            .font(.sc(size: 10.5, weight: .bold))
                             .tracking(1.2)
                             .foregroundStyle(accent)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
 
                         Text(meals.count > 1 ? "\(first.recipe.name) +\(meals.count - 1)" : first.recipe.name)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.sc(size: 14, weight: .semibold))
                             .tracking(-0.2)
                             .foregroundStyle(Color.scLabel(scheme))
                             .lineLimit(1)
@@ -93,9 +93,9 @@ struct PlanSlotConflictCard: View {
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .tracking(-0.2)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)

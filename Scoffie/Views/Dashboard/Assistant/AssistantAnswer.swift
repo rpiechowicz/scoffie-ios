@@ -331,7 +331,7 @@ struct AssistantAnswer: View {
         switch block {
         case let .heading(title, raw):
             Text(styled(AssistantAnswerParser.inline(title), raw: raw, reveal: reveal))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.sc(size: 15, weight: .semibold))
                 .tracking(-0.2)
                 .foregroundStyle(Color.scLabel(scheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -341,7 +341,7 @@ struct AssistantAnswer: View {
 
         case let .paragraph(paragraph, raw):
             Text(styled(AssistantAnswerParser.inline(paragraph), raw: raw, reveal: reveal))
-                .font(.system(size: 16))
+                .font(.sc(size: 16))
                 .lineSpacing(6)
                 .foregroundStyle(Color.scLabel(scheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -397,7 +397,7 @@ private struct AssistantListCard: View {
         HStack(alignment: .top, spacing: 10) {
             if let badge = item.day ?? item.ordinal.map({ "\($0)." }) {
                 Text(badge)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .foregroundStyle(SCPalette.terracotta)
                     .frame(width: 36, height: 22)
                     .background(
@@ -412,7 +412,7 @@ private struct AssistantListCard: View {
             }
 
             Text(styledText(item))
-                .font(.system(size: 15))
+                .font(.sc(size: 15))
                 .lineSpacing(3)
                 .foregroundStyle(Color.scLabel(scheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -442,18 +442,18 @@ struct AssistantSavedPlanCard: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.sc(size: 16, weight: .semibold))
                 .foregroundStyle(SCPalette.sage)
 
             Text("Plan tygodnia zapisany")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.sc(size: 14, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
 
             Spacer(minLength: 8)
 
             Button(action: onOpenPlan) {
                 Text("Otwórz")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .foregroundStyle(SCPalette.terracotta)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)

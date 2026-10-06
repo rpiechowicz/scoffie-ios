@@ -114,6 +114,7 @@ struct RecipeDetailView: View {
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
+    @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -159,9 +160,13 @@ struct RecipeDetailView: View {
     /// Porcje łączne w jednostkach 1/20: w katalogu stepper co 0,5, w planie
     /// (gdy nie ma porcji osób) co 1 — `plannedServings` to liczba całkowita.
     @State private var servingsUnits: Int
-    @State private var isAddToPlanPresented = false
-    /// Półarkusz „Kto ile je” spod przyczepionej pigułki porcji.
-    @State private var isPortionsSheetPresented = false
+    /// Pełne „Dodaj do planu” (ekran stosu arkusza) — z dniem i porą
+    /// z szybkiego menu (pora zajęta innym daniem) albo bez („Inny dzień…”,
+    /// cudzy przepis).
+    @State private var addToPlanRequest: AddToPlanRequest?
+    /// Ekran „Kto ile je” (push w stosie arkusza) spod przyczepionej pigułki
+    /// porcji.
+    @State private var isPortionsPagePresented = false
 
     /// Czy użytkownik dotknął steppera na tym ekranie.
     ///
@@ -198,9 +203,6 @@ struct RecipeDetailView: View {
 
     /// Wysyłka brakujących na listę zakupów.
     @State private var shoppingSend: ShoppingSendState = .idle
-
-    /// Wjazd treści — sekcje wchodzą kolejno, donut rysuje się od góry.
-    @State private var hasAppeared = false
 
     @State private var scrollPosition = ScrollPosition(edge: .top)
 
@@ -323,18 +325,68 @@ struct RecipeDetailView: View {
 
 
     var body: some View {
+        // Arkusz szczegółów ma WŁASNY stos (6.10.2026, „jak od Apple”: jeden
+        // arkusz, dalszy krok = push). „Kto ile je” i „Dodaj do planu”
+        // wjeżdżają jako kolejne ekrany tego arkusza z systemowym „wstecz”,
+        // a nie jako arkusz na arkuszu; pierwszy ekran zostaje bez paska.
+        NavigationStack {
+            page
+                .navigationDestination(isPresented: $isPortionsPagePresented) {
+                    if let personalPortions {
+                        portionsPage(personalPortions)
+                    }
+                }
+                .navigationDestination(item: $addToPlanRequest) { request in
+                    addToPlanPage(request)
+                }
+        }
+        // Wejście, zadanie i okno pytania na STOSIE, nie na pierwszym ekranie:
+        // tam powrót z ekranu wepchniętego odpalałby `onAppear` drugi raz,
+        // a zadanie anulowałoby się pod wepchniętym ekranem.
+        .onAppear { applyDebugLaunchOptions() }
+        // Scenariusz Gotuj w pamięci telefonu — przycisk „Gotuj” pojawia się,
+        // gdy paczka jest (§4.1), i działa potem bez sieci.
+        .task(id: recipe.id) {
+            // Cudzy przepis (`.shared`) i tak nie ma „Gotuj” — bez zapytań.
+            if case .shared = context { return }
+            await sessionStore.cookScenarioStore?.prepare(recipe)
+        }
+        .confirmationDialog(
+            "Gotujesz już inne danie",
+            isPresented: $isReplaceCookingAsked,
+            titleVisibility: .visible
+        ) {
+            // Bez `end()` tutaj: start i tak podmienia sesję, a gdyby przejście
+            // się nie udało, tamta nie przepada w pół drogi.
+            Button("Zakończ tamto i gotuj to", role: .destructive) {
+                beginCooking()
+            }
+            Button("Wróć do tamtego") {
+                Task { await sessionStore.resumeCooking() }
+            }
+            Button("Anuluj", role: .cancel) {}
+        } message: {
+            Text("Gotujemy jedno danie naraz — tamto ma swoje timery.")
+        }
+    }
+
+    /// Pierwszy ekran stosu: zdjęcie, przepis i dolny pasek akcji.
+    private var page: some View {
         ZStack(alignment: .top) {
             DetailBackground()
                 .ignoresSafeArea()
 
             ScrollView {
+                // Szczegóły otwierają się w GOTOWYM stanie (6.10.2026, „jak od
+                // Apple”): wjazd arkusza systemu wystarcza — bez osiadania
+                // zdjęcia, kaskady sekcji, rosnących pierścieni i liczb od
+                // zera. Animują się tylko ZMIANY: porcje, „mam w domu”, serce.
                 VStack(alignment: .leading, spacing: 0) {
-                    DetailHeroPhoto(url: recipe.imageURL, isRevealed: hasAppeared)
+                    DetailHeroPhoto(url: recipe.imageURL)
 
                     header
                         .padding(.horizontal, 20)
                         .padding(.top, 6)
-                        .detailReveal(hasAppeared, order: 0)
 
                     // „Kto ile je” nie jest już sekcją tutaj — to pigułka
                     // przyczepiona nad przyciskami (`portionsPill`), jak
@@ -342,18 +394,15 @@ struct RecipeDetailView: View {
 
                     nutritionSection
                         .padding(.top, 24)
-                        .detailReveal(hasAppeared, order: 1)
 
                     if !recipe.preparationSteps.isEmpty {
                         preparationSection
                             .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 2)
                     }
 
                     if !recipe.ingredients.isEmpty {
                         ingredientsSection
                             .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 3)
                     }
 
                     // Oddech nad dolnym paskiem. Sam pasek liczy system
@@ -413,7 +462,6 @@ struct RecipeDetailView: View {
             .disabled(onSetFavourite == nil)
             .padding(.leading, 20)
             .padding(.top, 16)
-            .detailChrome(hasAppeared)
         }
         .overlay(alignment: .topTrailing) {
             HStack(spacing: 10) {
@@ -426,59 +474,31 @@ struct RecipeDetailView: View {
             }
             .padding(.trailing, 20)
             .padding(.top, 16)
-            .detailChrome(hasAppeared)
         }
-        .onAppear { applyDebugLaunchOptions() }
-        // Klatka oddechu jak w wyborze posiłku u Asystenta: arkusz zaczyna
-        // wjeżdżać, dopiero potem treść. Ustawione w `onAppear` padało w tej
-        // samej klatce co wstawienie widoku i wjazd sekcji w ogóle nie grał.
-        .task {
-            guard !hasAppeared else { return }
-            try? await Task.sleep(for: .milliseconds(80))
-            hasAppeared = true
-        }
-        // Scenariusz Gotuj w pamięci telefonu — przycisk „Gotuj” pojawia się,
-        // gdy paczka jest (§4.1), i działa potem bez sieci.
-        .task(id: recipe.id) {
-            // Cudzy przepis (`.shared`) i tak nie ma „Gotuj” — bez zapytań.
-            if case .shared = context { return }
-            await sessionStore.cookScenarioStore?.prepare(recipe)
-        }
-        .confirmationDialog(
-            "Gotujesz już inne danie",
-            isPresented: $isReplaceCookingAsked,
-            titleVisibility: .visible
-        ) {
-            // Bez `end()` tutaj: start i tak podmienia sesję, a gdyby przejście
-            // się nie udało, tamta nie przepada w pół drogi.
-            Button("Zakończ tamto i gotuj to", role: .destructive) {
-                beginCooking()
+    }
+
+    /// „Dodaj do planu” jako ekran stosu szczegółów — z „Inny dzień…”, z pory
+    /// zajętej innym daniem i z cudzego przepisu. Dawniej arkusz na arkuszu.
+    private func addToPlanPage(_ request: AddToPlanRequest) -> some View {
+        // Liczba porcji ze steppera jedzie do ekranu jako punkt startowy:
+        // użytkownik właśnie na nią patrzył, więc przestawienie jej przy
+        // dodawaniu wyglądałoby na zgubienie jego wyboru.
+        AddToPlanSheet(
+            // Cudzy przepis idzie do planu jako kopia tego domu.
+            recipe: savedCopy ?? recipe,
+            initialServings: wholeServings,
+            initialUnits: servingsUnits,
+            // Stepper startuje od jedynki, więc każda inna wartość znaczy,
+            // że użytkownik świadomie go ruszył — i ekran nie ma prawa
+            // nadpisać jej regułą auto z chipów.
+            didOverrideServings: didTouchStepper,
+            initialDate: request.date,
+            initialSlot: request.slot,
+            isPushed: true,
+            onAdded: { day, slot in
+                onAddedToPlan?(day, slot)
             }
-            Button("Wróć do tamtego") {
-                Task { await sessionStore.resumeCooking() }
-            }
-            Button("Anuluj", role: .cancel) {}
-        } message: {
-            Text("Gotujemy jedno danie naraz — tamto ma swoje timery.")
-        }
-        .sheet(isPresented: $isAddToPlanPresented) {
-            // Liczba porcji ze steppera jedzie do arkusza jako punkt startowy:
-            // użytkownik właśnie na nią patrzył, więc przestawienie jej przy
-            // dodawaniu wyglądałoby na zgubienie jego wyboru.
-            AddToPlanSheet(
-                // Cudzy przepis idzie do planu jako kopia tego domu.
-                recipe: savedCopy ?? recipe,
-                initialServings: wholeServings,
-                initialUnits: servingsUnits,
-                // Stepper startuje od jedynki, więc każda inna wartość znaczy,
-                // że użytkownik świadomie go ruszył — i arkusz nie ma prawa
-                // nadpisać jej regułą auto z chipów.
-                didOverrideServings: didTouchStepper,
-                onAdded: { day, slot in
-                    onAddedToPlan?(day, slot)
-                }
-            )
-        }
+        )
     }
 
     // MARK: - Góra: tagi, tytuł, lede
@@ -488,7 +508,7 @@ struct RecipeDetailView: View {
             tagRow
 
             Text(recipe.name)
-                .font(.system(size: 32, weight: .heavy))
+                .font(.sc(size: 32, weight: .heavy))
                 .tracking(-0.96)
                 .foregroundStyle(look.fg)
                 .fixedSize(horizontal: false, vertical: true)
@@ -497,7 +517,7 @@ struct RecipeDetailView: View {
 
             if !recipe.description.isEmpty {
                 Text(recipe.description)
-                    .font(.system(size: 14.5))
+                    .font(.sc(size: 14.5))
                     .foregroundStyle(look.muted)
                     // 21 pt wiersza z makiety przy 14,5 pt pisma.
                     .lineSpacing(3.7)
@@ -553,7 +573,7 @@ struct RecipeDetailView: View {
             Spacer(minLength: 10)
 
             Text(verbatim: "\(recipe.prepTimeMinutes) MIN")
-                .font(.system(size: 12, weight: .bold))
+                .font(.sc(size: 12, weight: .bold))
                 .tracking(1.1)
                 .monospacedDigit()
                 .foregroundStyle(look.muted)
@@ -596,9 +616,10 @@ struct RecipeDetailView: View {
     /// otworzy się sheet do połowy, gdzie będzie można to modyfikować, i pokaże
     /// się łączna liczba porcji, którą trzeba ugotować”). Szkło jak pigułka
     /// „Cel dnia”: awatary jedzących, „Do ugotowania · 3,5 porcji”, strzałka
-    /// w górę. Stuknięcie = półarkusz z podziałem i stepperami
-    /// (`portionsSheet`). Zmiany idą do tego samego szkicu (`draftPortions`),
-    /// a zapis — jak dotąd — „Zapisz porcje”, który pojawia się pod pigułką.
+    /// w prawo. Stuknięcie = ekran „Kto ile je” w stosie arkusza z podziałem
+    /// i stepperami (`portionsPage`; do 6.10.2026 półarkusz na arkuszu).
+    /// Zmiany idą do tego samego szkicu (`draftPortions`), a zapis — jak
+    /// dotąd — „Zapisz porcje”, który pojawia się pod pigułką.
     ///
     /// Dawniej sekcja „Kto ile je” w przewijaniu, nad wartościami odżywczymi.
     private func portionsPill(_ model: RecipeDetailPortions) -> some View {
@@ -607,17 +628,17 @@ struct RecipeDetailView: View {
         let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
 
         return Button {
-            isPortionsSheetPresented = true
+            isPortionsPagePresented = true
         } label: {
             HStack(spacing: 12) {
                 portionsAvatars(model)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Do ugotowania")
-                        .font(.system(size: 11.5, weight: .semibold))
+                        .font(.sc(size: 11.5, weight: .semibold))
                         .foregroundStyle(look.muted)
                     Text(spoken)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.sc(size: 16, weight: .bold))
                         .tracking(-0.2)
                         .monospacedDigit()
                         .foregroundStyle(look.fg)
@@ -627,8 +648,9 @@ struct RecipeDetailView: View {
 
                 Spacer(minLength: 8)
 
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 13, weight: .bold))
+                // Wiersz prowadzi w głąb stosu — strzałka jak w Ustawieniach iOS.
+                Image(systemName: "chevron.right")
+                    .font(.sc(size: 13, weight: .bold))
                     .foregroundStyle(look.muted)
             }
             .padding(.leading, 12)
@@ -641,12 +663,6 @@ struct RecipeDetailView: View {
         .buttonStyle(PlanPressStyle(scale: 0.985))
         .accessibilityLabel("Kto ile je, do ugotowania \(spoken)")
         .accessibilityHint("Otwiera porcje domowników")
-        // Arkusz na samej pigułce, nie na całym ekranie: łańcuch szczegółów
-        // ma już swoje arkusze, a SwiftUI gubi czasem kolejne `.sheet` na
-        // tym samym widoku.
-        .sheet(isPresented: $isPortionsSheetPresented) {
-            portionsSheet(model)
-        }
     }
 
     /// Do trzech awatarów jedzących na zakładkę, reszta jako „+N”.
@@ -668,7 +684,7 @@ struct RecipeDetailView: View {
             }
             if rest > 0 {
                 Text(verbatim: "+\(rest)")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .foregroundStyle(look.fg)
                     .frame(width: size, height: size)
                     .background(Circle().fill(look.background))
@@ -677,69 +693,54 @@ struct RecipeDetailView: View {
         .accessibilityHidden(true)
     }
 
-    /// Półarkusz „Kto ile je”: łączna liczba porcji do ugotowania (duża,
-    /// roluje), podział garnka w kolorach osób i wiersz na osobę ze stepperem
-    /// co pół porcji. Po zmianie w stopce wjeżdża „Zapisz porcje” (Rafał
-    /// 4.10.2026: „daj tam button do zapisu, jak się zmieni stan”), a obok
-    /// krzyżyka „Cofnij zmiany”. Do połowy ekranu, przewijanie rozwija na cały
-    /// (dom z wieloma osobami).
-    private func portionsSheet(_ model: RecipeDetailPortions) -> some View {
+    /// Ekran „Kto ile je” w stosie arkusza szczegółów (6.10.2026: bez arkusza
+    /// na arkuszu — do tego dnia półarkusz nad szczegółami): linia „Razem ·
+    /// 3,5 porcji · kcal” i wiersz na osobę ze stepperem co pół porcji. Po
+    /// zmianie w stopce wjeżdża „Zapisz porcje” (Rafał 4.10.2026: „daj tam
+    /// button do zapisu, jak się zmieni stan”), a w pasku systemu obok tytułu
+    /// „Cofnij”. Powrót „wstecz” niczego nie traci — szkic żyje w szczegółach.
+    private func portionsPage(_ model: RecipeDetailPortions) -> some View {
         let hasChanges = !changedPortions.isEmpty
 
-        return ZStack {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    EditorialSheetHeader(
-                        eyebrow: "Kto ile je",
-                        title: "Porcje",
-                        icon: "person.2.fill",
-                        accent: SCPalette.butter,
-                        subtitle: recipe.name,
-                        onClose: { isPortionsSheetPresented = false }
-                    ) {
-                        if hasChanges && model.isEditable {
-                            RecipeFilterClearButton(accessibilityLabel: "Cofnij zmiany porcji") {
-                                withAnimation(.smooth(duration: 0.3)) {
-                                    draftPortions = personalPortions?.units ?? [:]
-                                }
-                            }
-                            .transition(.scale(scale: 0.6).combined(with: .opacity))
+        return ScrollView {
+            portionsCard(model)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 16)
+        }
+        .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize)
+        .scSheetFooter {
+            if hasChanges && model.isEditable {
+                EditorialPrimaryActionButton(
+                    title: "Zapisz porcje",
+                    icon: "checkmark",
+                    isEnabled: portionsSaveFeasible,
+                    isLoading: isSavingServings
+                ) {
+                    // Ta sama droga co przycisk pod pigułką: zapis każdej
+                    // zmienionej osoby i zamknięcie szczegółów (razem
+                    // z tym ekranem).
+                    performPrimaryAction()
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.smooth(duration: 0.3), value: hasChanges)
+        .scPushedPage("Kto ile je")
+        .toolbar {
+            if model.isEditable {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Cofnij") {
+                        withAnimation(.smooth(duration: 0.3)) {
+                            draftPortions = personalPortions?.units ?? [:]
                         }
                     }
-
-                    portionsCard(model)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 16)
-                .animation(.smooth(duration: 0.25), value: hasChanges)
-            }
-            .scrollIndicators(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
-            .scSheetFooter {
-                if hasChanges && model.isEditable {
-                    EditorialPrimaryActionButton(
-                        title: "Zapisz porcje",
-                        icon: "checkmark",
-                        isEnabled: portionsSaveFeasible,
-                        isLoading: isSavingServings
-                    ) {
-                        // Ta sama droga co przycisk pod pigułką: zapis każdej
-                        // zmienionej osoby i zamknięcie szczegółów (razem
-                        // z tym arkuszem).
-                        performPrimaryAction()
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .disabled(!hasChanges)
+                    .accessibilityLabel("Cofnij zmiany porcji")
                 }
             }
-            .animation(.smooth(duration: 0.3), value: hasChanges)
         }
-        .presentationDetents([.medium, .large])
-        .presentationContentInteraction(.resizes)
-        .dashboardLiquidSheet()
     }
 
     /// Kolor osoby — ten sam co jej awatar w Planie.
@@ -801,7 +802,7 @@ struct RecipeDetailView: View {
 
             if !model.isEditable {
                 Text(PlanPortions.readOnlyMessage)
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.sc(size: 12.5, weight: .medium))
                     .foregroundStyle(look.muted)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -873,7 +874,7 @@ struct RecipeDetailView: View {
                     ForEach(Array(groups.enumerated()), id: \.element.department) { groupIndex, group in
                         VStack(alignment: .leading, spacing: 0) {
                             Text(group.department.uppercased())
-                                .font(.system(size: 10.5, weight: .heavy))
+                                .font(.sc(size: 10.5, weight: .heavy))
                                 .tracking(0.8)
                                 .foregroundStyle(SCPalette.indigo)
                                 .padding(.horizontal, 16)
@@ -963,7 +964,7 @@ struct RecipeDetailView: View {
                     .foregroundStyle(look.dim)
             }
         }
-        .font(.system(size: 12.5))
+        .font(.sc(size: 12.5))
         .lineSpacing(2)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -995,7 +996,7 @@ struct RecipeDetailView: View {
                         .transition(.scale.combined(with: .opacity))
                 } else if isSent {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .heavy))
+                        .font(.sc(size: 11, weight: .heavy))
                         .transition(.scale.combined(with: .opacity))
                 }
 
@@ -1004,11 +1005,11 @@ struct RecipeDetailView: View {
 
                 if !isSent && !isSending {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.sc(size: 10, weight: .bold))
                         .transition(.opacity)
                 }
             }
-            .font(.system(size: 12.5, weight: .bold))
+            .font(.sc(size: 12.5, weight: .bold))
             .foregroundStyle(accent)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
@@ -1203,28 +1204,140 @@ struct RecipeDetailView: View {
     }
 
     /// Akcja planu w standardowym wariancie „soft" — terakota na tincie.
+    /// W katalogu ten sam przycisk otwiera szybkie menu (`quickPlanMenu`).
+    @ViewBuilder
     private func planActionButton(title: String) -> some View {
-        Button(action: performPrimaryAction) {
-            HStack(spacing: 7) {
-                Image(systemName: primaryActionIcon)
-                    .font(.system(size: 13, weight: .heavy))
-                Text(title)
-                    .font(.system(size: 14, weight: .bold))
-                    .tracking(-0.1)
-                    .lineLimit(1)
+        let options = quickPlanOptions
+        if !options.isEmpty {
+            quickPlanMenu(options, title: title)
+        } else {
+            Button(action: performPrimaryAction) {
+                planActionLabel(title: title)
             }
-            .foregroundStyle(SCPalette.terracotta)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .scSoftCapsule()
+            .buttonStyle(.plain)
+            .disabled(!isPrimaryActionEnabled || isSavingServings)
+            // Wygaszony tylko na chwilę pracy (zapis, przygotowanie planu) —
+            // „Zapisz porcje” bez zmian w ogóle się nie pokazuje (`showsPlanAction`).
+            .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
+            .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
+            .accessibilityLabel(primaryActionTitle)
         }
-        .buttonStyle(.plain)
-        .disabled(!isPrimaryActionEnabled || isSavingServings)
-        // Wygaszony tylko na chwilę pracy (zapis, przygotowanie planu) —
-        // „Zapisz porcje” bez zmian w ogóle się nie pokazuje (`showsPlanAction`).
-        .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
-        .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
+    }
+
+    private func planActionLabel(title: String) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: primaryActionIcon)
+                .font(.sc(size: 13, weight: .heavy))
+            Text(title)
+                .font(.sc(size: 14, weight: .bold))
+                .tracking(-0.1)
+                .lineLimit(1)
+        }
+        .foregroundStyle(SCPalette.terracotta)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .scSoftCapsule()
+    }
+
+    // MARK: - Szybkie „Dodaj do planu”
+
+    /// Pozycje szybkiego menu — tylko przepis z katalogu (posiłek z planu ma
+    /// „Zapisz porcje”, cudzy przepis najpierw zapisuje kopię). Dla całego
+    /// domu i z porcjami ze steppera, jak pełny ekran bez ruszania
+    /// czegokolwiek. Pusto, gdy dom nie planuje żadnej pory, w którą przepis
+    /// pasuje — wtedy przycisk otwiera od razu pełne „Dodaj do planu”.
+    private var quickPlanOptions: [RecipeQuickPlan.Option] {
+        guard case .catalog = context else { return [] }
+        return RecipeQuickPlan.options(
+            recipe: recipe,
+            store: mealStore,
+            enabledSlots: sessionStore.mealSlots.enabled,
+            schedule: sessionStore.mealSlotSchedule,
+            members: sessionStore.householdMembers,
+            portions: AddToPlanPortions(units: servingsUnits, didOverride: didTouchStepper)
+        )
+    }
+
+    /// „Dodaj do planu” z katalogu = SYSTEMOWE menu zamiast ciężkiego arkusza
+    /// (6.10.2026, „jak od Apple — prościej, mniej ceremonii”): „Dziś · Obiad”
+    /// (gdy ta pora dziś jeszcze przed nami) i „Jutro · Obiad” zapisują jednym
+    /// stuknięciem, „Inny dzień…” wpycha pełny ekran w stos arkusza. Pora
+    /// zajęta INNYM daniem → pozycja z „Zamiast: …” (zapis by je podmienił)
+    /// albo „Jest już: …” (danie części domu) otwiera ten ekran z tym dniem
+    /// i porą — po cichu nie podmieniamy ani nie dokładamy drugiego obiadu;
+    /// to danie już tam stoi → pozycja wyłączona „Już w planie”. Szkło jest
+    /// CAŁĄ etykietą menu, więc iOS 26 może z niego animować menu (patrz
+    /// „Szkło w etykiecie `Menu`” w CLAUDE.md).
+    ///
+    /// Kolejność stała (`menuOrder(.fixed)`): czyta się z góry na dół jak
+    /// kalendarz — dziś, jutro, inny dzień — a „Inny dzień…” stoi przy palcu.
+    private func quickPlanMenu(_ options: [RecipeQuickPlan.Option], title: String) -> some View {
+        Menu {
+            ForEach(options) { option in
+                quickPlanItem(option)
+            }
+
+            Divider()
+
+            Button {
+                addToPlanRequest = AddToPlanRequest()
+            } label: {
+                Label("Inny dzień…", systemImage: "calendar")
+            }
+        } label: {
+            planActionLabel(title: title)
+        }
+        .menuOrder(.fixed)
         .accessibilityLabel(primaryActionTitle)
+        .accessibilityHint("Wybierz dziś, jutro albo inny dzień")
+    }
+
+    /// Pozycja menu: pora dnia jako ikona, podtytuł mówi, co stoi na drodze.
+    @ViewBuilder
+    private func quickPlanItem(_ option: RecipeQuickPlan.Option) -> some View {
+        switch option.outcome {
+        case .add:
+            Button {
+                quickAdd(option)
+            } label: {
+                Label(option.title, systemImage: option.slot.icon)
+            }
+        case .replaces(let meal):
+            Button {
+                addToPlanRequest = AddToPlanRequest(date: option.date, slot: option.slot)
+            } label: {
+                Label(option.title, systemImage: option.slot.icon)
+                Text("Zamiast: \(meal.recipe.name)")
+            }
+        case .besides(let meal):
+            Button {
+                addToPlanRequest = AddToPlanRequest(date: option.date, slot: option.slot)
+            } label: {
+                Label(option.title, systemImage: option.slot.icon)
+                Text("Jest już: \(meal.recipe.name)")
+            }
+        case .alreadyPlanned:
+            Button {} label: {
+                Label(option.title, systemImage: option.slot.icon)
+                Text("Już w planie")
+            }
+            .disabled(true)
+        case .unknownWeek:
+            Button {
+                addToPlanRequest = AddToPlanRequest(date: option.date, slot: option.slot)
+            } label: {
+                Label(option.title, systemImage: option.slot.icon)
+            }
+        }
+    }
+
+    /// Szybkie dodanie: zapis tą samą drogą co arkusz (`AddToPlanDraft.save`
+    /// — toast „Dodano do planu · Jutro · Obiad” z haptyką sukcesu po
+    /// potwierdzeniu), a ekran pod spodem — jak po arkuszu — dostaje
+    /// `onAddedToPlan` (wejścia katalogu zamykają wtedy szczegóły).
+    private func quickAdd(_ option: RecipeQuickPlan.Option) {
+        option.draft.save(store: mealStore, toasts: toasts, placement: option.title)
+        onAddedToPlan?(option.date, option.slot)
     }
 
     // MARK: - Gotuj
@@ -1255,9 +1368,9 @@ struct RecipeDetailView: View {
         Button(action: startCooking) {
             HStack(spacing: 7) {
                 Image(systemName: "play.fill")
-                    .font(.system(size: 13, weight: .heavy))
+                    .font(.sc(size: 13, weight: .heavy))
                 Text(cookSession == nil ? "Gotuj" : "Gotuj dalej")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .tracking(-0.1)
                     .lineLimit(1)
             }
@@ -1329,7 +1442,7 @@ struct RecipeDetailView: View {
     private var thermomixFeedback: some View {
         if let thermomixError {
             Text(thermomixError)
-                .font(.system(size: 12.5, weight: .medium))
+                .font(.sc(size: 12.5, weight: .medium))
                 .foregroundStyle(SCPalette.terracotta)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1364,13 +1477,13 @@ struct RecipeDetailView: View {
                             .tint(SCPalette.sage)
                     } else {
                         Image(systemName: showThermomixSuccess ? "checkmark" : "play.fill")
-                            .font(.system(size: 13, weight: .heavy))
+                            .font(.sc(size: 13, weight: .heavy))
                     }
                 }
                 .frame(width: 16, height: 17)
 
                 Text("Gotuj w TM")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .tracking(-0.1)
                     .lineLimit(1)
             }
@@ -1458,7 +1571,9 @@ struct RecipeDetailView: View {
     private func performPrimaryAction() {
         switch context {
         case .catalog:
-            isAddToPlanPresented = true
+            // Tu tylko wtedy, gdy szybkiego menu nie ma (dom nie planuje
+            // żadnej pory, w którą przepis pasuje) — od razu pełny ekran.
+            addToPlanRequest = AddToPlanRequest()
         case .shared:
             addSharedToPlan()
         case .planned:
@@ -1492,14 +1607,14 @@ struct RecipeDetailView: View {
                             .tint(SCPalette.sage)
                     } else {
                         Image(systemName: isSaved ? "checkmark" : "bookmark")
-                            .font(.system(size: 13, weight: .heavy))
+                            .font(.sc(size: 13, weight: .heavy))
                             .contentTransition(.symbolEffect(.replace))
                     }
                 }
                 .frame(width: 16, height: 17)
 
                 Text(isSaved ? "Zapisano" : "Zapisz u siebie")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .tracking(-0.1)
                     .lineLimit(1)
                     .contentTransition(.interpolate)
@@ -1537,7 +1652,7 @@ struct RecipeDetailView: View {
     private func addSharedToPlan() {
         guard case .shared(let token, _) = context, !isPreparingPlan else { return }
         if savedCopy != nil {
-            isAddToPlanPresented = true
+            addToPlanRequest = AddToPlanRequest()
             return
         }
         isPreparingPlan = true
@@ -1546,7 +1661,7 @@ struct RecipeDetailView: View {
                 savedCopy = try await recipeCatalogStore.saveSharedRecipe(token: token)
                 sharedSave = .saved
                 isPreparingPlan = false
-                isAddToPlanPresented = true
+                addToPlanRequest = AddToPlanRequest()
             } catch {
                 isPreparingPlan = false
                 guard !UserFacingErrorMapper.isCancellation(error) else { return }
@@ -1580,6 +1695,17 @@ struct RecipeDetailView: View {
         }
         #endif
     }
+}
+
+// MARK: - „Dodaj do planu”
+
+/// Otwarcie pełnego „Dodaj do planu” (ekran stosu szczegółów) — z dniem
+/// i porą wybranymi już w szybkim menu (pora zajęta innym daniem) albo bez
+/// (`nil` = dziś i domyślna pora przepisu).
+private struct AddToPlanRequest: Identifiable, Hashable {
+    let id = UUID()
+    var date: Date? = nil
+    var slot: MealSlot? = nil
 }
 
 // MARK: - „Zapisz u siebie”
@@ -1748,9 +1874,6 @@ struct RecipeDetailPlaceholder: View {
 /// oba efekty to `visualEffect`, więc nie przeliczają układu co klatkę.
 private struct DetailHeroPhoto: View {
     let url: URL?
-    /// Wjazd arkusza: zdjęcie startuje lekko przybliżone i osiada — ten sam
-    /// ruch co zdjęcie w wyborze posiłku u Asystenta.
-    var isRevealed: Bool = true
 
     // `nonisolated`, bo czyta ją domknięcie `onScrollGeometryChange` ekranu.
     nonisolated static let height: CGFloat = 340
@@ -1826,8 +1949,6 @@ private struct DetailHeroPhoto: View {
                 EditorialShimmerBlock()
             }
         }
-        .scaleEffect(isRevealed || reduceMotion ? 1 : 1.12)
-        .animation(.easeOut(duration: 1.1), value: isRevealed)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
     }
@@ -1846,9 +1967,9 @@ private struct DetailTagPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .bold))
+                .font(.sc(size: 11, weight: .bold))
             Text(text.uppercased())
-                .font(.system(size: 11, weight: .heavy))
+                .font(.sc(size: 11, weight: .heavy))
                 .tracking(0.8)
                 .lineLimit(1)
         }
@@ -1872,7 +1993,7 @@ private struct DetailDashedTag: View {
     var body: some View {
         let look = DetailLook(scheme: scheme)
         Text(text.uppercased())
-            .font(.system(size: 11, weight: .heavy))
+            .font(.sc(size: 11, weight: .heavy))
             .tracking(0.8)
             .lineLimit(1)
             .foregroundStyle(look.dim)
@@ -1912,12 +2033,12 @@ private struct DetailSectionHeader<Trailing: View>: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(eyebrow.uppercased())
-                    .font(.system(size: 11, weight: .heavy))
+                    .font(.sc(size: 11, weight: .heavy))
                     .tracking(1.4)
                     .foregroundStyle(accent)
                     .contentTransition(.numericText())
                 Text(title)
-                    .font(.system(size: 22, weight: .heavy))
+                    .font(.sc(size: 22, weight: .heavy))
                     .tracking(-0.4)
                     .foregroundStyle(DetailLook(scheme: scheme).fg)
                     .lineLimit(1)
@@ -2010,7 +2131,7 @@ private struct DetailServingsStepper: View {
             }
 
             Text(label(value))
-                .font(.system(size: 16, weight: .heavy))
+                .font(.sc(size: 16, weight: .heavy))
                 .monospacedDigit()
                 .foregroundStyle(look.fg)
                 .frame(minWidth: 28)
@@ -2049,7 +2170,7 @@ private struct DetailServingsStepper: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.sc(size: 14, weight: .semibold))
                 .foregroundStyle(enabled ? SCPalette.terracotta : look.faint)
                 .frame(width: 40, height: 36)
                 .contentShape(Rectangle())
@@ -2145,13 +2266,11 @@ private struct DetailNutritionCard: View {
     }
 }
 
-/// Jedna krzywa dla pierścieni, torów i liczników sekcji — ruch ma się
-/// czytać jako jeden. Wolniejszy i łagodniej hamujący niż w „Celu dnia”:
-/// tu wykres jest główną treścią karty, a nie podsumowaniem nad listą.
+/// Jedna krzywa dla pierścieni, torów i liczb sekcji przy ZMIANIE porcji —
+/// ruch ma się czytać jako jeden (ease-out quint, 0,8 s). Wjazdu nie ma:
+/// szczegóły otwierają się z wartościami docelowymi (6.10.2026 — dawniej
+/// pierścienie rosły 1,4 s, a liczby liczyły się od zera przy każdym otwarciu).
 private enum DetailNutritionMotion {
-    /// Wjazd: 1,4 s z długim, miękkim wyhamowaniem (ease-out quint).
-    static let reveal: Animation = .timingCurve(0.22, 1, 0.36, 1, duration: 1.4)
-    /// Zmiana porcji: ta sama krzywa, krócej.
     static let change: Animation = .timingCurve(0.22, 1, 0.36, 1, duration: 0.8)
 }
 
@@ -2162,13 +2281,11 @@ private struct DetailGoalRings: View {
     let progresses: [Double]
     let colors: [Color]
 
-    @State private var isRevealed = false
-
     var body: some View {
         ZStack {
             ForEach(Array(progresses.enumerated()), id: \.offset) { index, progress in
                 ActivityRing(
-                    progress: isRevealed ? CGFloat(progress) : 0,
+                    progress: CGFloat(progress),
                     lineWidth: PlanGoalRings.lineWidth,
                     startColor: colors[index],
                     endColor: colors[index],
@@ -2178,23 +2295,16 @@ private struct DetailGoalRings: View {
             }
         }
         .frame(width: PlanGoalRings.size, height: PlanGoalRings.size)
-        // Zmiana porcji — wjazd prowadzi `withAnimation` niżej, bo w jego
-        // trakcie ta wartość się nie zmienia.
         .animation(DetailNutritionMotion.change, value: progresses)
-        .onAppear {
-            guard !isRevealed else { return }
-            withAnimation(DetailNutritionMotion.reveal.delay(0.05)) { isRevealed = true }
-        }
     }
 }
 
-/// Wiersz legendy jak `PlanGoalLegendRow`, z liczbą liczącą się
-/// `CountingNumber` i torem na tej samej krzywej co pierścienie.
+/// Wiersz legendy jak `PlanGoalLegendRow`: liczba roluje się przy zmianie
+/// porcji, tor jedzie tą samą krzywą co pierścienie.
 private struct DetailGoalLegendRow: View {
     let row: PlanGoalLegendRow.Row
 
     @Environment(\.colorScheme) private var scheme
-    @State private var isRevealed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -2212,13 +2322,14 @@ private struct DetailGoalLegendRow: View {
                 Spacer(minLength: 6)
 
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    CountingNumber(
-                        target: row.value,
-                        loadAnimation: DetailNutritionMotion.reveal,
-                        changeAnimation: DetailNutritionMotion.change
-                    )
-                    .scFont(12.5, weight: .bold, relativeTo: .caption)
-                    .foregroundStyle(row.isOverTarget ? row.color : Color.scLabel(scheme))
+                    Text(verbatim: "\(row.value)")
+                        .scFont(12.5, weight: .bold, relativeTo: .caption)
+                        .monospacedDigit()
+                        .foregroundStyle(row.isOverTarget ? row.color : Color.scLabel(scheme))
+                        // Cyfry rolują w miejscu przy zmianie porcji — ta
+                        // sama animacja co każda liczba w aplikacji.
+                        .contentTransition(.numericText(value: Double(row.value)))
+                        .animation(SCMotion.textRoll, value: row.value)
 
                     Text(row.target.map { "/ \($0) \(row.unit)" } ?? row.unit)
                         .scFont(10.5, weight: .semibold, relativeTo: .caption2)
@@ -2231,14 +2342,13 @@ private struct DetailGoalLegendRow: View {
 
             if let progress = row.progress {
                 MacroProgressTrack(
-                    progress: isRevealed ? max(progress, 0) : 0,
+                    progress: max(progress, 0),
                     color: row.color,
                     height: 3,
-                    animation: isRevealed ? DetailNutritionMotion.change : DetailNutritionMotion.reveal
+                    animation: DetailNutritionMotion.change
                 )
             }
         }
-        .onAppear { isRevealed = true }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             row.target.map { "\(row.title): \(row.value) z \($0) \(row.unit)" }
@@ -2261,7 +2371,7 @@ private struct DetailStepRow: View {
 
         HStack(alignment: .top, spacing: 14) {
             Text("\(index)")
-                .font(.system(size: 13, weight: .bold))
+                .font(.sc(size: 13, weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(SCPalette.sage)
                 .frame(width: 30, height: 30)
@@ -2270,7 +2380,7 @@ private struct DetailStepRow: View {
                 )
 
             Text(text)
-                .font(.system(size: 14.5))
+                .font(.sc(size: 14.5))
                 .tracking(-0.1)
                 // `lineHeight: 1.55` z makiety.
                 .lineSpacing(5)
@@ -2324,14 +2434,14 @@ private struct DetailIngredientRow: View {
             }
 
             Text(name)
-                .font(.system(size: 15))
+                .font(.sc(size: 15))
                 .tracking(-0.2)
                 .foregroundStyle(have ? look.muted : look.fg)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(amount)
-                .font(.system(size: 13))
+                .font(.sc(size: 13))
                 .monospacedDigit()
                 .foregroundStyle(look.muted)
                 .lineLimit(1)
@@ -2342,37 +2452,6 @@ private struct DetailIngredientRow: View {
         .padding(.vertical, 9)
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.2), value: have)
-    }
-}
-
-// MARK: - Wjazd sekcji
-
-// Kaskada sekcji to `scReveal(_:order:)` (`Components/SCReveal.swift`) —
-// wyniesiona w rundzie 14, bo „Dodaj do planu” wjeżdża tak samo.
-
-/// Przyciski na zdjęciu (serce, krzyżyk) pojawiają się razem z treścią,
-/// a nie wiszą nad pustym kadrem, zanim zdjęcie osiądzie.
-private struct DetailChrome: ViewModifier {
-    let isVisible: Bool
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(isVisible ? 1 : 0)
-            .scaleEffect(isVisible || reduceMotion ? 1 : 0.85)
-            .animation(.easeOut(duration: 0.35).delay(0.05), value: isVisible)
-    }
-}
-
-private extension View {
-    /// Sekcje wchodzą po kolei — góra pierwsza, składniki ostatnie.
-    func detailReveal(_ isVisible: Bool, order: Int) -> some View {
-        scReveal(isVisible, order: order)
-    }
-
-    func detailChrome(_ isVisible: Bool) -> some View {
-        modifier(DetailChrome(isVisible: isVisible))
     }
 }
 

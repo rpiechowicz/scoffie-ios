@@ -79,7 +79,7 @@ struct SCPipsBadge: View {
 
             if let label {
                 Text(label)
-                    .font(.system(size: size.fontSize, weight: .bold))
+                    .font(.sc(size: size.fontSize, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(color)
                     .lineLimit(1)

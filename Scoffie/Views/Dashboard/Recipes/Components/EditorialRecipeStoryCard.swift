@@ -143,7 +143,7 @@ struct EditorialRecipeStoryCard: View {
             .allowsHitTesting(false)
 
             Image(systemName: RecipesConstants.icon(for: recipe.category))
-                .font(.system(size: 84, weight: .regular))
+                .font(.sc(size: 84, weight: .regular))
                 .foregroundStyle(Color.white.opacity(0.92))
                 .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
         }
@@ -155,7 +155,7 @@ struct EditorialRecipeStoryCard: View {
     private var bottomContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(recipe.name)
-                .font(.system(size: 21, weight: .bold))
+                .font(.sc(size: 21, weight: .bold))
                 .tracking(-0.4)
                 .foregroundStyle(.white)
                 .lineLimit(2)
@@ -187,9 +187,9 @@ struct EditorialGlassChip: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.sc(size: 11, weight: .semibold))
             Text(text)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.sc(size: 11, weight: .semibold))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)

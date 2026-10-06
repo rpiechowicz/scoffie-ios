@@ -124,9 +124,9 @@ struct AssistantView: View {
     @State private var reporting: AgentChatMessage?
     /// Odpowiedź, której przebieg („Myślałem 42 s ›”) jest otwarty.
     @State private var thinkingOf: AgentChatMessage?
-    /// Odpowiedź i kierunek oceny, do których piszemy podpowiedź („Co było
-    /// dobre?” / „Co nie zagrało?”).
-    @State private var suggesting: SuggestionTarget?
+    /// Odpowiedź, do której piszemy podpowiedź „Co nie zagrało?” (po kciuku
+    /// w dół albo z „⋯”).
+    @State private var suggesting: AgentChatMessage?
     /// Pytanie z odpowiedzią w aplikacji (lista zakupów, przepis) — karta
     /// nad polem zamiast tury (`AssistantAppShortcut`).
     @State private var appShortcut: AssistantAppShortcut?
@@ -221,8 +221,15 @@ struct AssistantView: View {
                         // rozmowa przejeżdża POD nim i gaśnie w cieniu
                         // krawędzi, zamiast urywać się twardą linią na jego
                         // dolnym brzegu.
+                        //
+                        // Pole stoi nad systemowym paskiem zakładek (a przy
+                        // klawiaturze — nad nią) jako pasek bezpiecznego
+                        // obszaru: pod nim leży natywny efekt krawędzi
+                        // przewijania, jawnie miękki (`.automatic` z Xcode
+                        // Cloud wychodził jako `.hard`).
                         conversation
-                            .safeAreaInset(edge: .bottom, spacing: 0) { composer }
+                            .safeAreaBar(edge: .bottom, spacing: 0) { composer }
+                            .scrollEdgeEffectStyle(.soft, for: .bottom)
                             .safeAreaInset(edge: .top, spacing: 0) {
                                 header
                                     .background(alignment: .top) {
@@ -251,20 +258,17 @@ struct AssistantView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .animation(.easeOut(duration: 0.28), value: activeIntroStep == nil)
             .sensoryFeedback(.impact(flexibility: .soft), trigger: activeIntroStep)
-            // Miejsce pod własnym paskiem zakładek: pole wiadomości i stopka
-            // wprowadzenia siadają nad nim, a przy klawiaturze rezerwa
-            // schodzi do zera.
-            .scReservesTabBarSpace()
         }
         .task {
+            // Systemowy `TabView` odpala to przy KAŻDYM wejściu na zakładkę —
+            // `openIfNeeded` jest na to odporne. Pulę (plakietka w nagłówku)
+            // ładuje start sesji (`SessionStore.prepareUnbuiltTabs`), a przy
+            // wejściu odświeża ją `refreshUsageIfStale` niżej (60 s), więc tu
+            // już nie pytamy o nią przy każdym przełączeniu.
             await store.openIfNeeded()
-            // Plakietka puli w nagłówku potrzebuje liczb od razu, nie dopiero
-            // po pierwszym 429. Bez zgody to żądanie po prostu nic nie zwraca.
-            _ = await store.loadUsage()
         }
-        // Zakładki żyją wszystkie naraz, więc „widać rozmowę" znaczy
-        // „wybrana zakładka", nie `onAppear` — ten odpala się raz, pod
-        // loaderem startowym.
+        // „Widać rozmowę” = wybrana zakładka (`scTabIsActive`), a nie samo
+        // `onAppear` — ten sam sygnał, którego używają inne zakładki.
         .onChange(of: isActiveTab, initial: true) { _, active in
             store.setVisible(active)
             if active, !introPlayedOnScreen, activeIntroStep != nil {
@@ -365,11 +369,11 @@ struct AssistantView: View {
                 await store.report(messageId: message.id, reason: reason, comment: comment)
             }
         }
-        .sheet(item: $suggesting) { target in
-            AssistantSuggestionSheet(message: target.message, rating: target.rating) { tags, comment in
+        .sheet(item: $suggesting) { message in
+            AssistantSuggestionSheet(message: message) { tags, comment in
                 await store.suggest(
-                    messageId: target.message.id,
-                    rating: target.rating,
+                    messageId: message.id,
+                    rating: .down,
                     tags: tags,
                     comment: comment
                 )
@@ -410,7 +414,10 @@ struct AssistantView: View {
             mode: headerMode,
             onNewConversation: { Task { await store.startNewConversation() } },
             accessory: quotaPips,
-            markMood: store.isSending ? .thinking : .idle,
+            // W trakcie tury znak w nagłówku tylko nasłuchuje: kręci się
+            // JEDEN łuk — w wierszu „myślę” w rozmowie. Dwa obracające się
+            // elementy naraz to dekoracja, nie informacja (6.10.2026).
+            markMood: store.isSending ? .attentive : .idle,
             markCheer: answerCheer
         ) {
             // Wprowadzenie stoi bez nagłówka, ale krok „Zgoda” bez magazynu
@@ -1079,8 +1086,8 @@ struct AssistantView: View {
                     scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
                 } else if old < store.messages.count, followsAnswer,
                           let last = store.messages.last, last.author == .assistant {
-                    // Gotowa odpowiedź ma już całe miejsce w układzie (pisze
-                    // się w nim), więc jej początek idzie pod górną krawędź —
+                    // Gotowa odpowiedź ma już całe miejsce w układzie (stoi
+                    // w nim od pierwszej klatki), więc jej początek idzie pod górną krawędź —
                     // `scrollTo` i tak zatrzyma się na końcu treści, gdy
                     // odpowiedź jest krótka. Ten sam widok, co szkic
                     // (`anchorID`), więc to ruch w dół, nie przeskok.
@@ -1114,7 +1121,7 @@ struct AssistantView: View {
             scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
         } label: {
             Image(systemName: "arrow.down")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.sc(size: 14, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 40, height: 40)
                 // Szklany krążek jak „na dół” w Telegramie — pływa nad
@@ -1294,16 +1301,6 @@ struct AssistantView: View {
                 }
             }
         }
-        // Rozmowa chowa się pod polem i dolnym menu jak w Telegramie:
-        // rozmywa się i gaśnie w tło strony od 28 pt nad polem aż do
-        // krawędzi ekranu, także pod menu (`NavigationMenu.ownBottomEdge`).
-        // Wcześniej kryjący gradient — treść urywała się ścianą tła, a pole
-        // i menu nie miały nad czym być szkłem.
-        .background(alignment: .top) {
-            SCScrollEdgeBlur(edge: .bottom, solidFraction: 0.6)
-                .padding(.top, -28)
-                .ignoresSafeArea(.container, edges: .bottom)
-        }
         .animation(.easeInOut(duration: 0.2), value: editing != nil)
         .animation(.easeInOut(duration: 0.2), value: store.isLockedByTrialQuota)
         .animation(.easeInOut(duration: 0.2), value: isLockedByMonthlyQuota)
@@ -1332,7 +1329,7 @@ struct AssistantView: View {
             // cały tydzień”) łamał się na dwa, a pierwsza litera zwijała pole
             // do jednego — powitanie nad nim opadało skokiem o wiersz.
             .lineLimit(draft.isEmpty ? 1...1 : 1...8)
-            .font(.system(size: 16.5))
+            .font(.sc(size: 16.5))
             .tracking(-0.3)
             .foregroundStyle(AssistantLook.ink(scheme))
             .focused($isComposerFocused)
@@ -1375,7 +1372,7 @@ struct AssistantView: View {
                     // Wygaszony: samo szkło, jak pole obok. Jedno szkło, nie
                     // drugie na pierwszym.
                     Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
-                        .font(.system(size: store.isSending ? 18 : 19, weight: .bold))
+                        .font(.sc(size: store.isSending ? 18 : 19, weight: .bold))
                         .foregroundStyle(active ? SCPalette.terracotta : AssistantLook.ink(scheme).opacity(0.45))
                         .contentTransition(.symbolEffect(.replace))
                 }
@@ -1395,7 +1392,7 @@ struct AssistantView: View {
             .animation(.easeOut(duration: 0.2), value: store.isSending)
         }
         // Ten sam margines co dolne menu — pole i pasek mają jedną szerokość.
-        .padding(.horizontal, SCFloatingTabBar.sideMargin)
+        .padding(.horizontal, SCPageMetrics.horizontal)
         .padding(.top, 8)
         .padding(.bottom, 8)
     }
@@ -1412,7 +1409,7 @@ struct AssistantView: View {
         )
         .background(RoundedRectangle(cornerRadius: AssistantCardMetrics.radius, style: .continuous).fill(AssistantLook.input(scheme)))
         // Ten sam margines co dolne menu — pole i pasek mają jedną szerokość.
-        .padding(.horizontal, SCFloatingTabBar.sideMargin)
+        .padding(.horizontal, SCPageMetrics.horizontal)
         .padding(.top, 8)
         .padding(.bottom, 8)
     }
@@ -1422,10 +1419,10 @@ struct AssistantView: View {
     private var editingBar: some View {
         HStack(spacing: 7) {
             Image(systemName: "pencil")
-                .font(.system(size: 14, weight: .bold))
+                .font(.sc(size: 14, weight: .bold))
                 .foregroundStyle(AssistantLook.terra(scheme))
             Text("Edytujesz wiadomość")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .tracking(-0.2)
                 .foregroundStyle(AssistantLook.ink(scheme))
 
@@ -1437,7 +1434,7 @@ struct AssistantView: View {
                 isComposerFocused = false
             } label: {
                 Text("Anuluj")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .foregroundStyle(AssistantLook.terra(scheme))
                     .frame(height: 36)
                     .padding(.horizontal, 6)
@@ -1718,7 +1715,7 @@ struct AssistantView: View {
             onEdit: { beginEditing(message) },
             onReport: { reporting = message },
             onShowThinking: { thinkingOf = message },
-            onSuggest: { rating in suggesting = SuggestionTarget(message: message, rating: rating) },
+            onSuggest: { suggesting = message },
             onRate: { rating in
                 Task {
                     if let problem = await store.setFeedback(rating, for: message.id) {
@@ -1903,7 +1900,7 @@ struct AssistantUnavailableView: View {
                 EditorialPageHeader("Asystent")
 
                 Text("Asystent będzie dostępny, gdy wczyta się gospodarstwo.")
-                    .font(.system(size: 15))
+                    .font(.sc(size: 15))
                     .foregroundStyle(Color.scMuted(scheme))
 
                 Spacer()
@@ -1926,7 +1923,7 @@ private struct DaySeparator: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.sc(size: 11, weight: .semibold))
             .foregroundStyle(Color.scMuted(scheme))
             .frame(maxWidth: .infinity)
             .padding(.top, 6)
@@ -1967,8 +1964,8 @@ private struct MessageBubble: View {
     let onReport: () -> Void
     /// „Myślałem 42 s ›” — przebieg tury w arkuszu.
     var onShowThinking: () -> Void = {}
-    /// Podpowiedź do oceny — kierunek z kciuka.
-    var onSuggest: (AgentFeedback) -> Void = { _ in }
+    /// Podpowiedź do kciuka w dół („Co nie zagrało?”).
+    var onSuggest: () -> Void = {}
     /// Kciuk pod odpowiedzią (`nil` = zdjęty).
     var onRate: (AgentFeedback?) -> Void = { _ in }
     /// Odpowiedź dopisała się do końca — sklep zdejmuje `reveal`.
@@ -1979,18 +1976,24 @@ private struct MessageBubble: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Wiadomość przyszła w tej sesji (a nie z historii) — karta wyboru
-    /// otwiera wtedy arkusz sama. `reveal` znika po dopisaniu tekstu,
-    /// czyli zanim karta się pokaże, więc zapamiętujemy go przy wejściu.
+    /// otwiera wtedy arkusz sama. `reveal` znika zaraz po odsłonięciu tekstu
+    /// (przy odpowiedzi, która przyszła cała — w pierwszej chwili), więc
+    /// zapamiętujemy go przy wejściu.
     /// Szkic i gotowa odpowiedź to jeden widok, więc wejście szkicu też się
     /// liczy.
     @State private var arrivedLive = false
 
-    /// Czy tekst jeszcze się pisze — reszta (karta, pasek akcji) czeka pod
-    /// nim i wchodzi dopiero po ostatnim znaku. Szkic pisze się zawsze.
+    /// Czy tekst jeszcze się dopisuje — reszta (karta, pasek akcji) czeka pod
+    /// nim i wchodzi dopiero po ostatnim znaku. Szkic pisze się zawsze;
+    /// gotowa odpowiedź tylko wtedy, gdy domyka szkic, który już był na
+    /// ekranie (≤ 0,6 s). Odpowiedź, która przyszła cała (`whole`), stoi od
+    /// razu RAZEM z kartą — jedno przenikanie, karta nie czeka.
     private var isRevealing: Bool {
         guard message.author == .assistant else { return false }
         if message.isDraft { return true }
-        return message.reveal != nil && !message.text.isEmpty && message.card?.replacesText != true
+        guard let reveal = message.reveal, !message.text.isEmpty,
+              message.card?.replacesText != true else { return false }
+        return !reveal.startsComplete(total: message.text.count)
     }
 
     /// Jawna właściwość zamiast `reduceMotion ? nil : …` w argumencie (SE-0418).
@@ -2141,8 +2144,7 @@ private struct MessageBubble: View {
                 onUndo: { onUndo(planWeek.proposalId) },
                 onOpenPlan: onOpenPlan,
                 onAsk: onAsk,
-                onCompose: onCompose,
-                autoPresentID: arrivedLive ? message.id : nil
+                onCompose: onCompose
             )
         case .planDay(let planDay):
             AssistantPlanDayCard(
@@ -2154,8 +2156,7 @@ private struct MessageBubble: View {
                 onUndo: { onUndo(planDay.proposalId) },
                 onOpenPlan: onOpenPlan,
                 onAsk: onAsk,
-                onCompose: onCompose,
-                autoPresentID: arrivedLive ? message.id : nil
+                onCompose: onCompose
             )
         case .options(let options):
             AssistantOptionsCard(
@@ -2250,11 +2251,4 @@ private struct ChatSkeleton: View {
             if !isMine { Spacer(minLength: 40) }
         }
     }
-}
-
-/// Arkusz podpowiedzi: która odpowiedź i w którą stronę ocena.
-private struct SuggestionTarget: Identifiable {
-    let message: AgentChatMessage
-    let rating: AgentFeedback
-    var id: String { "\(message.id)-\(rating.rawValue)" }
 }

@@ -51,7 +51,7 @@ struct AssistantReportSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         Text(message.text)
-                            .font(.system(size: 13))
+                            .font(.sc(size: 13))
                             .lineLimit(4)
                             .foregroundStyle(Color.scMuted(scheme))
                             .padding(14)
@@ -68,10 +68,10 @@ struct AssistantReportSheet: View {
                                     HStack(spacing: 12) {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(item.title)
-                                                .font(.system(size: 14.5, weight: .semibold))
+                                                .font(.sc(size: 14.5, weight: .semibold))
                                                 .foregroundStyle(Color.scLabel(scheme))
                                             Text(item.detail)
-                                                .font(.system(size: 12.5))
+                                                .font(.sc(size: 12.5))
                                                 .foregroundStyle(Color.scMuted(scheme))
                                         }
                                         Spacer(minLength: 0)
@@ -93,7 +93,7 @@ struct AssistantReportSheet: View {
                         EditorialSheetSectionLabel(title: "Komentarz (opcjonalnie)")
                         TextField("Co powinno być inaczej?", text: $comment, axis: .vertical)
                             .lineLimit(3...6)
-                            .font(.system(size: 14.5))
+                            .font(.sc(size: 14.5))
                             .padding(14)
                             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scTileBg(scheme)))
                             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
@@ -109,10 +109,10 @@ struct AssistantReportSheet: View {
                                     ProgressView().controlSize(.small).tint(reportTone)
                                 } else {
                                     Image(systemName: isDone ? "checkmark" : "flag.fill")
-                                        .font(.system(size: 14, weight: .bold))
+                                        .font(.sc(size: 14, weight: .bold))
                                 }
                                 Text(isDone ? (isEditing ? "Poprawiono" : "Zgłoszono") : (isEditing ? "Zapisz zmiany" : "Wyślij zgłoszenie"))
-                                    .font(.system(size: 15, weight: .bold))
+                                    .font(.sc(size: 15, weight: .bold))
                             }
                             .foregroundStyle(reportTone)
                             .frame(maxWidth: .infinity)
@@ -125,7 +125,7 @@ struct AssistantReportSheet: View {
                         Text(isEditing
                              ? "Poprawione zgłoszenie zastąpi poprzednie i wróci do administratora. Nie zmienia planu ani rozmowy."
                              : "Zgłoszenie trafia do administratora razem z treścią tej odpowiedzi. Nie zmienia planu ani rozmowy.")
-                            .font(.system(size: 12))
+                            .font(.sc(size: 12))
                             .foregroundStyle(Color.scFaint(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }

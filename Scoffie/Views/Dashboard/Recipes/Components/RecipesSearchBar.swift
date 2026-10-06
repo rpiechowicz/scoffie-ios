@@ -4,13 +4,16 @@ import SwiftUI
 /// wyszukiwarka, po lewej button od filtrów”): pływający pasek NAD dolnym
 /// menu — szklany krążek filtrów z plakietką liczby filtrów i szklana kapsuła
 /// pola. Przy fokusie z prawej dochodzi krążek z krzyżykiem (koniec szukania:
-/// czyści frazę i chowa klawiaturę), a cały pasek jedzie nad klawiaturą, bo
-/// rezerwa pod menu schodzi wtedy do zera (`scReservesTabBarSpace`).
+/// czyści frazę i chowa klawiaturę), a cały pasek jedzie nad klawiaturą
+/// (`safeAreaBar` w `recipesSearchDock`).
 ///
 /// Drugi — obok pola Asystenta — pływający wyjątek od `SCSearchField`:
 /// stoi na treści, nie w niej, więc ma wysokość krążków paska (50 pt).
 struct RecipesSearchBar: View {
     @Binding var text: String
+    /// Podpowiedź w polu — w kategorii „Szukaj w obiadach”
+    /// (`RecipesConstants.searchPrompt(for:)`), bo tam szuka się w niej.
+    var prompt: String = "Szukaj przepisów"
     /// Grupy filtrów z arkusza „Filtry” — plakietka i tint krążka.
     let activeFilterCount: Int
     var onSubmit: () -> Void = {}
@@ -24,26 +27,19 @@ struct RecipesSearchBar: View {
     private var hasFilters: Bool { activeFilterCount > 0 }
 
     var body: some View {
-        // Trzy szkła w jednej grupie — załamują światło razem, a krzyżyk
-        // wyrasta z pola, zamiast wskakiwać obok.
-        GlassEffectContainer(spacing: 10) {
-            HStack(spacing: 10) {
-                filterButton
-                field
-                if isFocused {
-                    closeButton
-                        .transition(.scale(scale: 0.4).combined(with: .opacity))
-                }
+        // Bez `GlassEffectContainer` (6.10.2026): w grupie szkła krążek filtrów
+        // przestał przyjmować stuknięcia pod systemowym `TabView` („zero
+        // reakcji”), a plakietka musiała wisieć w osobnej nakładce, bo grupa ją
+        // przycinała. Każde szkło osobno, plakietka wprost na krążku.
+        HStack(spacing: 10) {
+            filterButton
+                // Plakietka wystaje poza krążek — nad polem, nie pod nim.
+                .zIndex(1)
+            field
+            if isFocused {
+                closeButton
+                    .transition(.scale(scale: 0.4).combined(with: .opacity))
             }
-        }
-        // Plakietka POZA grupą szkła — w środku grupa przycinała to, co
-        // wystaje poza krążek, a pole obok rysowało się na niej (Rafał
-        // 4.10.2026: „badge psuje z-index”). Stoi w ramce krążka filtrów.
-        .overlay(alignment: .topLeading) {
-            Color.clear
-                .frame(width: Self.height, height: Self.height)
-                .scCountBadge(activeFilterCount, offset: CGSize(width: 2, height: -2))
-                .allowsHitTesting(false)
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.82), value: isFocused)
     }
@@ -53,7 +49,7 @@ struct RecipesSearchBar: View {
     private var filterButton: some View {
         Button(action: onOpenFilters) {
             Image(systemName: "line.3.horizontal.decrease")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.sc(size: 17, weight: .semibold))
                 .foregroundStyle(hasFilters ? SCPalette.terracotta : Color.scLabel(scheme))
                 .frame(width: Self.height, height: Self.height)
                 .scChromeGlass(
@@ -63,6 +59,7 @@ struct RecipesSearchBar: View {
                 .contentShape(Circle())
         }
         .buttonStyle(PlanPressStyle(scale: 0.92))
+        .scCountBadge(activeFilterCount, offset: CGSize(width: 2, height: -2))
         .accessibilityLabel(hasFilters ? "Filtry, aktywne: \(activeFilterCount)" : "Filtry")
     }
 
@@ -71,11 +68,11 @@ struct RecipesSearchBar: View {
     private var field: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.sc(size: 16, weight: .semibold))
                 .foregroundStyle(Color.scMuted(scheme))
 
-            TextField("Szukaj przepisów", text: $text)
-                .font(.system(size: 16.5))
+            TextField(prompt, text: $text)
+                .font(.sc(size: 16.5))
                 .foregroundStyle(Color.scLabel(scheme))
                 .tint(SCPalette.terracotta)
                 .focused($isFocused)
@@ -102,7 +99,7 @@ struct RecipesSearchBar: View {
             isFocused = false
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 15, weight: .bold))
+                .font(.sc(size: 15, weight: .bold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: Self.height, height: Self.height)
                 .scChromeGlass(in: Circle())
@@ -110,5 +107,25 @@ struct RecipesSearchBar: View {
         }
         .buttonStyle(PlanPressStyle(scale: 0.92))
         .accessibilityLabel("Zakończ szukanie")
+    }
+}
+
+// MARK: - Przyczepienie
+
+extension View {
+    /// Pływający pasek szukania Przepisów przyczepiony nad systemowym paskiem
+    /// zakładek — JEDNA droga dla korzenia i ekranu kategorii (zmieniać razem).
+    /// Pasek bezpiecznego obszaru: lista przejeżdża pod szkłem i kończy się nad
+    /// nim, przy klawiaturze jedzie nad nią, a pod paskiem leży natywny, miękki
+    /// efekt krawędzi przewijania (jak w Poczcie na iOS 26).
+    func recipesSearchDock(_ bar: RecipesSearchBar, horizontalPadding: CGFloat) -> some View {
+        safeAreaBar(edge: .bottom, spacing: 0) {
+            bar
+                .padding(.horizontal, horizontalPadding)
+                .padding(.bottom, 8)
+        }
+        // Miękki, jawnie — `.automatic` z Xcode Cloud wychodził jako `.hard`
+        // (kreska i kryjące tło, patrz `scSheetFooterEdge`).
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
     }
 }

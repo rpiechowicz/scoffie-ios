@@ -11,7 +11,7 @@ struct FeatureCard: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(.thinMaterial)
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.sc(size: 18, weight: .semibold))
                     .foregroundStyle(.blue)
             }
             .frame(width: 40, height: 40)

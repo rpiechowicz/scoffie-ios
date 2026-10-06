@@ -502,7 +502,23 @@ struct SCToastHost: View {
         .accessibilityLabel("\(displayed?.style.accessibilityPrefix ?? "") \(displayed?.title ?? "")")
         .accessibilityValue(displayed?.message ?? "")
         .accessibilityAddTraits(.isStaticText)
+        // Połączony element nie wystawia przycisku z treści — akcja idzie
+        // jako akcja VoiceOver na całej kapsule.
+        .accessibilityActions {
+            if let action = displayed?.action {
+                Button(action.title) { perform(action) }
+            }
+        }
         .accessibilityHidden(!isPresented)
+    }
+
+    /// Najpierw zamknięcie, potem akcja: kapsuła zwija się z tym, co
+    /// pokazywała, a skutek akcji (np. „Usunięto z planu”) przychodzi jako
+    /// następny toast.
+    private func perform(_ action: SCToast.Action) {
+        guard isPresented else { return }
+        center.dismiss()
+        action.perform()
     }
 
     private func content(_ toast: SCToast) -> some View {
@@ -532,7 +548,7 @@ struct SCToastHost: View {
             // zmienia się na oczach.
             ZStack {
                 Image(systemName: toast.style.icon)
-                    .font(.system(size: 12, weight: .heavy))
+                    .font(.sc(size: 12, weight: .heavy))
                     .foregroundStyle(surface)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(toast.style.accent))
@@ -561,9 +577,27 @@ struct SCToastHost: View {
             .multilineTextAlignment(.leading)
 
             Spacer(minLength: 0)
+
+            if let action = toast.action {
+                // Przycisk w kapsule, której stuknięcie ją zamyka — gest
+                // dziecka wygrywa z `onTapGesture` rodzica. Tint akcentu, nie
+                // drugie wypełnienie: pełny krążek po lewej niesie już kolor.
+                Button { perform(action) } label: {
+                    Text(action.title)
+                        .scFont(13.5, weight: .semibold, relativeTo: .subheadline)
+                        .foregroundStyle(toast.style.accent)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 32)
+                        .background(Capsule(style: .continuous).fill(toast.style.accent.opacity(scheme == .dark ? 0.22 : 0.16)))
+                        .contentShape(Capsule(style: .continuous))
+                }
+                .buttonStyle(PlanPressStyle(scale: 0.94))
+                .fixedSize()
+                .transition(.opacity)
+            }
         }
         .padding(.leading, 12)
-        .padding(.trailing, 18)
+        .padding(.trailing, toast.action == nil ? 18 : 10)
         .padding(.vertical, 11)
         // Podłoga wysokości: sama treść jednowierszowa dałaby kapsułę ledwie
         // wyższą od wyspy i rozwinięcie przestałoby być widoczne.
@@ -855,6 +889,13 @@ private struct SCToastPreviewStage: View {
                 Spacer()
                 SCSoftButton(title: "Zapisano", trailingIcon: nil, accent: SCPalette.sage) {
                     center.success("Plan zapisany", "Czwartek, 4 posiłki")
+                }
+                SCSoftButton(title: "Z „Cofnij”", trailingIcon: nil, accent: SCPalette.sage) {
+                    center.success(
+                        "Dodano do planu",
+                        "Jutro · Obiad",
+                        action: SCToast.Action(title: "Cofnij") { center.info("Usunięto z planu", "Jutro · Obiad") }
+                    )
                 }
                 SCSoftButton(title: "Informacja", trailingIcon: nil, accent: SCPalette.indigo) {
                     center.info("Lista zamknięta")

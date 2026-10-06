@@ -59,7 +59,7 @@ struct SCShimmerText: View {
         let base = Color.scMuted(scheme)
         if still {
             Text(text)
-                .font(.system(size: 15))
+                .font(.sc(size: 15))
                 .foregroundStyle(base)
         } else {
             let phase = t.truncatingRemainder(dividingBy: period) / period
@@ -69,7 +69,7 @@ struct SCShimmerText: View {
             // przyklejałoby się do krawędzi i zawinięcie stałoby się skokiem.
             let p = -0.6 + phase * 2.2
             Text(text)
-                .font(.system(size: 15))
+                .font(.sc(size: 15))
                 .foregroundStyle(
                     LinearGradient(
                         stops: [

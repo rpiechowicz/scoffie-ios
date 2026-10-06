@@ -163,13 +163,13 @@ struct CalendarPlateStrip: View {
                 // przyjdzie zmieniony, w tej samej kolumnie potrafi stanąć
                 // „dowolna” zamiast „20:00” i rolowanie robiło z tego zlepek.
                 Text(item.time ?? "dowolna")
-                    .font(.system(size: 11.5, weight: .bold))
+                    .font(.sc(size: 11.5, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(on ? Color.scLabel(scheme) : Color.scMuted(scheme))
                     .contentTransition(.opacity)
 
                 Text(item.slot.shortTitle)
-                    .font(.system(size: 9.5, weight: .semibold))
+                    .font(.sc(size: 9.5, weight: .semibold))
                     .tracking(0.3)
                     .foregroundStyle(labelColor(item, isSelected: on))
                     .contentTransition(.opacity)

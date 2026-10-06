@@ -321,7 +321,7 @@ private struct AssistantIntroComposerDemo: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Napisz na przykład")
-                .font(.system(size: 10.5, weight: .bold))
+                .font(.sc(size: 10.5, weight: .bold))
                 .tracking(1.4)
                 .textCase(.uppercase)
                 .foregroundStyle(Color.scFaint(scheme))
@@ -340,7 +340,7 @@ private struct AssistantIntroComposerDemo: View {
                             .transition(.opacity)
                     }
                 }
-                .font(.system(size: 16.5))
+                .font(.sc(size: 16.5))
                 .tracking(-0.3)
                 .foregroundStyle(AssistantLook.ink(scheme))
                 .lineLimit(1)
@@ -350,7 +350,7 @@ private struct AssistantIntroComposerDemo: View {
                 .scChromeGlass(in: Capsule(style: .continuous))
 
                 Image(systemName: "arrow.up")
-                    .font(.system(size: 19, weight: .bold))
+                    .font(.sc(size: 19, weight: .bold))
                     .foregroundStyle(SCPalette.terracotta)
                     .frame(width: 50, height: 50)
                     .scChromeGlass(
@@ -505,7 +505,7 @@ private struct AssistantIntroOptionsScene: View {
             )
             if picked {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.sc(size: 17, weight: .semibold))
                     .foregroundStyle(AssistantLook.sage(scheme))
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
             }
@@ -566,7 +566,7 @@ private struct AssistantIntroRequestBubble: View {
                     Text(text).hidden()
                 }
             }
-            .font(.system(size: 16))
+            .font(.sc(size: 16))
             .tracking(-0.3)
             .foregroundStyle(AssistantLook.ink(scheme))
             .lineLimit(1)

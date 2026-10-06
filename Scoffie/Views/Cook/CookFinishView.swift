@@ -53,7 +53,7 @@ struct CookFinishContent: View {
 
             VStack(spacing: 0) {
                 Text("UGOTOWANE")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.sc(size: 12, weight: .bold))
                     .tracking(1.44)
                     .foregroundStyle(Color.scMuted(scheme))
                 Text("Smacznego!")
@@ -65,7 +65,7 @@ struct CookFinishContent: View {
             .cookReveal(hasAppeared, order: 0)
 
             Text(recipe.headline)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.sc(size: 17, weight: .semibold))
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -115,11 +115,11 @@ struct CookFinishContent: View {
     private func stat(value: String, caption: String) -> some View {
         VStack(spacing: 3) {
             SCCountingText(value, loadAnimation: .easeOut(duration: 0.9).delay(0.3))
-                .font(.system(size: 20, weight: .bold))
+                .font(.sc(size: 20, weight: .bold))
                 .tracking(-0.4)
                 .foregroundStyle(Color.scLabel(scheme))
             Text(caption)
-                .font(.system(size: 12))
+                .font(.sc(size: 12))
                 .foregroundStyle(Color.scMuted(scheme))
         }
         .frame(maxWidth: .infinity)
@@ -129,7 +129,7 @@ struct CookFinishContent: View {
     private var ratingRow: some View {
         HStack(spacing: 10) {
             Text("Jak wyszło?")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.sc(size: 16, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
             thumb(.up, systemName: "hand.thumbsup", selectedName: "hand.thumbsup.fill", label: "Dobre")
@@ -157,7 +157,7 @@ struct CookFinishContent: View {
             }
         } label: {
             Image(systemName: selected ? selectedName : systemName)
-                .font(.system(size: 18, weight: .medium))
+                .font(.sc(size: 18, weight: .medium))
                 .foregroundStyle(Color.scLabel(scheme))
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce.up.byLayer, value: selected)
@@ -249,7 +249,7 @@ struct CookFeedbackSheet: View {
                         if isOn { selected.remove(reason) } else { selected.insert(reason) }
                     } label: {
                         Text(reason)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.sc(size: 14, weight: .semibold))
                             .foregroundStyle(isOn ? SCPalette.terracotta : Color.scLabel(scheme).opacity(0.8))
                             .padding(.horizontal, 14)
                             .frame(height: 36)
@@ -263,7 +263,7 @@ struct CookFeedbackSheet: View {
             .padding(.top, 20)
 
             TextField("Co poprawić następnym razem?", text: $comment, axis: .vertical)
-                .font(.system(size: 16))
+                .font(.sc(size: 16))
                 .lineLimit(3...5)
                 .padding(.vertical, 14)
                 .padding(.horizontal, 16)
