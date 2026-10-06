@@ -438,65 +438,66 @@ struct RecipeFilterSheet: View {
                 .map(\.chipTitle)
         let more = filters.traits.count + filters.cuisines.count + filters.moments.count
 
-        return RecipeFilterSection(title: "Więcej") {
-            RecipeFilterPickerGroup {
-                if let category {
-                    ForEach(otherFacets) { facet in
-                        let picked = facet.options
-                            .filter { filters.categoryFilters[category]?.contains($0.id, in: facet.kind) ?? false }
-                            .map(\.title)
-                        RecipeFilterListButtonRow(
-                            icon: Self.facetIcon(facet.kind, in: category),
-                            title: facet.title,
-                            value: Self.summary(picked),
-                            isActive: !picked.isEmpty,
-                            accent: RecipeAccent.accent(for: category)
-                        ) { openPane = .facet(category, facet.kind) }
-                        RecipeFilterListDivider()
-                    }
+        // Bez etykiety nad kartą — „Więcej” dublowało wiersz „Więcej filtrów”,
+        // a lista czyta się sama (jak w podglądzie uzgodnionym 6.10.2026).
+        return RecipeFilterPickerGroup {
+            if let category {
+                ForEach(otherFacets) { facet in
+                    let picked = facet.options
+                        .filter { filters.categoryFilters[category]?.contains($0.id, in: facet.kind) ?? false }
+                        .map(\.title)
+                    RecipeFilterListButtonRow(
+                        icon: Self.facetIcon(facet.kind, in: category),
+                        title: facet.title,
+                        value: Self.summary(picked),
+                        isActive: !picked.isEmpty,
+                        accent: RecipeAccent.accent(for: category)
+                    ) { openPane = .facet(category, facet.kind) }
+                    RecipeFilterListDivider()
                 }
-
-                RecipeFilterListMenuRow(
-                    icon: "chart.bar.fill",
-                    title: "Trudność",
-                    choices: Self.difficultyChoices,
-                    selection: $filters.difficulty,
-                    accent: SCPalette.indigo
-                )
-                RecipeFilterListDivider()
-                RecipeFilterListMenuRow(
-                    icon: "flame.fill",
-                    title: "Kalorie na porcję",
-                    choices: calorieChoices,
-                    selection: $filters.maxCaloriesPerServing,
-                    accent: SCPalette.terracotta
-                )
-                RecipeFilterListDivider()
-                RecipeFilterListButtonRow(
-                    icon: "leaf.fill",
-                    title: "Dieta",
-                    value: Self.summary(diets),
-                    isActive: !diets.isEmpty,
-                    accent: SCPalette.sage
-                ) { openPane = .diets }
-                RecipeFilterListDivider()
-                RecipeFilterListButtonRow(
-                    icon: "nosign",
-                    title: "Bez składników",
-                    value: Self.summary(excluded, none: "Żadnych"),
-                    isActive: !excluded.isEmpty,
-                    accent: SCPalette.rose
-                ) { openPane = .exclude }
-                RecipeFilterListDivider()
-                RecipeFilterListButtonRow(
-                    icon: "sparkles",
-                    title: "Więcej filtrów",
-                    value: more > 0 ? "Wybrane: \(more)" : "Cechy, kuchnia…",
-                    isActive: more > 0,
-                    accent: SCPalette.lavender
-                ) { openPane = .more }
             }
+
+            RecipeFilterListMenuRow(
+                icon: "chart.bar.fill",
+                title: "Trudność",
+                choices: Self.difficultyChoices,
+                selection: $filters.difficulty,
+                accent: SCPalette.indigo
+            )
+            RecipeFilterListDivider()
+            RecipeFilterListMenuRow(
+                icon: "flame.fill",
+                title: "Kalorie na porcję",
+                choices: calorieChoices,
+                selection: $filters.maxCaloriesPerServing,
+                accent: SCPalette.terracotta
+            )
+            RecipeFilterListDivider()
+            RecipeFilterListButtonRow(
+                icon: "leaf.fill",
+                title: "Dieta",
+                value: Self.summary(diets),
+                isActive: !diets.isEmpty,
+                accent: SCPalette.sage
+            ) { openPane = .diets }
+            RecipeFilterListDivider()
+            RecipeFilterListButtonRow(
+                icon: "nosign",
+                title: "Bez składników",
+                value: Self.summary(excluded, none: "Żadnych"),
+                isActive: !excluded.isEmpty,
+                accent: SCPalette.rose
+            ) { openPane = .exclude }
+            RecipeFilterListDivider()
+            RecipeFilterListButtonRow(
+                icon: "sparkles",
+                title: "Więcej filtrów",
+                value: more > 0 ? "Wybrane: \(more)" : "Cechy, kuchnia…",
+                isActive: more > 0,
+                accent: SCPalette.lavender
+            ) { openPane = .more }
         }
+        .padding(.top, 24)
     }
 
     // MARK: - Podstrony
