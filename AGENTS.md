@@ -63,10 +63,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   sekcji to przycisk; ten sam pływający `RecipesSearchBar` z `searchPrompt(for:)` szuka w kategorii — przyczepiony
   tak jak na korzeniu, zmieniać RAZEM). Korzeń: `.toolbar(.hidden)` zamiast `NavBarHitTestPassthrough`; kapsuła
   `compactTitles[.recipes]` odkładana na czas kategorii; fraza korzenia nie przechodzi do kategorii. Pasek szukania
-  na korzeniu i w kategorii = `recipesSearchDock` (jedna droga) + `recipesTracksTabBarMinimize` na liście: gdy systemowy
-  pasek zakładek zwinie się do ikony, pasek szukania ZJEŻDŻA w jego wiersz obok niej (6.10.2026; system nie mówi o
-  zwinięciu publicznie — liczymy z kierunku przewijania; stałe `besideTabBarDrop` / `besideTabBarLeading` do dostrojenia
-  na urządzeniu), przy fokusie zostaje nad klawiaturą. Krążek Filtrów BEZ `GlassEffectContainer` (w grupie był martwy
+  na korzeniu i w kategorii = `recipesSearchDock` (jedna droga), stoi nad paskiem zakładek, który się NIE zwija.
+  Zjeżdżanie paska szukania obok zwiniętej ikony (liczone z przewijania) USUNIĘTE tego samego dnia: iOS nie mówi, kiedy
+  pasek się rozwija (np. stuknięciem w zwiniętą ikonę), i pasek szukania nachodził na zakładki. Krążek Filtrów BEZ `GlassEffectContainer` (w grupie był martwy
   pod systemowym `TabView`), plakietka wprost na krążku. „Filtry” działają
   NA ŻYWO (bez szkicu i „Pokaż”), stopka „N z M przepisów” + tekstowe „Gotowe” (lupa odpadła). Filtry kategorii =
   sekcja „Filtrów”, gdy lista stoi w kategorii (ekran albo zakładka wyników, `scope`), bez kuchni i okazji kategorii;
@@ -420,7 +419,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   poniedziałku przez `PlanWeek`.
 - Dolne menu: Przepisy · Plan · **Dziś** · Asystent · Ustawienia — od 6.10.2026 SYSTEMOWY `TabView(selection:
   $session.dashboardTab)` z pięcioma `Tab` (iOS 26, `NavigationMenu.swift`), `.tint` terakota, `.badge` nowych
-  odpowiedzi Asystenta, `.tabBarMinimizeBehavior(.onScrollDown)`; zmiana zakładki = cięcie systemu. „Produkty” NIE są
+  odpowiedzi Asystenta, `.tabBarMinimizeBehavior(.never)` (6.10.2026: zwinięty pasek rozjeżdżał się ze wstawkami nad nim — nie wracać
+  do `.onScrollDown` bez akcesorium `tabViewBottomAccessory`, które zna stan paska); zmiana zakładki = cięcie systemu. „Produkty” NIE są
   zakładką — lista zakupów wchodzi przyciskiem z nagłówka Planu (`ProductsView` jako arkusz z `topPadding: 24`, bo
   domyślne 78 pt odsuwa tytuł od Dynamic Island). Piąte miejsce zajęte — nowa zakładka wymaga wyjęcia innej (inaczej
   iOS schowa obie pod „Więcej”). Zakładka buduje się przy PIERWSZYM wyborze i potem żyje; „wszedł na zakładkę” =

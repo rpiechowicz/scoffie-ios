@@ -70,9 +70,6 @@ struct RecipesView: View {
     /// otwarciu, żeby arkusz nie przestawiał się pod palcem, gdy zakładka
     /// wyników wróci do „Wszystkie”.
     @State private var filterSheetScope: RecipesCategory?
-    /// Systemowy pasek zakładek zwinięty przewijaniem korzenia — pasek
-    /// szukania zjeżdża wtedy obok jego ikony (`recipesTracksTabBarMinimize`).
-    @State private var isTabBarMinimized = false
 
     /// Numer doby posiłkowej — ziarno codziennej rotacji propozycji.
     /// Trzymany w stanie, a nie liczony w locie z `Date()`, żeby przewijanie
@@ -544,7 +541,6 @@ struct RecipesView: View {
         .scrollDismissesKeyboard(.immediately)
         // Duży tytuł zjechał — pod paskiem stanu staje szklana kapsuła.
         .scReportsCompactTitle("Przepisy", for: .recipes)
-        .recipesTracksTabBarMinimize($isTabBarMinimized)
         .ignoresSafeArea(.container, edges: .top)
         // Nowa fraza albo wejście w wyniki / wyjście z nich — od góry
         // (wyniki mogły zacząć się wysoko nad miejscem, w którym się było).
@@ -573,15 +569,14 @@ struct RecipesView: View {
             if !active { scope = nil }
         }
         }
-        // Pasek szukania nad systemowym paskiem zakładek, przy jego zwinięciu
-        // zjeżdża obok ikony — ta sama droga, co na ekranie kategorii.
+        // Pasek szukania nad systemowym paskiem zakładek — ta sama droga,
+        // co na ekranie kategorii.
         .recipesSearchDock(
             RecipesSearchBar(
                 text: $searchText,
                 activeFilterCount: filters.activeCount(in: scope),
                 onSubmit: { debouncedSearchText = searchText },
-                onOpenFilters: { openFilters(scope: scope) },
-                besideMinimizedTabBar: isTabBarMinimized
+                onOpenFilters: { openFilters(scope: scope) }
             ),
             horizontalPadding: pageHorizontalPadding
         )

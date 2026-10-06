@@ -38,8 +38,6 @@ struct RecipeCategoryScreen: View {
 
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.colorScheme) private var scheme
-    /// Systemowy pasek zakładek zwinięty przewijaniem — patrz `RecipesSearchBar`.
-    @State private var isTabBarMinimized = false
 
     // Te same klucze, co na korzeniu Przepisów — ekran czyta je sam, więc
     // zmiana dopasowania (żeton, różdżka w Filtrach) przelicza go od razu.
@@ -140,7 +138,6 @@ struct RecipeCategoryScreen: View {
             .scrollDismissesKeyboard(.immediately)
             // Pod systemowym paskiem — miękka krawędź, bez kreski.
             .scrollEdgeEffectStyle(.soft, for: .top)
-            .recipesTracksTabBarMinimize($isTabBarMinimized)
             // Ten sam pływający pasek, przyczepiony tą samą drogą co na korzeniu
             // Przepisów (`recipesSearchDock`).
             .recipesSearchDock(
@@ -148,8 +145,7 @@ struct RecipeCategoryScreen: View {
                     text: $searchText,
                     prompt: RecipesConstants.searchPrompt(for: category),
                     activeFilterCount: activeFilterCount,
-                    onOpenFilters: onOpenFilters,
-                    besideMinimizedTabBar: isTabBarMinimized
+                    onOpenFilters: onOpenFilters
                 ),
                 horizontalPadding: 20
             )

@@ -82,7 +82,7 @@ extension EnvironmentValues {
 /// (`SCFloatingTabBar`): wszystkie zakładki budowały się pod loaderem,
 /// zmiana zakładki przenikała, pasek zwijał się do samych ikon i miał jeden
 /// gest przeciągania pigułki. Rafał zdecydował: aplikacja „jak od Apple” —
-/// systemowy pasek, systemowe zwijanie przy przewijaniu (do bieżącej
+/// systemowy pasek (od 6.10.2026 bez zwijania przy przewijaniu, do bieżącej
 /// zakładki), cięcie przy zmianie zakładki. W zamian system robi sam:
 /// miejsce pod treścią, efekt krawędzi przewijania pod paskiem i to, że
 /// klawiatura zasłania pasek, a wstawki zakładek (pole Asystenta, pasek
@@ -123,8 +123,12 @@ struct NavigationMenu: View {
                 page(.settings, isActive: selected == .settings)
             }
         }
-        // Przewijanie w dół zwija pasek, w górę rozwija — systemowo.
-        .tabBarMinimizeBehavior(.onScrollDown)
+        // Pasek NIE zwija się przy przewijaniu (Rafał 6.10.2026). Zwinięty
+        // rozjeżdżał się ze wstawkami nad nim (pasek szukania Przepisów,
+        // pigułka Planu, pole Asystenta), a iOS nie mówi aplikacji, kiedy
+        // pasek się zwinął albo rozwinął (np. stuknięciem w zwiniętą ikonę) —
+        // przyklejany do niego pasek szukania nachodził potem na zakładki.
+        .tabBarMinimizeBehavior(.never)
         // Wybrana zakładka w terakocie; reszta w kolorze systemu. Ten sam
         // akcent dziedziczą zakładki (był tu i przy własnym kontenerze).
         .tint(SCPalette.terracotta)
