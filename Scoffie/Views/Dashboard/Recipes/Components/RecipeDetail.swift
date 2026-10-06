@@ -114,6 +114,7 @@ struct RecipeDetailView: View {
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
+    @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -159,7 +160,9 @@ struct RecipeDetailView: View {
     /// Porcje łączne w jednostkach 1/20: w katalogu stepper co 0,5, w planie
     /// (gdy nie ma porcji osób) co 1 — `plannedServings` to liczba całkowita.
     @State private var servingsUnits: Int
-    @State private var isAddToPlanPresented = false
+    /// Pełny arkusz „Dodaj do planu” — z dniem i porą z szybkiego menu
+    /// (pora zajęta innym daniem) albo bez („Inny dzień…”, cudzy przepis).
+    @State private var addToPlanRequest: AddToPlanRequest?
     /// Półarkusz „Kto ile je” spod przyczepionej pigułki porcji.
     @State private var isPortionsSheetPresented = false
 
@@ -461,7 +464,7 @@ struct RecipeDetailView: View {
         } message: {
             Text("Gotujemy jedno danie naraz — tamto ma swoje timery.")
         }
-        .sheet(isPresented: $isAddToPlanPresented) {
+        .sheet(item: $addToPlanRequest) { request in
             // Liczba porcji ze steppera jedzie do arkusza jako punkt startowy:
             // użytkownik właśnie na nią patrzył, więc przestawienie jej przy
             // dodawaniu wyglądałoby na zgubienie jego wyboru.
@@ -474,6 +477,8 @@ struct RecipeDetailView: View {
                 // że użytkownik świadomie go ruszył — i arkusz nie ma prawa
                 // nadpisać jej regułą auto z chipów.
                 didOverrideServings: didTouchStepper,
+                initialDate: request.date,
+                initialSlot: request.slot,
                 onAdded: { day, slot in
                     onAddedToPlan?(day, slot)
                 }
@@ -1203,28 +1208,134 @@ struct RecipeDetailView: View {
     }
 
     /// Akcja planu w standardowym wariancie „soft" — terakota na tincie.
+    /// W katalogu ten sam przycisk otwiera szybkie menu (`quickPlanMenu`).
+    @ViewBuilder
     private func planActionButton(title: String) -> some View {
-        Button(action: performPrimaryAction) {
-            HStack(spacing: 7) {
-                Image(systemName: primaryActionIcon)
-                    .font(.system(size: 13, weight: .heavy))
-                Text(title)
-                    .font(.system(size: 14, weight: .bold))
-                    .tracking(-0.1)
-                    .lineLimit(1)
+        let options = quickPlanOptions
+        if !options.isEmpty {
+            quickPlanMenu(options, title: title)
+        } else {
+            Button(action: performPrimaryAction) {
+                planActionLabel(title: title)
             }
-            .foregroundStyle(SCPalette.terracotta)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .scSoftCapsule()
+            .buttonStyle(.plain)
+            .disabled(!isPrimaryActionEnabled || isSavingServings)
+            // Wygaszony tylko na chwilę pracy (zapis, przygotowanie planu) —
+            // „Zapisz porcje” bez zmian w ogóle się nie pokazuje (`showsPlanAction`).
+            .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
+            .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
+            .accessibilityLabel(primaryActionTitle)
         }
-        .buttonStyle(.plain)
-        .disabled(!isPrimaryActionEnabled || isSavingServings)
-        // Wygaszony tylko na chwilę pracy (zapis, przygotowanie planu) —
-        // „Zapisz porcje” bez zmian w ogóle się nie pokazuje (`showsPlanAction`).
-        .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
-        .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
+    }
+
+    private func planActionLabel(title: String) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: primaryActionIcon)
+                .font(.system(size: 13, weight: .heavy))
+            Text(title)
+                .font(.system(size: 14, weight: .bold))
+                .tracking(-0.1)
+                .lineLimit(1)
+        }
+        .foregroundStyle(SCPalette.terracotta)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .scSoftCapsule()
+    }
+
+    // MARK: - Szybkie „Dodaj do planu”
+
+    /// Pozycje szybkiego menu — tylko przepis z katalogu (posiłek z planu ma
+    /// „Zapisz porcje”, cudzy przepis najpierw zapisuje kopię). Dla całego
+    /// domu i z porcjami ze steppera, jak arkusz bez ruszania czegokolwiek.
+    /// Pusto, gdy dom nie planuje żadnej pory, w którą przepis pasuje — wtedy
+    /// przycisk otwiera od razu pełny arkusz.
+    private var quickPlanOptions: [RecipeQuickPlan.Option] {
+        guard case .catalog = context else { return [] }
+        return RecipeQuickPlan.options(
+            recipe: recipe,
+            store: mealStore,
+            enabledSlots: sessionStore.mealSlots.enabled,
+            schedule: sessionStore.mealSlotSchedule,
+            members: sessionStore.householdMembers,
+            portions: AddToPlanPortions(units: servingsUnits, didOverride: didTouchStepper)
+        )
+    }
+
+    /// „Dodaj do planu” z katalogu = SYSTEMOWE menu zamiast ciężkiego arkusza
+    /// (6.10.2026, „jak od Apple — prościej, mniej ceremonii”): „Dziś · Obiad”
+    /// (gdy ta pora dziś jeszcze przed nami) i „Jutro · Obiad” zapisują jednym
+    /// stuknięciem, „Inny dzień…” otwiera pełny arkusz. Pora zajęta INNYM
+    /// daniem → pozycja z „Zamiast: …” (zapis by je podmienił) albo „Jest już:
+    /// …” (danie części domu) otwiera arkusz z tym dniem i porą — po cichu nie
+    /// podmieniamy ani nie dokładamy drugiego obiadu; to danie już tam stoi →
+    /// pozycja wyłączona „Już w planie”. Szkło jest CAŁĄ etykietą menu, więc
+    /// iOS 26 może z niego animować menu (patrz „Szkło w etykiecie `Menu`”
+    /// w CLAUDE.md).
+    ///
+    /// Kolejność stała (`menuOrder(.fixed)`): czyta się z góry na dół jak
+    /// kalendarz — dziś, jutro, inny dzień — a „Inny dzień…” stoi przy palcu.
+    private func quickPlanMenu(_ options: [RecipeQuickPlan.Option], title: String) -> some View {
+        Menu {
+            ForEach(options) { option in
+                quickPlanItem(option)
+            }
+
+            Divider()
+
+            Button {
+                addToPlanRequest = AddToPlanRequest()
+            } label: {
+                Label("Inny dzień…", systemImage: "calendar")
+            }
+        } label: {
+            planActionLabel(title: title)
+        }
+        .menuOrder(.fixed)
         .accessibilityLabel(primaryActionTitle)
+        .accessibilityHint("Wybierz dziś, jutro albo inny dzień")
+    }
+
+    /// Pozycja menu: pora dnia jako ikona, podtytuł mówi, co stoi na drodze.
+    @ViewBuilder
+    private func quickPlanItem(_ option: RecipeQuickPlan.Option) -> some View {
+        switch option.outcome {
+        case .add:
+            Button {
+                quickAdd(option)
+            } label: {
+                Label(option.title, systemImage: option.slot.icon)
+            }
+        case .replaces(let meal):
+            Button {
+                addToPlanRequest = AddToPlanRequest(date: option.date, slot: option.slot)
+            } label: {
+                Label(option.title, systemImage: option.slot.icon)
+                Text("Zamiast: \(meal.recipe.name)")
+            }
+        case .besides(let meal):
+            Button {
+                addToPlanRequest = AddToPlanRequest(date: option.date, slot: option.slot)
+            } label: {
+                Label(option.title, systemImage: option.slot.icon)
+                Text("Jest już: \(meal.recipe.name)")
+            }
+        case .alreadyPlanned:
+            Button {} label: {
+                Label(option.title, systemImage: option.slot.icon)
+                Text("Już w planie")
+            }
+            .disabled(true)
+        }
+    }
+
+    /// Szybkie dodanie: zapis tą samą drogą co arkusz (`AddToPlanDraft.save`
+    /// — toast „Dodano do planu · Jutro · Obiad” z haptyką sukcesu po
+    /// potwierdzeniu), a ekran pod spodem — jak po arkuszu — dostaje
+    /// `onAddedToPlan` (wejścia katalogu zamykają wtedy szczegóły).
+    private func quickAdd(_ option: RecipeQuickPlan.Option) {
+        option.draft.save(store: mealStore, toasts: toasts, placement: option.title)
+        onAddedToPlan?(option.date, option.slot)
     }
 
     // MARK: - Gotuj
@@ -1458,7 +1569,9 @@ struct RecipeDetailView: View {
     private func performPrimaryAction() {
         switch context {
         case .catalog:
-            isAddToPlanPresented = true
+            // Tu tylko wtedy, gdy szybkiego menu nie ma (dom nie planuje
+            // żadnej pory, w którą przepis pasuje) — od razu pełny arkusz.
+            addToPlanRequest = AddToPlanRequest()
         case .shared:
             addSharedToPlan()
         case .planned:
@@ -1537,7 +1650,7 @@ struct RecipeDetailView: View {
     private func addSharedToPlan() {
         guard case .shared(let token, _) = context, !isPreparingPlan else { return }
         if savedCopy != nil {
-            isAddToPlanPresented = true
+            addToPlanRequest = AddToPlanRequest()
             return
         }
         isPreparingPlan = true
@@ -1546,7 +1659,7 @@ struct RecipeDetailView: View {
                 savedCopy = try await recipeCatalogStore.saveSharedRecipe(token: token)
                 sharedSave = .saved
                 isPreparingPlan = false
-                isAddToPlanPresented = true
+                addToPlanRequest = AddToPlanRequest()
             } catch {
                 isPreparingPlan = false
                 guard !UserFacingErrorMapper.isCancellation(error) else { return }
@@ -1580,6 +1693,17 @@ struct RecipeDetailView: View {
         }
         #endif
     }
+}
+
+// MARK: - „Dodaj do planu”
+
+/// Otwarcie pełnego arkusza „Dodaj do planu” — z dniem i porą wybranymi już
+/// w szybkim menu (pora zajęta innym daniem) albo bez (`nil` = dziś
+/// i domyślna pora przepisu).
+private struct AddToPlanRequest: Identifiable {
+    let id = UUID()
+    var date: Date? = nil
+    var slot: MealSlot? = nil
 }
 
 // MARK: - „Zapisz u siebie”

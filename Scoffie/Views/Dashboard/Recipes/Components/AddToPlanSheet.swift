@@ -45,43 +45,45 @@ import SwiftUI
 ///    przestawiłby użytkownikowi dzień w Planie i Kalendarzu. Z
 ///    `DatesViewModel` bierzemy wyłącznie regułę `isEditable(_:)`.
 /// 2. **Chipy audytorium przestawiają porcje tylko do pierwszego ruchu ręką.**
-///    Patrz `didOverrideServings` i `applyAutoServings(for:animated:)`.
+///    Patrz `AddToPlanPortions.didOverride` i `applyAutoServings(for:animated:)`.
 /// 3. **Przeszłego dnia nie da się wybrać.** Plan i Kalendarz pokazują minione
 ///    dni tylko do odczytu, więc wpis dodany stąd byłby nie do usunięcia.
 /// 4. **Ten sam przepis w porze łączy osoby, a nie nadpisuje.** Pozycja planu
 ///    to para (pora, przepis): zapis obiadu Rafała dla Ani przepisywał go na
 ///    nią i Rafał zostawał bez obiadu. Teraz osoby się sumują, a pełny dom
 ///    zwija się do „Wspólne” (`PlanAudienceChips.merged`).
+///
+/// Audytorium, kolizje, porcje i sam zapis liczy `AddToPlanDraft` — ta sama
+/// reguła, z którą zapisuje szybkie menu przycisku w szczegółach („Dziś ·
+/// Obiad”, „Jutro · Obiad”). Pozycja menu z porą zajętą innym daniem otwiera
+/// ten arkusz z dniem i porą już wybranymi (`initialDate`, `initialSlot`).
 struct AddToPlanSheet: View {
     let recipe: Recipe
-    /// Liczba porcji ustawiona stepperem w szczegółach — punkt startowy,
-    /// który chipy audytorium mogą jeszcze przeliczyć.
-    let initialServings: Int
     var onAdded: ((Date, MealSlot) -> Void)? = nil
 
-    /// Porcje ze szczegółów w jednostkach 1/20 (stepper co 0,5) — `nil` =
-    /// `initialServings` całych porcji.
-    let initialUnits: Int
-
+    /// `initialServings` — liczba porcji ze steppera w szczegółach, punkt
+    /// startowy, który „Dla kogo” może jeszcze przeliczyć; `initialUnits` — te
+    /// same porcje w jednostkach 1/20 (stepper co 0,5), `nil` = całe porcje.
+    /// `initialDate` / `initialSlot` — dzień i pora wybrane już w szybkim menu
+    /// szczegółów (pora zajęta innym daniem: arkusz otwiera się z kartą
+    /// „ZAMIENISZ”); `nil` = dziś i domyślna pora przepisu.
     init(
         recipe: Recipe,
         initialServings: Int,
         initialUnits: Int? = nil,
         didOverrideServings: Bool = false,
+        initialDate: Date? = nil,
+        initialSlot: MealSlot? = nil,
         onAdded: ((Date, MealSlot) -> Void)? = nil
     ) {
         self.recipe = recipe
-        self.initialServings = initialServings
         self.onAdded = onAdded
         let units = initialUnits ?? initialServings * PlanPortions.unitsPerServing
-        self.initialUnits = units
-        // Klamrujemy już przy wejściu: `initialServings` przychodzi z innego
-        // ekranu i arkusz nie ma jak pokazać wartości spoza widełek steppera.
-        _servings = State(initialValue: min(12, PlanPortions.plannedServings(forTotalUnits: units)))
-        // Stepper w szczegółach i tutaj regulują to samo — świadome „gotuję
-        // 4 porcje” ustawione ekran wcześniej nie może zniknąć przy otwarciu.
-        _didOverrideServings = State(initialValue: didOverrideServings)
-        _seedTotalUnits = State(initialValue: didOverrideServings ? units : nil)
+        // Ten sam punkt startowy, z którym zapisuje szybkie menu szczegółów
+        // (`AddToPlanPortions`) — klamrowany do widełek steppera.
+        _portions = State(initialValue: AddToPlanPortions(units: units, didOverride: didOverrideServings))
+        _selectedDate = State(initialValue: initialDate ?? Date())
+        _selectedSlot = State(initialValue: initialSlot)
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -99,19 +101,12 @@ struct AddToPlanSheet: View {
     @State private var selectedSlot: MealSlot?
     /// Pusty zbiór znaczy „Wspólne" — danie je całe gospodarstwo.
     @State private var selectedParticipants: Set<String> = []
-    @State private var servings: Int
-    /// Czy użytkownik ruszył stepper ręcznie — tutaj albo jeszcze w szczegółach
-    /// przepisu. Dopóki `false`, porcje nadążają za audytorium i nie lecą na
-    /// serwer (patrz `save()`); potem są jego decyzją i chipy ich nie ruszają.
-    @State private var didOverrideServings = false
-    /// Porcje osób ruszone stepperem tutaj (jednostki 1/20); reszta osób ma
-    /// `seedUnits`. Klucz = id domownika.
-    @State private var touchedUnits: [String: Int] = [:]
+    /// Porcje: łączne, ręczny wybór (`didOverride` — dopóki `false`, porcje
+    /// nadążają za audytorium i nie lecą na serwer), punkt startowy porcji
+    /// osób i porcje osób ruszone stepperem. Reguły w `AddToPlanPortions`.
+    @State private var portions: AddToPlanPortions
     /// Arkusz porcji spod przycisku obok „Dodaj do planu”.
     @State private var isPortionsSheetPresented = false
-    /// Porcje łączne, od których startują porcje osób: ze szczegółów przepisu
-    /// albo ze steppera łącznego tutaj; `nil` = nikt nie wybierał (po 1).
-    @State private var seedTotalUnits: Int?
     @State private var isSaving = false
     /// Kaskada sekcji (`scReveal`) — przestawiana w `.task` po klatce oddechu.
     @State private var hasAppeared = false
@@ -166,15 +161,27 @@ struct AddToPlanSheet: View {
     /// Slot zaznaczany przy otwarciu: slot bazowy przepisu, o ile
     /// gospodarstwo ten posiłek planuje; inaczej pierwszy widoczny, w który
     /// przepis pasuje. Bazowy slot, a nie kategoria — „Przekąski i desery”
-    /// zbiera trzy sloty naraz.
+    /// zbiera trzy sloty naraz. Ta sama kolejność co w szybkim menu
+    /// szczegółów (`RecipeQuickPlan.candidateSlots`).
     private func defaultSlot(from visible: [MealSlot]) -> MealSlot? {
-        if let base = recipe.primarySlot, visible.contains(base) { return base }
-        return visible.first { recipe.fits($0) } ?? visible.first
+        RecipeQuickPlan.candidateSlots(for: recipe, among: visible).first ?? visible.first
     }
 
-    private var participantsToSave: [String] {
-        PlanAudienceChips.collapsed(selectedParticipants, members: members)
+    /// Wybór w arkuszu i to, co zapis z niego zrobi — reguły wspólne
+    /// z szybkim menu szczegółów (`AddToPlanDraft`).
+    private var draft: AddToPlanDraft {
+        AddToPlanDraft(
+            recipe: recipe,
+            date: selectedDate,
+            slot: selectedSlot,
+            store: mealStore,
+            selection: selectedParticipants,
+            members: members,
+            portions: portions
+        )
     }
+
+    private var participantsToSave: [String] { draft.participantsToSave }
 
     /// Ta sama reguła, którą Plan i Kalendarz stosują do minionych dni.
     private func isEditable(_ date: Date) -> Bool {
@@ -765,42 +772,15 @@ struct AddToPlanSheet: View {
 
     // MARK: - Porcje
 
-    /// Kto je nowe danie — osoby, których porcje pokazujemy. „Wspólne” =
-    /// cały dom. Puste, dopóki lista domowników nie dojechała.
-    private var eaterIds: [String] {
-        let ids = participantsToSave.isEmpty ? members.map(\.id) : participantsToSave
-        return ids
-    }
+    // Reguły porcji (kto je, punkt startowy, porcje osób, mapa do zapisu)
+    // żyją w `AddToPlanDraft` / `AddToPlanPortions` — z nich zapisuje też
+    // szybkie menu szczegółów.
 
-    /// Porcje osób liczymy tylko dla NOWEJ pozycji — dołączenie do dania,
-    /// które już stoi w porze, zostawia jego porcje (ustawia się je w planie).
-    /// Więcej niż 6 porcji na osobę (na zapas) — zostaje stepper łączny.
-    private var showsPersonalPortions: Bool {
-        guard !eaterIds.isEmpty, samePlanned == nil else { return false }
-        guard let seedTotalUnits else { return true }
-        return PlanPortions.fitsPerPerson(totalUnits: seedTotalUnits, eaterCount: eaterIds.count)
-    }
+    private var eaterIds: [String] { draft.eaterIds }
 
-    /// Punkt startowy porcji osób: wybrane porcje łączne rozpisane po pół
-    /// porcji (suma się zgadza) albo po 1 — jak reguła serwera.
-    private var seedMap: [String: Int] {
-        guard let seedTotalUnits else { return [:] }
-        return PlanPortions.seededUnits(eaters: eaterIds, totalUnits: seedTotalUnits)
-    }
+    private var showsPersonalPortions: Bool { draft.showsPersonalPortions }
 
-    /// Po pierwszym ruszeniu osoby nowi w audytorium zaczynają od 1.
-    private func units(for memberId: String) -> Int {
-        if let touched = touchedUnits[memberId] { return touched }
-        if touchedUnits.isEmpty, let seeded = seedMap[memberId] { return seeded }
-        return PlanPortions.missingEntryUnits
-    }
-
-    /// Mapa do wysłania — tylko gdy ktoś świadomie ustawił porcje; inaczej
-    /// serwer liczy sam z audytorium (jak dotąd).
-    private var portionsToSave: [String: Int]? {
-        guard showsPersonalPortions, didOverrideServings else { return nil }
-        return Dictionary(eaterIds.map { ($0, units(for: $0)) }, uniquingKeysWith: { first, _ in first })
-    }
+    private func units(for memberId: String) -> Int { draft.units(for: memberId) }
 
     @ViewBuilder
     private var servingsSection: some View {
@@ -866,11 +846,11 @@ struct AddToPlanSheet: View {
     private func setUnits(_ next: Int, for memberId: String, allIds: [String]) {
         // Ta sama krzywa co każda cyfra w aplikacji (`SCMotion.textRoll`).
         withAnimation(SCMotion.textRoll) {
-            if touchedUnits.isEmpty {
-                touchedUnits = Dictionary(allIds.map { ($0, units(for: $0)) }, uniquingKeysWith: { first, _ in first })
+            if portions.touchedUnits.isEmpty {
+                portions.touchedUnits = Dictionary(allIds.map { ($0, units(for: $0)) }, uniquingKeysWith: { first, _ in first })
             }
-            touchedUnits[memberId] = next
-            didOverrideServings = true
+            portions.touchedUnits[memberId] = next
+            portions.didOverride = true
         }
     }
 
@@ -886,23 +866,23 @@ struct AddToPlanSheet: View {
 
             // Liczba roluje — przy stepperze i przy regule auto, gdy chipy
             // „Dla kogo” przestawiają porcje.
-            Text("\(servings)")
+            Text("\(portions.servings)")
                 .font(.system(size: 20, weight: .heavy))
                 .tracking(-0.3)
                 .monospacedDigit()
                 .foregroundStyle(Color.scLabel(scheme))
-                .contentTransition(.numericText(value: Double(servings)))
+                .contentTransition(.numericText(value: Double(portions.servings)))
                 .frame(minWidth: 26, alignment: .trailing)
                 .accessibilityHidden(true)
 
             SCStepper(
-                value: $servings,
+                value: $portions.servings,
                 accessibilityTitle: "Liczba porcji",
-                accessibilityValue: PolishPlural.servings(servings),
+                accessibilityValue: PolishPlural.servings(portions.servings),
                 onChange: { next in
-                    didOverrideServings = true
-                    seedTotalUnits = next * PlanPortions.unitsPerServing
-                    touchedUnits = [:]
+                    portions.didOverride = true
+                    portions.seedTotalUnits = next * PlanPortions.unitsPerServing
+                    portions.touchedUnits = [:]
                 }
             )
         }
@@ -975,7 +955,7 @@ struct AddToPlanSheet: View {
     private var portionsTotalUnits: Int {
         showsPersonalPortions
             ? eaterIds.reduce(0) { $0 + units(for: $1) }
-            : servings * PlanPortions.unitsPerServing
+            : portions.servings * PlanPortions.unitsPerServing
     }
 
     /// Porcje jako szklany przycisk OBOK „Dodaj do planu” (Rafał 4.10.2026:
@@ -1071,9 +1051,7 @@ struct AddToPlanSheet: View {
     }
 
     /// Danie, które zapis naprawdę wyprze z planu.
-    private var replacedMeal: PlanMeal? {
-        isAlreadyPlanned ? nil : conflictingMeal
-    }
+    private var replacedMeal: PlanMeal? { draft.replacedMeal }
 
     /// „ZAMIENISZ · Owsianka z jabłkiem” ze zdjęciem — karta nad zdaniem
     /// w stopce, w kolorze wybranej pory.
@@ -1136,7 +1114,7 @@ struct AddToPlanSheet: View {
         let kept = Set(PlanAudienceChips.collapsed(selection, members: members).isEmpty
             ? members.map(\.id)
             : PlanAudienceChips.collapsed(selection, members: members))
-        touchedUnits = touchedUnits.filter { kept.contains($0.key) }
+        portions.touchedUnits = portions.touchedUnits.filter { kept.contains($0.key) }
         applyAutoServings(for: selection, animated: true)
     }
 
@@ -1144,7 +1122,7 @@ struct AddToPlanSheet: View {
     /// stosuje, gdy `plannedServings` nie przyjdzie w payloadzie.
     private func applyAutoServings(for selection: Set<String>, animated: Bool) {
         // Ręczny wybór wygrywa ze zgadywaniem — na zawsze.
-        guard !didOverrideServings else { return }
+        guard !portions.didOverride else { return }
 
         // „Wspólne" liczy się z liczby domowników, a tej jeszcze nie znamy —
         // zostawiamy wartość startową i przeliczamy, gdy lista dojedzie.
@@ -1154,56 +1132,25 @@ struct AddToPlanSheet: View {
         let collapsed = PlanAudienceChips.collapsed(selection, members: members)
         let merged = PlanAudienceChips.merged(collapsed, with: samePlanned, members: members)
         let eaters = min(12, max(1, PlanAudienceChips.eaterCount(Set(merged), memberCount: members.count)))
-        guard eaters != servings else { return }
+        guard eaters != portions.servings else { return }
 
         if animated {
-            withAnimation(.smooth(duration: 0.18)) { servings = eaters }
+            withAnimation(.smooth(duration: 0.18)) { portions.servings = eaters }
         } else {
-            servings = eaters
+            portions.servings = eaters
         }
     }
 
-    /// Ten sam przepis stoi już w wybranej porze wybranego dnia — dla
-    /// kogokolwiek.
-    private var samePlanned: PlanMeal? {
-        guard let selectedSlot else { return nil }
-        return mealStore
-            .meals(for: selectedDate, slot: selectedSlot)
-            .first { $0.recipe.id == recipe.id }
-    }
+    // Reguły audytorium i kolizji — wspólne z szybkim menu szczegółów
+    // (`AddToPlanDraft`).
 
-    /// Audytorium, z którym przepis naprawdę trafi do planu: wybrane osoby
-    /// plus te, dla których ten przepis już tu stoi, a pełny dom zwinięty
-    /// do „Wspólne”.
-    private var audienceToSave: [String] {
-        PlanAudienceChips.merged(participantsToSave, with: samePlanned, members: members)
-    }
+    private var samePlanned: PlanMeal? { draft.samePlanned }
 
-    /// Wybrane były konkretne osoby, a po zsumowaniu wychodzi cały dom.
-    private var mergesIntoShared: Bool {
-        samePlanned != nil && !participantsToSave.isEmpty && audienceToSave.isEmpty
-    }
+    private var mergesIntoShared: Bool { draft.mergesIntoShared }
 
-    /// Posiłek, który ten zapis zastąpi: ten sam dzień, slot i audytorium,
-    /// INNY przepis. Slot z założenia mieści kilka posiłków („Każdy je
-    /// inaczej”) — kolizją jest dopiero drugie danie dla TYCH SAMYCH osób.
-    /// Porównujemy z wybranymi osobami i z audytorium po połączeniu —
-    /// inaczej suma do „Wspólne” stawiała drugie wspólne danie obok.
-    private var conflictingMeal: PlanMeal? {
-        guard let selectedSlot else { return nil }
-        let audiences: Set<Set<String>> = [Set(participantsToSave), Set(audienceToSave)]
-        return mealStore
-            .meals(for: selectedDate, slot: selectedSlot)
-            .first { $0.recipe.id != recipe.id && audiences.contains(Set($0.participantIds)) }
-    }
+    private var conflictingMeal: PlanMeal? { draft.conflictingMeal }
 
-    /// Ten przepis już tu jest dla wybranych osób — nie ma czego zapisywać.
-    private var isAlreadyPlanned: Bool {
-        guard let existing = samePlanned else { return false }
-        if existing.isShared { return true }
-        let audience = Set(participantsToSave)
-        return !audience.isEmpty && audience.isSubset(of: Set(existing.participantIds))
-    }
+    private var isAlreadyPlanned: Bool { draft.isAlreadyPlanned }
 
     /// Danie, które zajmuje daną porę wybranego dnia — najpierw to dla
     /// wybranych osób, potem jakiekolwiek.
@@ -1231,74 +1178,22 @@ struct AddToPlanSheet: View {
         selectedSlot != nil && isEditable(selectedDate) && !isAlreadyPlanned && !portionsOverLimit
     }
 
-    /// Suma porcji osób ponad limit pozycji (np. dwie osoby po 6 i dołączona
-    /// trzecia) — serwer odrzuciłby zapis, więc przycisk czeka, aż ktoś
-    /// zejdzie z porcją (minus działa zawsze, `PlanPortions.stepped`).
-    private var portionsOverLimit: Bool {
-        guard showsPersonalPortions else { return false }
-        return eaterIds.reduce(0) { $0 + units(for: $1) } > PlanPortions.maxTotalUnits
-    }
+    private var portionsOverLimit: Bool { draft.portionsOverLimit }
 
     private func save() {
-        guard let slot = selectedSlot, !isSaving, isEditable(selectedDate), !isAlreadyPlanned, !portionsOverLimit else { return }
+        let current = draft
+        guard let slot = current.slot, !isSaving, isEditable(current.date), !current.isAlreadyPlanned, !current.portionsOverLimit else { return }
         isSaving = true
-        let date = selectedDate
-        // Zajęty slot podmieniamy, zamiast dokładać obok — drugie „Wspólne”
-        // śniadanie wjeżdżało do bazy jako wpis, którego plan nie pokazywał.
-        let replacing = conflictingMeal?.recipe.id
-        // Nazwę wypieranego dania i audytorium bierzemy TERAZ — po zapisie
-        // optymistycznym liczyłyby się już od nowego dania.
-        let replacedName = conflictingMeal?.recipe.name
-        let audience = audienceToSave
-        let becameShared = mergesIntoShared
-        let portions = portionsToSave
-
+        let date = current.date
         // Dismiss od razu, jak w PlanSlotPickerSheet: wpis optymistyczny
-        // ląduje w store przed siecią. Kolejkę toastów bierzemy do stałej
-        // PRZED zadaniem — po zamknięciu arkusza jego środowiska już nie ma.
-        let store = mealStore
-        let toasts = toasts
+        // ląduje w store przed siecią, toast przychodzi po potwierdzeniu
+        // (`AddToPlanDraft.save` — ta sama droga co szybkie menu szczegółów).
         // Nazwy pory NIE zniżamy: „II śniadanie" wyszłoby jako „ii śniadanie".
-        let place = "\(Self.dayName(for: date)) · \(slot.title)"
-        let placement = becameShared ? place + " · dla całego domu" : place
-        // Dwa identyczne błędy pod rząd nie są dla mostu zmianą — pamiętamy,
-        // co było przed zapisem.
-        let errorBefore = store.errorMessage
-        Task { @MainActor in
-            let saved = await store.upsertWeekSlot(
-                recipe: recipe,
-                participantIds: audience,
-                // Liczbę wysyłamy tylko jako wybór użytkownika — brak pola
-                // znaczy dla serwera „policz sam z audytorium” na świeżej
-                // liście domowników. Przy łączeniu z istniejącą pozycją ręczna
-                // liczba zjadłaby porcję tamtej osoby, więc też jej nie ma.
-                // Porcje osób (gdy ktoś je ustawił) idą jako pełna mapa
-                // audytorium; wtedy liczbę łączną liczy serwer.
-                plannedServings: portions == nil && didOverrideServings && samePlanned == nil ? servings : nil,
-                householdMemberCount: members.isEmpty ? nil : members.count,
-                replacingRecipeId: replacing,
-                portions: portions,
-                for: date,
-                slot: slot,
-                weekStart: PlanWeek.dateKey(PlanWeek.monday(of: date))
-            )
-
-            guard saved else {
-                // Błąd łączności NIE ustawia `errorMessage`, więc bez tego
-                // użytkownik odszedłby przekonany, że posiłek jest w planie.
-                // Bez „sprawdź połączenie” — brak sieci ma jedno miejsce.
-                if store.errorMessage == errorBefore {
-                    toasts.error("Nie udało się dodać do planu", "Plan został bez zmian.")
-                }
-                return
-            }
-
-            if let replacedName {
-                toasts.success("Zamieniono w planie", "\(slot.title) — zamiast: \(replacedName)")
-            } else {
-                toasts.success("Dodano do planu", placement)
-            }
-        }
+        current.save(
+            store: mealStore,
+            toasts: toasts,
+            placement: "\(Self.dayName(for: date)) · \(slot.title)"
+        )
         onAdded?(date, slot)
         dismiss()
     }
