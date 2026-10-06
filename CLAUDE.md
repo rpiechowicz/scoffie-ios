@@ -152,7 +152,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   rok i wzrost = koło, waga = koło kilogramów i dziesiątych jak w Zdrowiu (dokładność 0,1 kg jak dawne pole).
   „Nie podaję” wybrane w TYM otwarciu = `saveProfile(clearSex: true)` → jawny `null` (pominięte pole serwer zostawia
   i stara płeć wracała z `users:me`); `users:me` z `sex: null` kasuje płeć zapamiętaną na innym telefonie
-  (`persistProfileFields`). Ołówek i „Usuń konto” przy otwartym małym arkuszu: najpierw zjazd, okno
+  (`persistProfileFields`), a niepotwierdzone skasowanie (zapis padł) leży w `settings.profile.sexClearPending`
+  i `saveProfile` ponawia je przy każdym zapisie, aż serwer potwierdzi (inne pola leczą się same — zapis wysyła je
+  zawsze; do tego czasu `users:me` nie wpisuje starej płci). Ołówek i „Usuń konto” przy otwartym małym arkuszu: najpierw zjazd, okno
   z `onDismiss` (`pendingAlert`) — alertu z widoku prezentującego arkusz system nie pokaże. Zapis przy zejściu
   (`onDisappear`) w OBU trybach — przeciągnięcie w dół anulowało debounce. Imię tnie `SessionStore.limitedDisplayName`
   (punkty kodowe, jak `@MaxLength` serwera). `SCWheelPicker` (`Components/`) = `UIPickerView` z kolumnami — WŁASNY,

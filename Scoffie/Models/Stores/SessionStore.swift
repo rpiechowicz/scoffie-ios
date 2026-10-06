@@ -2628,6 +2628,10 @@ final class SessionStore {
         static let heightCm = "settings.profile.heightCm"
         static let weightKg = "settings.profile.weightKg"
         static let sex = "settings.profile.sex"
+        /// „Nie podaję”, którego serwer jeszcze nie potwierdził (zapis padł) —
+        /// ponawiane przy każdym kolejnym zapisie profilu. Inne pola leczą się
+        /// same, bo zapis wysyła ich lokalną wartość; skasowanie płci — nie.
+        static let sexClearPending = "settings.profile.sexClearPending"
     }
 
     private func persistProfileFields(
@@ -2646,9 +2650,14 @@ final class SessionStore {
         // „Nie podaję” wybrane na innym telefonie kasuje tu zapamiętaną płeć,
         // inaczej następna edycja sylwetki odesłałaby starą z powrotem.
         if let sex {
-            defaults.set(sex.lowercased(), forKey: ProfileKeys.sex)
+            // Niepotwierdzone „Nie podaję” wygrywa ze starą płcią z serwera,
+            // dopóki zapis go nie ponowi — inaczej arkusz pokazałby ją z powrotem.
+            if !defaults.bool(forKey: ProfileKeys.sexClearPending) {
+                defaults.set(sex.lowercased(), forKey: ProfileKeys.sex)
+            }
         } else {
             defaults.removeObject(forKey: ProfileKeys.sex)
+            defaults.removeObject(forKey: ProfileKeys.sexClearPending)
         }
     }
 
@@ -2658,6 +2667,7 @@ final class SessionStore {
         defaults.removeObject(forKey: ProfileKeys.heightCm)
         defaults.removeObject(forKey: ProfileKeys.weightKg)
         defaults.removeObject(forKey: ProfileKeys.sex)
+        defaults.removeObject(forKey: ProfileKeys.sexClearPending)
     }
 
     /// Pull the user's preferences row from the backend and write into
@@ -2972,12 +2982,19 @@ final class SessionStore {
             data["weightKg"] = rounded
             UserDefaults.standard.set(rounded, forKey: ProfileKeys.weightKg)
         }
-        if clearSex {
+        // Skasowanie płci: wybrane teraz albo niepotwierdzone z wcześniejszego
+        // zapisu, który padł (`sexClearPending`) — ponawiamy je, dopóki serwer
+        // nie potwierdzi, chyba że w międzyczasie wybrano płeć.
+        let clearsSex = clearSex
+            || ((sex ?? "").isEmpty && UserDefaults.standard.bool(forKey: ProfileKeys.sexClearPending))
+        if clearsSex {
             data["sex"] = NSNull()
             UserDefaults.standard.removeObject(forKey: ProfileKeys.sex)
+            UserDefaults.standard.set(true, forKey: ProfileKeys.sexClearPending)
         } else if let sex, !sex.isEmpty {
             data["sex"] = sex.uppercased()
             UserDefaults.standard.set(sex.lowercased(), forKey: ProfileKeys.sex)
+            UserDefaults.standard.removeObject(forKey: ProfileKeys.sexClearPending)
         }
         guard !data.isEmpty else { return true }
 
@@ -2989,6 +3006,9 @@ final class SessionStore {
                 payload: ["userId": userId, "data": data],
                 as: WsEnvelope<BackendUserProfileDTO>.self
             )
+            if envelope.ok, clearsSex {
+                UserDefaults.standard.removeObject(forKey: ProfileKeys.sexClearPending)
+            }
             return envelope.ok
         } catch {
             // AppStorage jest już zaktualizowany optymistycznie; kreator
