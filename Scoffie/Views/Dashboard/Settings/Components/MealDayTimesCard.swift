@@ -136,10 +136,11 @@ struct MealDayTimesCard: View {
 /// (`MealSlotsSheet`). Ustawienia podają `action` — „Wyłącz” przy porach
 /// dodatkowych obok krzyżyka; kreator go nie podaje i wygląda jak dotąd.
 struct MealTimeEditorSheet: View {
-    /// Akcja obok krzyżyka (szklana pigułka ze słowem).
+    /// Akcja pory pod kołem godzin („Wyłącz podwieczorek” / „Dodaj …”).
     struct Action {
         let title: String
         let accessibilityLabel: String
+        var isDestructive: Bool = false
         let run: () -> Void
     }
 
@@ -187,24 +188,15 @@ struct MealTimeEditorSheet: View {
                     accent: slot.cozyAccent,
                     compact: true,
                     onClose: onClose
-                ) {
-                    if let action {
-                        Button(action: action.run) {
-                            Text(action.title)
-                                .font(.sc(size: 13.5, weight: .semibold))
-                                .foregroundStyle(Color.scLabel(scheme))
-                                .padding(.horizontal, 14)
-                                .frame(height: SCSheetIconLabel.size)
-                                .scChromeGlass(in: Capsule(style: .continuous))
-                                .contentShape(Capsule(style: .continuous))
-                        }
-                        .buttonStyle(PlanPressStyle(scale: 0.94))
-                        .accessibilityLabel(action.accessibilityLabel)
-                    }
-                }
+                )
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .padding(.bottom, 2)
+                // Nad kołem: `UIDatePicker` ma naturalne 216 pt i ściśnięty
+                // do 150 potrafił łapać dotyk nad sobą — „Wyłącz” obok
+                // krzyżyka nie reagował (6.10.2026). Akcja zeszła pod koło,
+                // a nagłówek leży nad nim także w kolejności dotyku.
+                .zIndex(1)
 
                 DatePicker(
                     "",
@@ -233,6 +225,21 @@ struct MealTimeEditorSheet: View {
                         .font(.sc(size: 13.5, weight: .semibold))
                         .foregroundStyle(SCPalette.terracotta)
                         .frame(maxWidth: .infinity, minHeight: 40)
+                        .zIndex(1)
+                }
+
+                if let action {
+                    Group {
+                        if action.isDestructive {
+                            SCDestructiveButton(title: action.title, icon: "minus.circle", action: action.run)
+                        } else {
+                            EditorialPrimaryActionButton(title: action.title, icon: "plus", action: action.run)
+                        }
+                    }
+                    .accessibilityLabel(action.accessibilityLabel)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 6)
+                    .zIndex(1)
                 }
 
                 Spacer(minLength: 0)

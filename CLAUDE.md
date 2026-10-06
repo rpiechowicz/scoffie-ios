@@ -189,8 +189,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   Otwórz”), kanały „Dla Ciebie” / „Od domowników”. Wygląd — dawne trzy karty z podglądem, po polsku (Automatycznie,
   Jasny, Ciemny; `AppTheme.system.title` = „Automatycznie”). Posiłki w planie — JEDNA karta: pionowa oś dnia (godzina
   18 pt, kółko pory na linii, pełna nazwa), wyłączone pory na swoim miejscu z „+ Dodaj”; godzina = `MealTimeEditorSheet`
-  na 1/3 z akcją „Wyłącz”/„Dodaj” obok krzyżyka (bez `onDismiss` — „Wyłącz” bez dań działa od razu, z daniami alert po
-  0,45 s); „Wyłącz” też przesunięciem — cała treść to `List(.insetGrouped)`, która MUSI się przewijać (`scrollDisabled`
+  (dodatkowe: wyższy, `.height(380)`) z przyciskiem „Wyłącz podwieczorek” (`SCDestructiveButton`) POD kołem — obok krzyżyka
+  nie reagował: ściśnięty `UIDatePicker` łapał dotyk nad sobą, nagłówek ma `zIndex(1)` (bez `onDismiss` — „Wyłącz” bez dań działa od razu, z daniami alert po
+  0,45 s); „Wyłącz” też pod przytrzymaniem wiersza (`contextMenu`) i przesunięciem — cała treść to `List(.insetGrouped)`, która MUSI się przewijać (`scrollDisabled`
   wyłącza też `swipeActions`; tak „Wyłącz” nie działało w #342); wyłączona pora z daniami stoi z „+ Dodaj” i dopiskiem
   „W tym tygodniu: N dania”, nie jak włączona;
   pozioma oś (`MealDayTimesCard`) została TYLKO w kreatorze — w Ustawieniach była nieczytelna. Asystent i plan — teksty rolują WYŁĄCZNIE `SCMotion.textRoll` (sprężyna z odbiciem przy wyborze planu odpadła); karta
