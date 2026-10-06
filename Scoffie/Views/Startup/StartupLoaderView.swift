@@ -15,15 +15,17 @@ import SwiftUI
 ///              kolor wznosi się od dołu przez 0.20 s, kafelek „podskakuje”,
 ///              ptaszek dorysowuje się 50 ms później. Niedziela domyka się
 ///              o 1.34 s razem z pierwszym obrotem znaku
-///              = `StartupLoaderView.waveCompletionSeconds`, z którego
-///              korzysta `SessionStore.startupMinimumDisplaySeconds`.
+///              = `StartupLoaderView.waveCompletionSeconds` — tyle co
+///              najmniej stoi loader wejścia do aplikacji po logowaniu
+///              (`ScoffieApp.enterAppUnderLoader`). Zimny start nie ma
+///              minimum: schodzi, gdy pulpit jest gotowy.
 /// - od 1.34    wolne ładowanie: kafelki NIE resetują się; na każdy obrót
-///              znaku przez tydzień przechodzi refleks światła. Loader schodzi
-///              zawsze na końcu obrotu (`remainingToFullTurn`).
+///              znaku przez tydzień przechodzi refleks światła. Loader wejścia
+///              do aplikacji schodzi na końcu obrotu (`remainingToFullTurn`).
 /// - zejście    od sygnału gotowości (`restElapsed`) znak dokręca BIEŻĄCY
 ///              obrót i staje; nowy obrót, oddech, refleks i fala kropek już
-///              nie ruszają, więc gaśnięcie planszy (0,4 s) idzie nad
-///              stojącym znakiem, a nie nad początkiem kolejnego obrotu.
+///              nie ruszają, więc gaśnięcie planszy idzie nad stojącym albo
+///              dokręcającym znakiem, a nie nad początkiem kolejnego obrotu.
 ///
 /// Wszystko jest driver'owane jednym `TimelineView(.animation)` na
 /// podstawie czasu od `startDate` — bez state'ów i `repeatForever`, więc
@@ -40,15 +42,15 @@ struct StartupLoaderView: View {
     private let restElapsed: Double?
 
     /// Moment, w którym ostatni kafelek (niedziela) jest w pełni domknięty.
-    /// Jedyne źródło prawdy dla minimalnego czasu wyświetlania loadera.
+    /// Minimalny czas loadera wejścia do aplikacji po logowaniu.
     static let waveCompletionSeconds: Double = LoaderMotion.waveEnd
 
     /// Jeden obrót znaku = jedna fala dni (poniedziałek → niedziela).
     static let turnSeconds: Double = LoaderMotion.waveEnd
 
-    /// Ile brakuje do domknięcia bieżącego obrotu znaku. Loader schodzi
-    /// ZAWSZE na pełnym obrocie (`ScoffieApp`): start gotowy w półtora
-    /// obrotu = loader stoi do końca drugiego.
+    /// Ile brakuje do domknięcia bieżącego obrotu znaku. Loader wejścia do
+    /// aplikacji schodzi na pełnym obrocie (`ScoffieApp`): start gotowy
+    /// w półtora obrotu = loader stoi do końca drugiego.
     static func remainingToFullTurn(since start: Date, now: Date = .init()) -> Double {
         let elapsed = max(0, now.timeIntervalSince(start))
         return max(0, restingElapsed(since: start, now: now) - elapsed)

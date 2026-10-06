@@ -32,8 +32,6 @@ struct WeeklyPlanView: View {
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.scTabBarChrome) private var tabBarChrome
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Dzień planowany w tej zakładce. Własny stan Planu — Kalendarz ma swój,
     /// wspólny zostaje tylko tydzień.
@@ -412,10 +410,12 @@ struct WeeklyPlanView: View {
             // Różnica jest w tym, co się dzieje z osią dnia pod spodem:
             // `overlay` zostawiał ostatni wiersz („Dodaj posiłek") POD szkłem,
             // gdzie było go widać, ale nie dało się w niego stuknąć.
-            // `safeAreaInset` doksięgowuje wysokość pigułki do wnętrza
+            // `safeAreaBar` doksięgowuje wysokość pigułki do wnętrza
             // `ScrollView`, więc treść nadal przelatuje pod szkłem przy
-            // przewijaniu, ale kończy się nad nim.
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            // przewijaniu, ale kończy się nad nim — a pod pigułką leży natywny
+            // efekt krawędzi przewijania. Nad systemowym paskiem zakładek
+            // stawia ją sam bezpieczny obszar.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
                 PlanDayGoalBar(
                     nutrition: selectedDayNutrition,
                     targets: dailyTargets(for: nutritionPersonId),
@@ -427,30 +427,14 @@ struct WeeklyPlanView: View {
                     }
                 )
                 .frame(width: goalBarWidth)
-                // Zwija się RAZEM z dolnym menu: ten sam moment, ten sam ruch
-                // (`SCFloatingTabBar.compaction`). Opada o tyle, o ile opada
-                // górna krawędź paska, więc odstęp między nimi zostaje, i lekko
-                // maleje od dołu — jak pasek, który zszedł z drogi treści.
-                // Przesunięcie i skala nie ruszają układu, więc treść nad
-                // pigułką nie skacze.
-                .scaleEffect(tabBarChrome.isCompact ? 0.92 : 1, anchor: .bottom)
-                .offset(y: tabBarChrome.isCompact ? SCFloatingTabBar.compactionDrop : 0)
-                .animation(SCFloatingTabBar.compaction(reduceMotion: reduceMotion), value: tabBarChrome.isCompact)
                 .padding(.bottom, 8)
                 // Pierwsza klatka nie zna jeszcze szerokości zakładki, a
                 // pigułka o zerowej szerokości mignęłaby jako kreska.
                 .opacity(goalBarWidth > 0 ? 1 : 0)
-                // Oś dnia chowa się pod pigułką i dolnym menu jak w Telegramie:
-                // rozmyty pas od 28 pt nad pigułką do krawędzi ekranu, także
-                // pod menu (to on gasi treść pod paskiem na tej zakładce —
-                // `NavigationMenu.ownBottomEdge`).
-                .frame(maxWidth: .infinity)
-                .background(alignment: .top) {
-                    SCScrollEdgeBlur(edge: .bottom, solidFraction: 0.6)
-                        .padding(.top, -28)
-                        .ignoresSafeArea(.container, edges: .bottom)
-                }
             }
+            // Miękki, jawnie — `.automatic` z Xcode Cloud wychodził jako
+            // `.hard` (kreska i kryjące tło, patrz `scSheetFooterEdge`).
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
             // Wymiary obszaru zakładki: wysokość idzie na sufit arkusza
             // „Cel dnia", szerokość na szerokość pigułki. Mierzone spod spodu,
             // żeby pomiar nie ruszał układu.
@@ -463,9 +447,6 @@ struct WeeklyPlanView: View {
                         }
                 }
             }
-            // Miejsce pod własnym paskiem zakładek — musi być WEWNĄTRZ
-            // `NavigationStack`, patrz `scReservesTabBarSpace`.
-            .scReservesTabBarSpace()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {

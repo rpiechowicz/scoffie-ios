@@ -390,6 +390,9 @@ struct ScoffieApp: App {
     /// albo bez, zależnie od tego, czy warmup zdążył — i było widać Kalendarz.
     private func enterAppUnderLoader() async {
         isEnteringApp = true
+        // Ten loader — i tylko ten — schodzi na pełnym obrocie znaku
+        // (`startupLoaderWish`), po całej fali dni niżej.
+        loaderEndsOnFullTurn = true
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
         )
@@ -430,13 +433,28 @@ struct ScoffieApp: App {
 
     private var isStartupReady: Bool { sessionStore.startupPhase == .ready }
 
-    /// Czy loader NAPRAWDĘ stoi. Wchodzi od razu, gdy `wantsStartupLoader`,
-    /// ale schodzi dopiero na pełnym obrocie znaku (`StartupLoaderView.
-    /// remainingToFullTurn`) — start gotowy w półtora obrotu czeka do końca
-    /// drugiego. `nil` = idzie za `wantsStartupLoader` (pierwsza klatka).
+    /// Czy loader NAPRAWDĘ stoi. Wchodzi od razu, gdy `wantsStartupLoader`.
+    /// Schodzi od razu, gdy pulpit jest gotowy — poza wejściem do aplikacji
+    /// po logowaniu, które czeka na pełny obrót znaku (`loaderEndsOnFullTurn`).
+    /// `nil` = idzie za `wantsStartupLoader` (pierwsza klatka).
     @State private var loaderShown: Bool?
-    @State private var loaderStartedAt = Date()
+    /// Pierwszy loader procesu (zimny start z sesją) startuje z opóźnieniem
+    /// `coldStartLoaderDelay`: do tej chwili plansza jest samym tłem (znak,
+    /// kafle i napisy mają krycie 0 — `LoaderMotion` liczy od `startDate`).
+    /// Start z pamięci podręcznej kończy się zwykle wcześniej, więc pulpit
+    /// wyłania się z tła, bez mignięcia znaku, który zdążył ledwie wejść.
+    @State private var loaderStartedAt = Date().addingTimeInterval(Self.coldStartLoaderDelay)
     @State private var loaderRelease: Task<Void, Never>?
+    /// Loader wejścia do aplikacji (`enterAppUnderLoader`) schodzi na pełnym
+    /// obrocie znaku, jak dotąd. Każdy inny (zimny start, zmiana gospodarstwa)
+    /// — od razu, gdy pulpit jest gotowy.
+    @State private var loaderEndsOnFullTurn = false
+    /// Czas gaśnięcia loadera: krótszy, gdy schodzi od razu.
+    @State private var loaderFade: Double = Self.entryLoaderFade
+
+    private static let coldStartLoaderDelay: TimeInterval = 0.3
+    private static let entryLoaderFade: Double = 0.4
+    private static let quickLoaderFade: Double = 0.25
     /// Koniec obrotu, na którym znak loadera staje po gotowości
     /// (`StartupLoaderView.restingElapsed`). Bez tego zegar loadera szedł
     /// dalej i w 0,4 s gaśnięcia planszy było widać początek kolejnego
@@ -468,9 +486,22 @@ struct ScoffieApp: App {
         let wait = max(0, rest - now.timeIntervalSince(loaderStartedAt))
         loaderRestElapsed = rest
         loaderRelease?.cancel()
+        // Zimny start i zmiana gospodarstwa: loader schodzi OD RAZU, gdy pulpit
+        // jest gotowy. Dawniej czekał do końca obrotu znaku — razem z minimum
+        // 1,34 s w `SessionStore` do ~2,7 s, także z danymi w pamięci
+        // podręcznej. Znak dokręca bieżący obrót w trakcie gaśnięcia
+        // (`loaderRestElapsed`) i nowego już nie zaczyna.
+        guard loaderEndsOnFullTurn else {
+            loaderRelease = nil
+            loaderFade = Self.quickLoaderFade
+            loaderShown = false
+            return
+        }
+        loaderFade = Self.entryLoaderFade
         loaderRelease = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
             guard !Task.isCancelled else { return }
+            loaderEndsOnFullTurn = false
             loaderShown = false
         }
     }
@@ -529,12 +560,13 @@ struct ScoffieApp: App {
             if let mealStore = sessionStore.mealCalendarStore,
                let recipeCatalogStore = sessionStore.recipeCatalogStore,
                let shoppingListStore = sessionStore.shoppingListStore {
-                // Pulpit buduje się POD loaderem: zakładki, ich dane i zdjęcia
-                // są gotowe, zanim ktokolwiek je zobaczy. Wejście do aplikacji
-                // to potem samo zgaśnięcie loadera nad stojącym ekranem —
-                // wcześniej w tych samych klatkach budował się cały pulpit,
-                // skalował korzeń i wyłaniała pierwsza zakładka, i to było
-                // widać jako zgubione klatki.
+                // Pulpit buduje się POD loaderem: pierwsza zakładka, jej dane
+                // i zdjęcia są gotowe, zanim ktokolwiek je zobaczy (pozostałe
+                // `TabView` buduje przy pierwszym wyborze). Wejście do
+                // aplikacji to potem samo zgaśnięcie loadera nad stojącym
+                // ekranem — wcześniej w tych samych klatkach budował się cały
+                // pulpit, skalował korzeń i wyłaniała pierwsza zakładka, i to
+                // było widać jako zgubione klatki.
                 //
                 // Loader NIE mieszka w tej gałęzi (patrz `showsStartupLoader`):
                 // gałąź wjeżdża przejściem korzenia z `.opacity`, a krycie
@@ -630,7 +662,7 @@ struct ScoffieApp: App {
                 if let debugScreen = AssistantOptionsDebugScreen.requested { debugScreen }
                 #endif
             }
-            .animation(.easeOut(duration: 0.4), value: showsStartupLoader)
+            .animation(.easeOut(duration: loaderFade), value: showsStartupLoader)
             .onChange(of: wantsStartupLoader, initial: true) { _, wants in
                 startupLoaderWish(changedTo: wants)
             }
