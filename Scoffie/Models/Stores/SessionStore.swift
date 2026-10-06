@@ -2641,8 +2641,15 @@ final class SessionStore {
         if let heightCm { defaults.set(heightCm, forKey: ProfileKeys.heightCm) }
         if let weightKg { defaults.set(weightKg, forKey: ProfileKeys.weightKg) }
         // Backend oddaje `MALE` / `FEMALE`, iOS trzyma małymi literami —
-        // ta sama konwencja co przy diecie i celu.
-        if let sex { defaults.set(sex.lowercased(), forKey: ProfileKeys.sex) }
+        // ta sama konwencja co przy diecie i celu. `users:me` (jedyne wywołanie)
+        // oddaje płeć ZAWSZE, `null` gdy jej nie podano — brak to więc fakt:
+        // „Nie podaję” wybrane na innym telefonie kasuje tu zapamiętaną płeć,
+        // inaczej następna edycja sylwetki odesłałaby starą z powrotem.
+        if let sex {
+            defaults.set(sex.lowercased(), forKey: ProfileKeys.sex)
+        } else {
+            defaults.removeObject(forKey: ProfileKeys.sex)
+        }
     }
 
     private func clearPersistedProfileFields() {

@@ -151,7 +151,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   zamyka krzyżyk, przeciągnięcie albo ten sam wiersz, zapis od razu (bez „Gotowe”). Płeć = kafle z „Nie podaję”,
   rok i wzrost = koło, waga = koło kilogramów i dziesiątych jak w Zdrowiu (dokładność 0,1 kg jak dawne pole).
   „Nie podaję” wybrane w TYM otwarciu = `saveProfile(clearSex: true)` → jawny `null` (pominięte pole serwer zostawia
-  i stara płeć wracała z `users:me`). Ołówek i „Usuń konto” przy otwartym małym arkuszu: najpierw zjazd, okno
+  i stara płeć wracała z `users:me`); `users:me` z `sex: null` kasuje płeć zapamiętaną na innym telefonie
+  (`persistProfileFields`). Ołówek i „Usuń konto” przy otwartym małym arkuszu: najpierw zjazd, okno
   z `onDismiss` (`pendingAlert`) — alertu z widoku prezentującego arkusz system nie pokaże. Zapis przy zejściu
   (`onDisappear`) w OBU trybach — przeciągnięcie w dół anulowało debounce. Imię tnie `SessionStore.limitedDisplayName`
   (punkty kodowe, jak `@MaxLength` serwera). `SCWheelPicker` (`Components/`) = `UIPickerView` z kolumnami — WŁASNY,
