@@ -104,7 +104,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   inne danie” stoją na stosie, nie na pierwszym ekranie (`page`).
 - **„Dodaj do planu”** w szczegółach z katalogu = systemowe `Menu`: „Dziś · pora” (tylko gdy pora jeszcze przed nami),
   „Jutro · pora”, „Inny dzień…” → `AddToPlanSheet` (push). Szybki zapis dla całego domu z porcjami ze steppera, szczegóły się
-  zamykają, toast „Dodano do planu · Jutro · Obiad”; reguły i zapis w `AddToPlanDraft` / `AddToPlanPortions`, wspólne
+  zamykają, toast „Dodano do planu · Jutro · Obiad” z „Cofnij” (6.10.2026: `SCToast.action` — JEDNA akcja po prawej
+  kapsuły, toast z nią trwa ≥ 5,5 s; tylko przy NOWEJ pozycji, cofnięcie = `removeWeekSlot` tego przepisu i toast
+  „Usunięto z planu”; dołączenie osób do dania i zamiana — bez „Cofnij”); reguły i zapis w `AddToPlanDraft` / `AddToPlanPortions`, wspólne
   z arkuszem — nie duplikować. „Zamiast: X” (cały dom) / „Jest już: X” (część domu) otwierają arkusz z `initialDate` /
   `initialSlot`; to samo danie = wyłączone „Już w planie”. Porcje w arkuszu stoją W TREŚCI pod „Posiłek”
   (`SCPortionKit`) — przycisk `chart.pie.fill` i arkusz porcji USUNIĘTE. Szczegóły posiłku otwierają się w gotowym
