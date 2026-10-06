@@ -51,7 +51,8 @@ struct AssistantMaintenanceView: View {
                 .tracking(-0.6)
                 .foregroundStyle(AssistantLook.ink(scheme))
                 .multilineTextAlignment(.center)
-                .contentTransition(.numericText())
+                // „Ogranicz ruch”: samo przenikanie zamiast rolowania liter.
+                .contentTransition(reduceMotion ? .opacity : .numericText())
                 .accessibilityAddTraits(.isHeader)
 
             Text(isBack ? "Możesz pisać." : "Wróci niedługo. Plan, przepisy i zakupy działają jak zawsze.")
@@ -81,7 +82,7 @@ struct AssistantMaintenanceView: View {
                 .accessibilityHidden(!stillDown || isBack)
         }
         .frame(maxWidth: .infinity)
-        .animation(SCMotion.textRoll, value: isBack)
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : SCMotion.textRoll, value: isBack)
         .sensoryFeedback(.warning, trigger: checks)
         .sensoryFeedback(trigger: isBack) { old, new in
             !old && new ? .success : nil
@@ -117,11 +118,12 @@ struct AssistantMaintenanceView: View {
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(Color.scPageBase(scheme)))
                 .overlay(Circle().stroke(AssistantLook.terraFill(scheme).opacity(0.35), lineWidth: 1))
-                // Klucz odpada przy powrocie — skala z obrotem, potem krycie.
-                .scaleEffect(isBack ? 0.01 : 1)
-                .rotationEffect(.degrees(isBack ? -60 : 0))
+                // Klucz odpada przy powrocie — skala z obrotem, potem krycie;
+                // przy „Ogranicz ruch” samo krycie.
+                .scaleEffect(isBack && !reduceMotion ? 0.01 : 1)
+                .rotationEffect(.degrees(isBack && !reduceMotion ? -60 : 0))
                 .opacity(isBack ? 0 : 1)
-                .animation(.easeIn(duration: 0.25), value: isBack)
+                .animation(reduceMotion ? .easeOut(duration: 0.2) : .easeIn(duration: 0.25), value: isBack)
                 .offset(x: -14, y: -14)
         }
         .accessibilityHidden(true)
