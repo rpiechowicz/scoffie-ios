@@ -67,21 +67,8 @@ struct WeeklyPlanView: View {
     /// Szerokość obszaru zakładki — z niej liczy się szerokość pigułki.
     @State private var pageWidth: CGFloat = 0
 
-    /// Pigułka „Cel dnia" jest węższa od dolnego menu i to jest jedyna rzecz,
-    /// która mówi, co jest nawigacją, a co podglądem: dwa paski tej samej
-    /// szerokości jeden nad drugim czytały się jak dwa poziomy tego samego menu.
-    ///
-    /// Ile dokładnie — decydują podpisy w pigułce. Kolumna kalorii bierze
-    /// tyle, ile potrzebuje „kcal 2298/2300" (~90 pt), a trzy makra dzielą resztę
-    /// po równo i każde musi zmieścić „B 112/110" (~60 pt). Stąd 0,82, a nie
-    /// okrągłe dwie trzecie: przy nich makra miały po ~50 pt i podpis się
-    /// kurczył. Podłoga 310 pt trzyma to samo na wąskich telefonach
-    /// (375 pt: makra po ~62 pt); sufit zostawia pigułkę w marginesach strony.
-    private var goalBarWidth: CGFloat {
-        guard pageWidth > 0 else { return 0 }
-        let limit = pageWidth - SCPageMetrics.horizontal * 2
-        return min(max(pageWidth * 0.82, 310), limit)
-    }
+    /// Ta sama szerokość co na Pulpicie — jedna reguła (`PlanDayGoalBar.width`).
+    private var goalBarWidth: CGFloat { PlanDayGoalBar.width(in: pageWidth) }
 
     // Cel dnia mieszka w Ustawieniach → „Dieta i alergeny" i w profilu; tu
     // czytamy go tymi samymi kluczami, co Kalendarz, bo tylko `@AppStorage`

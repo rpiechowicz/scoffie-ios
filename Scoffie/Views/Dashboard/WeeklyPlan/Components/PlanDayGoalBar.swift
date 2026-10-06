@@ -125,6 +125,24 @@ struct PlanDayGoalBar: View {
         }
     }
 
+    /// Szerokość pigułki na zakładce o szerokości `pageWidth` — JEDNA reguła
+    /// dla Planu i Pulpitu, żeby pigułka przy zmianie zakładki stała w tym
+    /// samym miejscu i tej samej szerokości.
+    ///
+    /// Pigułka jest węższa od dolnego menu i to jest jedyna rzecz, która mówi,
+    /// co jest nawigacją, a co podglądem: dwa paski tej samej szerokości jeden
+    /// nad drugim czytały się jak dwa poziomy tego samego menu. Ile dokładnie —
+    /// decydują podpisy: kolumna kalorii ma szerokość wzorca „kcal 8888/8888”
+    /// (~95 pt), a trzy makra dzielą resztę po równo i każde musi zmieścić
+    /// „B 112/110” (~60 pt). Stąd 0,82, a nie okrągłe dwie trzecie; podłoga
+    /// 310 pt trzyma to samo na wąskich telefonach, sufit zostawia pigułkę
+    /// w marginesach strony.
+    static func width(in pageWidth: CGFloat) -> CGFloat {
+        guard pageWidth > 0 else { return 0 }
+        let limit = pageWidth - SCPageMetrics.horizontal * 2
+        return min(max(pageWidth * 0.82, 310), limit)
+    }
+
     var body: some View {
         bar
     }
@@ -204,19 +222,35 @@ struct PlanDayGoalBar: View {
     private var content: some View {
         let face = self.face
         return HStack(alignment: .top, spacing: 8) {
+            // Szerokość kolumny kalorii z WZORCA „kcal 8888/8888”, nie z bieżących
+            // liczb: przy „kcal 850/2100” kolumna była węższa niż przy
+            // „kcal 1450/2100”, więc rolowanie liczb przy zmianie zakładki
+            // i dnia przesuwało makra, a pigułka Planu i Pulpitu wyglądały na
+            // różne (Rafał 6.10.2026: „trochę się rozszerza”). Wzorzec jest
+            // niewidoczny, prawdziwy miernik leży na nim i wypełnia jego ramkę.
             MacroMeter(
                 letter: "kcal",
-                title: face.planned == nil ? "Kalorie" : "Zjedzone kalorie",
-                value: face.nutrition.kcal,
-                target: face.targets.kcal,
-                plannedValue: face.planned?.kcal,
-                color: SCMacroPalette.calories,
-                unit: "kilokalorii",
-                accessibilityDetail: kcalDetail(face),
-                animation: Self.animation
+                title: "",
+                value: 8888,
+                target: 8888,
+                color: .clear,
+                animation: nil
             )
-            // Szerokość z podpisu, nie z podziału na cztery — patrz
-            // komentarz typu. Tor pod spodem i tak wypełnia całą kolumnę.
+            .hidden()
+            .accessibilityHidden(true)
+            .overlay(alignment: .leading) {
+                MacroMeter(
+                    letter: "kcal",
+                    title: face.planned == nil ? "Kalorie" : "Zjedzone kalorie",
+                    value: face.nutrition.kcal,
+                    target: face.targets.kcal,
+                    plannedValue: face.planned?.kcal,
+                    color: SCMacroPalette.calories,
+                    unit: "kilokalorii",
+                    accessibilityDetail: kcalDetail(face),
+                    animation: Self.animation
+                )
+            }
             .fixedSize(horizontal: true, vertical: false)
 
             macroMeters(face)

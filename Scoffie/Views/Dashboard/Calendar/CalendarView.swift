@@ -361,14 +361,8 @@ struct CalendarView: View {
         )
     }
 
-    /// Pigułka „Cel dnia" jest węższa od dolnego menu i to jest jedyna rzecz,
-    /// która mówi, co jest nawigacją, a co podglądem. Liczby jak w Planie —
-    /// jedna pigułka, jedna szerokość.
-    private var goalBarWidth: CGFloat {
-        guard pageWidth > 0 else { return 0 }
-        let limit = pageWidth - SCPageMetrics.horizontal * 2
-        return min(max(pageWidth * 0.82, 310), limit)
-    }
+    /// Ta sama szerokość co w Planie — jedna reguła (`PlanDayGoalBar.width`).
+    private var goalBarWidth: CGFloat { PlanDayGoalBar.width(in: pageWidth) }
 
     /// Odhaczać można dziś i wstecz. Dzień z przyszłości nie ma czego
     /// odhaczać, a przeszły jest zablokowany tylko do *planowania* — to, co
