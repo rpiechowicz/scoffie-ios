@@ -119,7 +119,8 @@ struct RecipeFilterIndex {
         return RecipeFacetCovers(
             facets: RecipeCategoryFacets.facets(for: category),
             recipes: inCategory,
-            values: values
+            values: values,
+            category: category
         )
     }
 
