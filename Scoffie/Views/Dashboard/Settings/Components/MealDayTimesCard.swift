@@ -133,15 +133,16 @@ struct MealDayTimesCard: View {
 /// przyciskiem „Gotowe”, który udawał zapis.
 ///
 /// Wspólny dla osi kreatora (`MealDayTimesCard`) i osi Ustawień
-/// (`MealSlotsSheet`). Ustawienia podają `action` — „Wyłącz” przy porach
-/// dodatkowych obok krzyżyka; kreator go nie podaje i wygląda jak dotąd.
+/// (`MealSlotsSheet`). Ustawienia podają `inPlan` — przy porach dodatkowych
+/// nad kołem stoi wiersz „W planie dnia” z systemowym `Toggle`, jak w Ustawieniach
+/// iOS; kreator go nie podaje i wygląda jak dotąd.
 struct MealTimeEditorSheet: View {
-    /// Akcja pory pod kołem godzin („Wyłącz podwieczorek” / „Dodaj …”).
-    struct Action {
-        let title: String
-        let accessibilityLabel: String
-        var isDestructive: Bool = false
-        let run: () -> Void
+    /// Czy pora dodatkowa jest w dniu — wiersz z przełącznikiem nad kołem.
+    /// (6.10.2026: czerwony przycisk „Wyłącz …” pod kołem „totalnie nie
+    /// pasował” — włącz/wyłącz to w iOS przełącznik, nie przycisk.)
+    struct InPlan {
+        let isOn: Bool
+        let set: (Bool) -> Void
     }
 
     let slot: MealSlot
@@ -149,9 +150,13 @@ struct MealTimeEditorSheet: View {
     let onPick: (Int) -> Void
     let onClearTime: () -> Void
     let onClose: () -> Void
-    let action: Action?
+    let inPlan: InPlan?
 
     @Environment(\.colorScheme) private var scheme
+
+    /// Stan przełącznika „W planie dnia” — lokalny, żeby kciuk przejechał od
+    /// razu, zanim zapis i zamknięcie okienka dojdą z góry.
+    @State private var isInPlan: Bool
 
     /// Kopia lokalna: koło pisze tu na każdą klatkę przeciągnięcia,
     /// a dalej idzie dopiero wartość różna od zapisanej.
@@ -163,14 +168,15 @@ struct MealTimeEditorSheet: View {
         onPick: @escaping (Int) -> Void,
         onClearTime: @escaping () -> Void,
         onClose: @escaping () -> Void,
-        action: Action? = nil
+        inPlan: InPlan? = nil
     ) {
         self.slot = slot
         self.minutes = minutes
         self.onPick = onPick
         self.onClearTime = onClearTime
         self.onClose = onClose
-        self.action = action
+        self.inPlan = inPlan
+        _isInPlan = State(initialValue: inPlan?.isOn ?? true)
         let start = minutes ?? MealSlotSchedule.snackSuggestedMinutes
         _selection = State(initialValue: MealSlotSchedule.date(fromMinutes: start))
     }
@@ -192,11 +198,30 @@ struct MealTimeEditorSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .padding(.bottom, 2)
-                // Nad kołem: `UIDatePicker` ma naturalne 216 pt i ściśnięty
-                // do 150 potrafił łapać dotyk nad sobą — „Wyłącz” obok
-                // krzyżyka nie reagował (6.10.2026). Akcja zeszła pod koło,
-                // a nagłówek leży nad nim także w kolejności dotyku.
+                // Nad kołem także w kolejności dotyku: `UIDatePicker` ma
+                // naturalne 216 pt i ściśnięty do 150 łapał dotyk nad sobą
+                // (6.10.2026 — akcja obok krzyżyka nie reagowała).
                 .zIndex(1)
+
+                if inPlan != nil {
+                    EditorialSettingsCardGroup {
+                        EditorialSettingsRow(
+                            icon: slot.icon,
+                            iconColor: slot.cozyAccent,
+                            title: "W planie dnia",
+                            isLast: true
+                        ) {
+                            Toggle("W planie dnia", isOn: $isInPlan)
+                                .labelsHidden()
+                                .tint(SCPalette.sage)
+                                .fixedSize()
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    .padding(.bottom, 4)
+                    .zIndex(1)
+                }
 
                 DatePicker(
                     "",
@@ -216,6 +241,10 @@ struct MealTimeEditorSheet: View {
                 .clipped()
                 .layoutPriority(1)
                 .padding(.horizontal, 20)
+                // Pora wyłączona — godzina zostaje, ale nie ma czego ustawiać.
+                .opacity(isInPlan ? 1 : 0.35)
+                .disabled(!isInPlan)
+                .animation(.smooth(duration: 0.2), value: isInPlan)
 
                 // Zdjąć porę można wyłącznie tam, gdzie model na to pozwala.
                 // Przy pozostałych slotach `setting(_:toMinutes: nil)` jest
@@ -228,25 +257,14 @@ struct MealTimeEditorSheet: View {
                         .zIndex(1)
                 }
 
-                if let action {
-                    Group {
-                        if action.isDestructive {
-                            SCDestructiveButton(title: action.title, icon: "minus.circle", action: action.run)
-                        } else {
-                            EditorialPrimaryActionButton(title: action.title, icon: "plus", action: action.run)
-                        }
-                    }
-                    .accessibilityLabel(action.accessibilityLabel)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 6)
-                    .zIndex(1)
-                }
-
                 Spacer(minLength: 0)
             }
         }
         .onChange(of: selection) { _, newValue in
             onPick(MealSlotSchedule.minutes(from: newValue))
+        }
+        .onChange(of: isInPlan) { _, newValue in
+            inPlan?.set(newValue)
         }
     }
 }

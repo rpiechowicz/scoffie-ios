@@ -189,8 +189,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   Otwórz”), kanały „Dla Ciebie” / „Od domowników”. Wygląd — dawne trzy karty z podglądem, po polsku (Automatycznie,
   Jasny, Ciemny; `AppTheme.system.title` = „Automatycznie”). Posiłki w planie — JEDNA karta: pionowa oś dnia (godzina
   18 pt, kółko pory na linii, pełna nazwa), wyłączone pory na swoim miejscu z „+ Dodaj”; godzina = `MealTimeEditorSheet`
-  (dodatkowe: wyższy, `.height(380)`) z przyciskiem „Wyłącz podwieczorek” (`SCDestructiveButton`) POD kołem — obok krzyżyka
-  nie reagował: ściśnięty `UIDatePicker` łapał dotyk nad sobą, nagłówek ma `zIndex(1)` (bez `onDismiss` — „Wyłącz” bez dań działa od razu, z daniami alert po
+  (dodatkowe: `.height(390)`) z wierszem „W planie dnia” + systemowy `Toggle` NAD kołem (`MealTimeEditorSheet.InPlan`;
+  wyłączenie zamyka okienko po 0,3 s) — czerwony przycisk „Wyłącz …” pod kołem odrzucony („z dupy, totalnie nie pasuje”),
+  pigułka obok krzyżyka nie reagowała: ściśnięty `UIDatePicker` łapał dotyk nad sobą, nagłówek i wiersz mają `zIndex(1)` (bez `onDismiss` — „Wyłącz” bez dań działa od razu, z daniami alert po
   0,45 s); „Wyłącz” też pod przytrzymaniem wiersza (`contextMenu`) i przesunięciem — cała treść to `List(.insetGrouped)`, która MUSI się przewijać (`scrollDisabled`
   wyłącza też `swipeActions`; tak „Wyłącz” nie działało w #342); wyłączona pora z daniami stoi z „+ Dodaj” i dopiskiem
   „W tym tygodniu: N dania”, nie jak włączona;
