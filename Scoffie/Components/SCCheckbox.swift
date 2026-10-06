@@ -39,7 +39,7 @@ struct SCCheckbox: View {
                 .opacity(on ? 1 : 0)
 
             Image(systemName: "checkmark")
-                .font(.system(size: size * 0.5, weight: .heavy))
+                .font(.sc(size: size * 0.5, weight: .heavy))
                 .foregroundStyle(SCPalette.labelDark)
                 .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                 .scaleEffect(on ? 1 : 0.4)

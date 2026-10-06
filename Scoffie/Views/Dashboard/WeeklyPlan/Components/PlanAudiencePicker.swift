@@ -59,7 +59,7 @@ struct PlanAudienceButton: View {
         return HStack(spacing: 6) {
             if chosen.isEmpty {
                 Image(systemName: "house.fill")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.sc(size: 13, weight: .bold))
                     .foregroundStyle(SCPalette.sage)
             } else {
                 HStack(spacing: -7) {
@@ -70,7 +70,7 @@ struct PlanAudienceButton: View {
                 }
             }
             Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 10, weight: .bold))
+                .font(.sc(size: 10, weight: .bold))
                 .foregroundStyle(Color.scMuted(scheme))
         }
         .padding(.horizontal, 14)

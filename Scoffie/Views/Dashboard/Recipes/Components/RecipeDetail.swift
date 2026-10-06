@@ -480,7 +480,7 @@ struct RecipeDetailView: View {
             tagRow
 
             Text(recipe.name)
-                .font(.system(size: 32, weight: .heavy))
+                .font(.sc(size: 32, weight: .heavy))
                 .tracking(-0.96)
                 .foregroundStyle(look.fg)
                 .fixedSize(horizontal: false, vertical: true)
@@ -489,7 +489,7 @@ struct RecipeDetailView: View {
 
             if !recipe.description.isEmpty {
                 Text(recipe.description)
-                    .font(.system(size: 14.5))
+                    .font(.sc(size: 14.5))
                     .foregroundStyle(look.muted)
                     // 21 pt wiersza z makiety przy 14,5 pt pisma.
                     .lineSpacing(3.7)
@@ -545,7 +545,7 @@ struct RecipeDetailView: View {
             Spacer(minLength: 10)
 
             Text(verbatim: "\(recipe.prepTimeMinutes) MIN")
-                .font(.system(size: 12, weight: .bold))
+                .font(.sc(size: 12, weight: .bold))
                 .tracking(1.1)
                 .monospacedDigit()
                 .foregroundStyle(look.muted)
@@ -606,10 +606,10 @@ struct RecipeDetailView: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Do ugotowania")
-                        .font(.system(size: 11.5, weight: .semibold))
+                        .font(.sc(size: 11.5, weight: .semibold))
                         .foregroundStyle(look.muted)
                     Text(spoken)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.sc(size: 16, weight: .bold))
                         .tracking(-0.2)
                         .monospacedDigit()
                         .foregroundStyle(look.fg)
@@ -620,7 +620,7 @@ struct RecipeDetailView: View {
                 Spacer(minLength: 8)
 
                 Image(systemName: "chevron.up")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.sc(size: 13, weight: .bold))
                     .foregroundStyle(look.muted)
             }
             .padding(.leading, 12)
@@ -660,7 +660,7 @@ struct RecipeDetailView: View {
             }
             if rest > 0 {
                 Text(verbatim: "+\(rest)")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .foregroundStyle(look.fg)
                     .frame(width: size, height: size)
                     .background(Circle().fill(look.background))
@@ -793,7 +793,7 @@ struct RecipeDetailView: View {
 
             if !model.isEditable {
                 Text(PlanPortions.readOnlyMessage)
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.sc(size: 12.5, weight: .medium))
                     .foregroundStyle(look.muted)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -865,7 +865,7 @@ struct RecipeDetailView: View {
                     ForEach(Array(groups.enumerated()), id: \.element.department) { groupIndex, group in
                         VStack(alignment: .leading, spacing: 0) {
                             Text(group.department.uppercased())
-                                .font(.system(size: 10.5, weight: .heavy))
+                                .font(.sc(size: 10.5, weight: .heavy))
                                 .tracking(0.8)
                                 .foregroundStyle(SCPalette.indigo)
                                 .padding(.horizontal, 16)
@@ -955,7 +955,7 @@ struct RecipeDetailView: View {
                     .foregroundStyle(look.dim)
             }
         }
-        .font(.system(size: 12.5))
+        .font(.sc(size: 12.5))
         .lineSpacing(2)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -987,7 +987,7 @@ struct RecipeDetailView: View {
                         .transition(.scale.combined(with: .opacity))
                 } else if isSent {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .heavy))
+                        .font(.sc(size: 11, weight: .heavy))
                         .transition(.scale.combined(with: .opacity))
                 }
 
@@ -996,11 +996,11 @@ struct RecipeDetailView: View {
 
                 if !isSent && !isSending {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.sc(size: 10, weight: .bold))
                         .transition(.opacity)
                 }
             }
-            .font(.system(size: 12.5, weight: .bold))
+            .font(.sc(size: 12.5, weight: .bold))
             .foregroundStyle(accent)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
@@ -1218,9 +1218,9 @@ struct RecipeDetailView: View {
     private func planActionLabel(title: String) -> some View {
         HStack(spacing: 7) {
             Image(systemName: primaryActionIcon)
-                .font(.system(size: 13, weight: .heavy))
+                .font(.sc(size: 13, weight: .heavy))
             Text(title)
-                .font(.system(size: 14, weight: .bold))
+                .font(.sc(size: 14, weight: .bold))
                 .tracking(-0.1)
                 .lineLimit(1)
         }
@@ -1353,9 +1353,9 @@ struct RecipeDetailView: View {
         Button(action: startCooking) {
             HStack(spacing: 7) {
                 Image(systemName: "play.fill")
-                    .font(.system(size: 13, weight: .heavy))
+                    .font(.sc(size: 13, weight: .heavy))
                 Text(cookSession == nil ? "Gotuj" : "Gotuj dalej")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .tracking(-0.1)
                     .lineLimit(1)
             }
@@ -1427,7 +1427,7 @@ struct RecipeDetailView: View {
     private var thermomixFeedback: some View {
         if let thermomixError {
             Text(thermomixError)
-                .font(.system(size: 12.5, weight: .medium))
+                .font(.sc(size: 12.5, weight: .medium))
                 .foregroundStyle(SCPalette.terracotta)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1462,13 +1462,13 @@ struct RecipeDetailView: View {
                             .tint(SCPalette.sage)
                     } else {
                         Image(systemName: showThermomixSuccess ? "checkmark" : "play.fill")
-                            .font(.system(size: 13, weight: .heavy))
+                            .font(.sc(size: 13, weight: .heavy))
                     }
                 }
                 .frame(width: 16, height: 17)
 
                 Text("Gotuj w TM")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .tracking(-0.1)
                     .lineLimit(1)
             }
@@ -1592,14 +1592,14 @@ struct RecipeDetailView: View {
                             .tint(SCPalette.sage)
                     } else {
                         Image(systemName: isSaved ? "checkmark" : "bookmark")
-                            .font(.system(size: 13, weight: .heavy))
+                            .font(.sc(size: 13, weight: .heavy))
                             .contentTransition(.symbolEffect(.replace))
                     }
                 }
                 .frame(width: 16, height: 17)
 
                 Text(isSaved ? "Zapisano" : "Zapisz u siebie")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .tracking(-0.1)
                     .lineLimit(1)
                     .contentTransition(.interpolate)
@@ -1952,9 +1952,9 @@ private struct DetailTagPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .bold))
+                .font(.sc(size: 11, weight: .bold))
             Text(text.uppercased())
-                .font(.system(size: 11, weight: .heavy))
+                .font(.sc(size: 11, weight: .heavy))
                 .tracking(0.8)
                 .lineLimit(1)
         }
@@ -1978,7 +1978,7 @@ private struct DetailDashedTag: View {
     var body: some View {
         let look = DetailLook(scheme: scheme)
         Text(text.uppercased())
-            .font(.system(size: 11, weight: .heavy))
+            .font(.sc(size: 11, weight: .heavy))
             .tracking(0.8)
             .lineLimit(1)
             .foregroundStyle(look.dim)
@@ -2018,12 +2018,12 @@ private struct DetailSectionHeader<Trailing: View>: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(eyebrow.uppercased())
-                    .font(.system(size: 11, weight: .heavy))
+                    .font(.sc(size: 11, weight: .heavy))
                     .tracking(1.4)
                     .foregroundStyle(accent)
                     .contentTransition(.numericText())
                 Text(title)
-                    .font(.system(size: 22, weight: .heavy))
+                    .font(.sc(size: 22, weight: .heavy))
                     .tracking(-0.4)
                     .foregroundStyle(DetailLook(scheme: scheme).fg)
                     .lineLimit(1)
@@ -2116,7 +2116,7 @@ private struct DetailServingsStepper: View {
             }
 
             Text(label(value))
-                .font(.system(size: 16, weight: .heavy))
+                .font(.sc(size: 16, weight: .heavy))
                 .monospacedDigit()
                 .foregroundStyle(look.fg)
                 .frame(minWidth: 28)
@@ -2155,7 +2155,7 @@ private struct DetailServingsStepper: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.sc(size: 14, weight: .semibold))
                 .foregroundStyle(enabled ? SCPalette.terracotta : look.faint)
                 .frame(width: 40, height: 36)
                 .contentShape(Rectangle())
@@ -2356,7 +2356,7 @@ private struct DetailStepRow: View {
 
         HStack(alignment: .top, spacing: 14) {
             Text("\(index)")
-                .font(.system(size: 13, weight: .bold))
+                .font(.sc(size: 13, weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(SCPalette.sage)
                 .frame(width: 30, height: 30)
@@ -2365,7 +2365,7 @@ private struct DetailStepRow: View {
                 )
 
             Text(text)
-                .font(.system(size: 14.5))
+                .font(.sc(size: 14.5))
                 .tracking(-0.1)
                 // `lineHeight: 1.55` z makiety.
                 .lineSpacing(5)
@@ -2419,14 +2419,14 @@ private struct DetailIngredientRow: View {
             }
 
             Text(name)
-                .font(.system(size: 15))
+                .font(.sc(size: 15))
                 .tracking(-0.2)
                 .foregroundStyle(have ? look.muted : look.fg)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(amount)
-                .font(.system(size: 13))
+                .font(.sc(size: 13))
                 .monospacedDigit()
                 .foregroundStyle(look.muted)
                 .lineLimit(1)

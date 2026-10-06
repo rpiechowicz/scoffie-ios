@@ -65,7 +65,7 @@ struct AssistantHeader<MenuContent: View>: View {
                     // zlewała się ze słowem obok.
                     SCLivingMark(mood: markMood, color: AssistantLook.terraFill(scheme), size: 15, cheer: markCheer, glows: false)
                     Text("Asystent")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.sc(size: 17, weight: .semibold))
                         .tracking(-0.4)
                         .foregroundStyle(AssistantLook.ink(scheme))
                 }
@@ -171,7 +171,7 @@ struct AssistantQuotaPill: View {
                 // Po „z” dopełniacz — „z 5 wiadomości”, „z 1 wiadomości”.
                 Text(compact ? "z \(max(limit, remaining))" : "z \(max(limit, remaining)) wiadomości")
             }
-            .font(.system(size: 12, weight: .semibold))
+            .font(.sc(size: 12, weight: .semibold))
             .tracking(-0.1)
             .foregroundStyle(isEmpty ? AssistantLook.terra(scheme) : AssistantLook.muted(scheme))
             .lineLimit(1)
@@ -214,7 +214,7 @@ struct AssistantUserBubble: View {
         HStack {
             Spacer(minLength: 40)
             Text(text)
-                .font(.system(size: 16))
+                .font(.sc(size: 16))
                 .tracking(-0.3)
                 .lineSpacing(3)
                 .foregroundStyle(AssistantLook.ink(scheme))

@@ -10,23 +10,23 @@ struct AuthFooterView: View {
         // samotnie po gapie HStack-a.
         VStack(spacing: 6) {
             Text("Kontynuując, akceptujesz")
-                .font(.system(size: 12))
+                .font(.sc(size: 12))
                 .foregroundStyle(Color.scMuted(colorScheme))
 
             HStack(spacing: 4) {
                 Button("Warunki") { showTermsOfService = true }
                     .buttonStyle(.plain)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.sc(size: 12, weight: .medium))
                     .underline()
                     .foregroundStyle(Color.scLabel(colorScheme))
 
                 Text("oraz")
-                    .font(.system(size: 12))
+                    .font(.sc(size: 12))
                     .foregroundStyle(Color.scMuted(colorScheme))
 
                 Button("Politykę prywatności.") { showPrivacyPolicy = true }
                     .buttonStyle(.plain)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.sc(size: 12, weight: .medium))
                     .underline()
                     .foregroundStyle(Color.scLabel(colorScheme))
             }
@@ -124,18 +124,18 @@ private struct LegalHeaderCard: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Scoffie")
-                        .font(.system(size: 16, weight: .heavy))
+                        .font(.sc(size: 16, weight: .heavy))
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(scheme))
 
                     Text("Wersja \(LegalDocMeta.version) · Obowiązuje od: \(LegalDocMeta.effectiveDate)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.sc(size: 12, weight: .medium))
                         .foregroundStyle(Color.scMuted(scheme))
                 }
             }
 
             Text(intro)
-                .font(.system(size: 13))
+                .font(.sc(size: 13))
                 .lineSpacing(2.5)
                 .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -178,14 +178,14 @@ private struct LegalSection<Content: View>: View {
                 )
 
                 Text("\(number). \(title)")
-                    .font(.system(size: 15.5, weight: .semibold))
+                    .font(.sc(size: 15.5, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(Color.scLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             content()
-                .font(.system(size: 13))
+                .font(.sc(size: 13))
                 .lineSpacing(2.5)
                 .foregroundStyle(Color.scMuted(scheme))
         }

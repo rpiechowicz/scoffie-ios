@@ -141,14 +141,14 @@ struct AssistantSuggestionSheet: View {
                 ZStack {
                     Circle().fill(reasonColor.opacity(scheme == .dark ? 0.18 : 0.13))
                     Image(systemName: reason.icon)
-                        .font(.system(size: 13.5, weight: .semibold))
+                        .font(.sc(size: 13.5, weight: .semibold))
                         .foregroundStyle(reasonColor)
                 }
                 .frame(width: 32, height: 32)
                 .accessibilityHidden(true)
 
                 Text(reason.title)
-                    .font(.system(size: 15.5, weight: .semibold))
+                    .font(.sc(size: 15.5, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(AssistantLook.ink(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -174,7 +174,7 @@ struct AssistantSuggestionSheet: View {
                 axis: .vertical
             )
             .lineLimit(3...8)
-            .font(.system(size: 15.5))
+            .font(.sc(size: 15.5))
             .focused($commentFocused)
             .onChange(of: comment) { _, value in
                 if value.count > Self.commentLimit {
@@ -185,7 +185,7 @@ struct AssistantSuggestionSheet: View {
             // Licznik dopiero pod koniec limitu — wcześniej to szum.
             if comment.count > Self.commentLimit - 100 {
                 Text("\(comment.count)/\(Self.commentLimit)")
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.sc(size: 11.5, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(AssistantLook.faint(scheme))
             }

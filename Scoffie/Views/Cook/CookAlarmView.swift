@@ -179,14 +179,14 @@ struct CookAlarmView: View {
         return Button { select(other.id) } label: {
             HStack(spacing: 7) {
                 Image(systemName: "bell.fill")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .foregroundStyle(tint)
                 Text(other.timer.label)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
                 Text(overText)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(tint)
                     .cookTicking(overText, countsDown: false)
@@ -290,7 +290,7 @@ struct CookAlarmView: View {
                     .cookTicking(counter, countsDown: false)
                     .padding(.top, 2)
                 Text("po czasie")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
                     .frame(maxWidth: SCCook.Size.alarmTextWidth)
@@ -313,7 +313,7 @@ struct CookAlarmView: View {
             // literami był nieczytelny.
             ZStack {
                 Text(item.timer.alert.body)
-                    .font(.system(size: 17))
+                    .font(.sc(size: 17))
                     .lineSpacing(4)
                     .foregroundStyle(SCCook.Palette.alarmBody(scheme))
                     .multilineTextAlignment(.center)
@@ -347,7 +347,7 @@ struct CookAlarmView: View {
         Button { onDone(item.id) } label: {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 17, weight: .heavy))
+                    .font(.sc(size: 17, weight: .heavy))
                 Text("Gotowe")
                     .cookText(SCCook.Typography.buttonQuiet)
                     .lineLimit(1)
@@ -405,7 +405,7 @@ struct CookAlarmView: View {
         } label: {
             // Szkło jako CAŁA etykieta menu — iOS 26 rozwija menu z krążka.
             Image(systemName: "ellipsis")
-                .font(.system(size: 18, weight: .bold))
+                .font(.sc(size: 18, weight: .bold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: SCCook.Height.alarmDone, height: SCCook.Height.alarmDone)
                 .scChromeGlass(in: Circle())
@@ -542,6 +542,6 @@ private struct CookBell: View {
 
     private var bell: some View {
         Image(systemName: "bell.fill")
-            .font(.system(size: 12, weight: .bold))
+            .font(.sc(size: 12, weight: .bold))
     }
 }

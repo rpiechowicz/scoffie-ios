@@ -73,9 +73,9 @@ struct WelcomeStep1ProfileView: View {
                         Spacer(minLength: 8)
                         HStack(spacing: 4) {
                             Image(systemName: "lock.fill")
-                                .font(.system(size: 9.5, weight: .semibold))
+                                .font(.sc(size: 9.5, weight: .semibold))
                             Text("Tylko do obliczeń")
-                                .font(.system(size: 11.5, weight: .medium))
+                                .font(.sc(size: 11.5, weight: .medium))
                         }
                         .foregroundStyle(Color.scFaint(colorScheme))
                         .padding(.trailing, 6)
@@ -121,13 +121,13 @@ struct WelcomeStep1ProfileView: View {
                         }
                         .focused($focusedField, equals: .name)
                         .submitLabel(.next)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.sc(size: 18, weight: .bold))
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(colorScheme))
                         .onSubmit { focusedField = .height }
 
                     Image(systemName: "pencil")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.sc(size: 12, weight: .bold))
                         .foregroundStyle(isEditing ? SCPalette.terracotta : Color.scFaint(colorScheme))
                 }
 
@@ -136,7 +136,7 @@ struct WelcomeStep1ProfileView: View {
                     .frame(height: isEditing ? 1.5 : 1)
 
                 Text("Tak zobaczą Cię domownicy w planie")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.sc(size: 12, weight: .medium))
                     .foregroundStyle(Color.scMuted(colorScheme))
                     .padding(.top, 2)
             }
@@ -178,7 +178,7 @@ struct WelcomeStep1ProfileView: View {
                     fieldCaption("Rok urodzenia")
                     Spacer(minLength: 8)
                     Text(BodyMetricsSummaryRow.ageLabel(max(currentYear - yearOfBirth, 0)))
-                        .font(.system(size: 11.5, weight: .semibold))
+                        .font(.sc(size: 11.5, weight: .semibold))
                         .foregroundStyle(SCPalette.terracotta)
                         .contentTransition(.numericText())
                         .animation(.smooth(duration: 0.2), value: yearOfBirth)
@@ -219,7 +219,7 @@ struct WelcomeStep1ProfileView: View {
     /// w „Twoich danych”.
     private func fieldCaption(_ text: String) -> some View {
         Text(text.uppercased())
-            .font(.system(size: 10.5, weight: .bold))
+            .font(.sc(size: 10.5, weight: .bold))
             .tracking(1.4)
             .foregroundStyle(Color.scFaint(colorScheme))
     }
@@ -229,11 +229,11 @@ struct WelcomeStep1ProfileView: View {
     private func measureField<Input: View>(unit: String, @ViewBuilder input: () -> Input) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             input()
-                .font(.system(size: 19, weight: .bold))
+                .font(.sc(size: 19, weight: .bold))
                 .foregroundStyle(Color.scLabel(colorScheme))
                 .monospacedDigit()
             Text(unit)
-                .font(.system(size: 12, weight: .medium))
+                .font(.sc(size: 12, weight: .medium))
                 .foregroundStyle(Color.scMuted(colorScheme))
         }
         .padding(.horizontal, 12)
@@ -263,9 +263,9 @@ private struct SexChip: View {
         Button(action: onTap) {
             HStack(spacing: 7) {
                 Image(systemName: candidate.icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                 Text(candidate.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.sc(size: 14, weight: .semibold))
             }
             .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(colorScheme))
             .frame(maxWidth: .infinity)
@@ -429,8 +429,8 @@ struct YearWheelPicker: View {
 
     private func font(for y: Int) -> Font {
         y == year
-            ? .system(size: 20, weight: .bold)
-            : .system(size: 16, weight: .medium)
+            ? .sc(size: 20, weight: .bold)
+            : .sc(size: 16, weight: .medium)
     }
 
     private func color(for y: Int) -> Color {

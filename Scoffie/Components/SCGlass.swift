@@ -148,7 +148,7 @@ struct SCCompactTitle: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 15, weight: .semibold))
+            .font(.sc(size: 15, weight: .semibold))
             .tracking(-0.2)
             .foregroundStyle(Color.scLabel(scheme))
             .lineLimit(1)
@@ -199,7 +199,7 @@ extension View {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(0..<40) { index in
                     Text("Wiersz \(index) — treść przewija się pod szkłem")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.sc(size: 17, weight: .semibold))
                 }
             }
             .padding(20)

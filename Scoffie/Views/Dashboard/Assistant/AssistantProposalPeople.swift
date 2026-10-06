@@ -66,7 +66,7 @@ struct ProposalAudiencePill: View {
             HStack(spacing: 6) {
                 PlanWhoBadge(participantIds: participantIds, members: members, size: size)
                 Text(label)
-                    .font(.system(size: filled ? 13.5 : 12.5, weight: .semibold))
+                    .font(.sc(size: filled ? 13.5 : 12.5, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(filled ? AssistantLook.ink(scheme) : AssistantLook.muted(scheme))
                     .lineLimit(1)
@@ -106,7 +106,7 @@ struct ProposalPersonFilter: View {
             HStack(spacing: 8) {
                 chip(id: nil, title: "Wszyscy", accent: AssistantLook.terra(scheme)) {
                     Image(systemName: "house.fill")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.sc(size: 10, weight: .bold))
                         .foregroundStyle(AssistantLook.terra(scheme))
                         .frame(width: 20, height: 20)
                 }
@@ -139,7 +139,7 @@ struct ProposalPersonFilter: View {
             HStack(spacing: 6) {
                 avatar()
                 Text(title)
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.sc(size: 13.5, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(isOn ? accent : AssistantLook.ink(scheme))
                     .lineLimit(1)

@@ -55,7 +55,7 @@ struct ShoppingProductRow: View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(.system(size: 15.5, weight: .semibold))
+                    .font(.sc(size: 15.5, weight: .semibold))
                     .tracking(-0.3)
                     // Kupione zostaje CZYTELNE: `scMuted` (62 %), a nie
                     // `scFaint` (32 %). Przekreślenie samo mówi „załatwione”,
@@ -71,7 +71,7 @@ struct ShoppingProductRow: View {
 
                 if let dishes, !dishes.isEmpty {
                     Text(dishes)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.sc(size: 12, weight: .regular))
                         .foregroundStyle(Color.scFaint(scheme))
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -107,7 +107,7 @@ struct ShoppingProductRow: View {
     /// ilość już nie jest potrzebna, więc przestaje wołać.
     private var amountPill: some View {
         SCCountingText(amount)
-            .font(.system(size: 13, weight: .bold))
+            .font(.sc(size: 13, weight: .bold))
             .tracking(0.1)
             .monospacedDigit()
             .foregroundStyle(bought ? Color.scMuted(scheme) : accent)

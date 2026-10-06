@@ -34,7 +34,7 @@ struct RecipeResultsHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(eyebrow.uppercased())
-                .font(.system(size: 10.5, weight: .bold))
+                .font(.sc(size: 10.5, weight: .bold))
                 .tracking(1.4)
                 .foregroundStyle(SCPalette.terracotta)
                 .lineLimit(1)
@@ -43,14 +43,14 @@ struct RecipeResultsHeader: View {
             HStack(alignment: .center, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 7) {
                     Text(verbatim: "\(count)")
-                        .font(.system(size: 30, weight: .heavy))
+                        .font(.sc(size: 30, weight: .heavy))
                         .tracking(-0.6)
                         .monospacedDigit()
                         .foregroundStyle(Color.scLabel(scheme))
                         .contentTransition(.numericText(value: Double(count)))
 
                     Text(PolishPlural.recipesNoun(count))
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.sc(size: 17, weight: .semibold))
                         .foregroundStyle(Color.scMuted(scheme))
                         .contentTransition(.numericText())
                 }
@@ -58,7 +58,7 @@ struct RecipeResultsHeader: View {
 
                 Button(action: onClear) {
                     Text("Wyczyść")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.sc(size: 14, weight: .semibold))
                         .foregroundStyle(Color.scLabel(scheme))
                         .padding(.horizontal, 15)
                         .frame(height: 34)
@@ -71,7 +71,7 @@ struct RecipeResultsHeader: View {
 
             if !detail.isEmpty {
                 Text(detail)
-                    .font(.system(size: 13.5, weight: .medium))
+                    .font(.sc(size: 13.5, weight: .medium))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(2)
                     .contentTransition(.opacity)

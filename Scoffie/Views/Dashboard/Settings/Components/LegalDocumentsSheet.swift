@@ -29,7 +29,7 @@ struct LegalDocumentsSheet: View {
                     }
 
                     Text("Wersja \(LegalDocMeta.version) · obowiązuje od \(LegalDocMeta.effectiveDate). Te same dokumenty, które akceptujesz przy logowaniu; aktualne wersje są też na scoffie.app.")
-                        .font(.system(size: 13))
+                        .font(.sc(size: 13))
                         .lineSpacing(2)
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
@@ -66,12 +66,12 @@ struct LegalDocumentsSheet: View {
                     }
 
                     Text("Paczka z Twoim profilem, preferencjami, przepisami, posiłkami, krokami, zgodami i rozmowami z asystentem — prawo dostępu i przenoszenia danych (art. 15 i 20 RODO). Bez danych innych domowników.")
-                        .font(.system(size: 12))
+                        .font(.sc(size: 12))
                         .foregroundStyle(Color.scFaint(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text("Pytania i żądania: \(LegalDocMeta.contactEmail)")
-                        .font(.system(size: 12))
+                        .font(.sc(size: 12))
                         .foregroundStyle(Color.scFaint(scheme))
                 }
                 .padding(.horizontal, 20)

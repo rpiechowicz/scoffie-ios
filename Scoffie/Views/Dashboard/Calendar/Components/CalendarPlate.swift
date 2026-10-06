@@ -261,7 +261,7 @@ struct CalendarPlateKicker: View {
 
     var body: some View {
         Text(item?.kicker ?? " ")
-            .font(.system(size: 10.5, weight: .bold))
+            .font(.sc(size: 10.5, weight: .bold))
             .tracking(1.1)
             .foregroundStyle(item?.kickerColor(in: scheme) ?? Color.scMuted(scheme))
             .lineLimit(1)
@@ -362,7 +362,7 @@ struct CalendarPlateFace: View {
                     )
 
                 Image(systemName: item?.slot.icon ?? "calendar")
-                    .font(.system(size: iconSize, weight: .light))
+                    .font(.sc(size: iconSize, weight: .light))
                     .foregroundStyle(Color.scFaint(scheme))
             }
         }
@@ -386,7 +386,7 @@ struct CalendarPlateFace: View {
                 slot.cozyGradient
 
                 Image(systemName: slot.icon)
-                    .font(.system(size: iconSize, weight: .light))
+                    .font(.sc(size: iconSize, weight: .light))
                     .foregroundStyle(Color.white.opacity(0.65))
             }
         } else {
@@ -399,7 +399,7 @@ struct CalendarPlateFace: View {
                 )
 
                 Image(systemName: slot.icon)
-                    .font(.system(size: iconSize, weight: .light))
+                    .font(.sc(size: iconSize, weight: .light))
                     .foregroundStyle(slot.cozyAccent)
             }
         }
@@ -800,7 +800,7 @@ private struct CalendarPlatePlay: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "play.fill")
-                .font(.system(size: (size * 0.4).rounded(), weight: .heavy))
+                .font(.sc(size: (size * 0.4).rounded(), weight: .heavy))
                 .foregroundStyle(isStrong ? Color.scPageBase(scheme) : SCPalette.terracotta)
                 // Trójkąt ma ciężar po lewej — o punkt w prawo stoi na środku.
                 .offset(x: 1)
@@ -992,14 +992,14 @@ struct CalendarPlateChip: View {
         HStack(spacing: 5) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     // Pierwsza pigułka zmienia ikonę razem z tekstem (plan ↔
                     // zegar) — podmiana symbolu zamiast przeskoku w klatce.
                     .contentTransition(.symbolEffect(.replace))
             }
 
             Text(text)
-                .font(.system(size: 12.5, weight: .bold))
+                .font(.sc(size: 12.5, weight: .bold))
                 .tracking(-0.15)
                 .monospacedDigit()
                 // Bez `fixedSize`: rząd pigułek ma się ŚCISNĄĆ, gdy danie ma
@@ -1082,7 +1082,7 @@ struct CalendarPlateCaption: View {
             // osobny widok (`CalendarView.dayPage`, `.id` po dacie), więc
             // w obrębie jednej strony pusty dzień nie przechodzi w danie.
             Text(headline)
-                .font(.system(size: 34, weight: .bold))
+                .font(.sc(size: 34, weight: .bold))
                 .tracking(-1.3)
                 .monospacedDigit()
                 .foregroundStyle(headlineColor)
@@ -1202,7 +1202,7 @@ struct CalendarPlateCaption: View {
 
     private func titleText(_ name: String, eaten: Bool) -> some View {
         Text(name)
-            .font(.system(size: 18, weight: .semibold))
+            .font(.sc(size: 18, weight: .semibold))
             .tracking(-0.45)
             .foregroundStyle(eaten ? Color.scMuted(scheme) : Color.scLabel(scheme))
             .multilineTextAlignment(.center)

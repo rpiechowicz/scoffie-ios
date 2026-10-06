@@ -46,7 +46,7 @@ struct EditorialSettingsRow<Trailing: View>: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(title)
-                    .font(.system(size: 15.5, weight: .semibold))
+                    .font(.sc(size: 15.5, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
             }
@@ -54,7 +54,7 @@ struct EditorialSettingsRow<Trailing: View>: View {
 
             if let value, !value.isEmpty {
                 Text(value)
-                    .font(.system(size: 14, weight: .regular))
+                    .font(.sc(size: 14, weight: .regular))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
             }
@@ -95,7 +95,7 @@ struct EditorialSettingsChevron: View {
 
     var body: some View {
         Image(systemName: "chevron.right")
-            .font(.system(size: 12, weight: .heavy))
+            .font(.sc(size: 12, weight: .heavy))
             .foregroundStyle(
                 scheme == .dark
                 ? SCPalette.labelDark.opacity(0.35)

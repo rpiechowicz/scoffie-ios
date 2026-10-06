@@ -673,6 +673,10 @@ struct ScoffieApp: App {
                     Task { await showRootScreen(target) }
                 }
             }
+            // Dynamic Type rośnie najwyżej do xxL (`SCDynamicType.cap`) —
+            // style systemowe i `@ScaledMetric` tak samo jak `Font.sc`, żeby
+            // tekst w jednym wierszu nie rósł w dwóch różnych tempach.
+            .dynamicTypeSize(...SCDynamicType.swiftUICap)
             .environment(\.sessionStore, sessionStore)
             // Kolejność ma znaczenie: każdy z mostów poniżej musi stać POD
             // `scToastLayer` w drzewie, bo to ona wstawia `\.toasts`

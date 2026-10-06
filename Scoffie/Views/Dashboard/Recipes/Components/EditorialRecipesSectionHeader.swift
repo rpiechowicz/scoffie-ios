@@ -53,13 +53,13 @@ struct EditorialRecipesSectionHeader: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(eyebrow.uppercased())
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .tracking(1.4)
                     .foregroundStyle(accent)
                     .lineLimit(1)
 
                 Text(title)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.sc(size: 22, weight: .bold))
                     .tracking(-0.3)
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
@@ -68,7 +68,7 @@ struct EditorialRecipesSectionHeader: View {
 
             if showsChevron {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .heavy))
+                    .font(.sc(size: 12, weight: .heavy))
                     .foregroundStyle(accent)
                     // Rozmiar krzyżyka arkusza (`SCSheetIconLabel.size`,
                     // Rafał 4.10.2026: „takiej samej wielkości jak X”).

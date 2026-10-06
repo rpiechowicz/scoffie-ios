@@ -42,20 +42,20 @@ struct SCPortionSummary: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("Razem")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.sc(size: 15, weight: .medium))
                     .foregroundStyle(Color.scMuted(scheme))
 
                 Spacer(minLength: 8)
 
                 Text(PlanPortions.spokenServings(units: totalUnits, plural: PolishPlural.servings))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.sc(size: 15, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(isOverLimit ? SCPalette.terracotta : Color.scLabel(scheme))
                     .contentTransition(.numericText(value: Double(totalUnits)))
 
                 if let kcal {
                     Text(verbatim: "· \(kcal) kcal")
-                        .font(.system(size: 15))
+                        .font(.sc(size: 15))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .contentTransition(.numericText(value: Double(kcal)))
@@ -64,7 +64,7 @@ struct SCPortionSummary: View {
 
             if let warning {
                 Text(warning)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.sc(size: 13, weight: .medium))
                     .foregroundStyle(SCPalette.terracotta)
                     .fixedSize(horizontal: false, vertical: true)
                     .transition(.opacity)
@@ -142,19 +142,19 @@ struct SCPortionRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
                     Text(name)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.sc(size: 16, weight: .medium))
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
                     if isViewer {
                         Text("· Ty")
-                            .font(.system(size: 16))
+                            .font(.sc(size: 16))
                             .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize()
                     }
                 }
                 if let kcal {
                     Text(verbatim: "\(kcal) kcal")
-                        .font(.system(size: 13))
+                        .font(.sc(size: 13))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .contentTransition(.numericText(value: Double(kcal)))
@@ -164,7 +164,7 @@ struct SCPortionRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(PlanPortions.label(units: units))
-                .font(.system(size: 17, weight: .semibold))
+                .font(.sc(size: 17, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(isChanged ? SCPalette.terracotta : Color.scLabel(scheme))
                 .contentTransition(.numericText(value: Double(units)))

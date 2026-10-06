@@ -869,7 +869,7 @@ struct RecipesView: View {
 
     private var emptySectionCard: some View {
         Text("Brak przepisów w tej sekcji.")
-            .font(.system(size: 13))
+            .font(.sc(size: 13))
             .foregroundStyle(Color.scMuted(scheme))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
@@ -892,20 +892,20 @@ struct RecipesView: View {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.10))
                 Image(systemName: "fork.knife.circle")
-                    .font(.system(size: 30, weight: .semibold))
+                    .font(.sc(size: 30, weight: .semibold))
                     .foregroundStyle(SCPalette.terracotta)
             }
             .frame(width: 78, height: 78)
 
             VStack(spacing: 8) {
                 Text(isNarrowed ? "Brak wyników" : "Brak przepisów")
-                    .font(.system(size: 18, weight: .heavy))
+                    .font(.sc(size: 18, weight: .heavy))
                     .tracking(-0.4)
                     .foregroundStyle(Color.scLabel(scheme))
                     .multilineTextAlignment(.center)
 
                 Text(emptyStateMessage)
-                    .font(.system(size: 13))
+                    .font(.sc(size: 13))
                     .foregroundStyle(Color.scMuted(scheme))
                     .multilineTextAlignment(.center)
             }
@@ -919,7 +919,7 @@ struct RecipesView: View {
                     withAnimation(.smooth(duration: 0.2)) { isPersonalizationEnabled = false }
                 } label: {
                     Text("Pokaż wszystkie przepisy")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.sc(size: 13, weight: .bold))
                         .foregroundStyle(SCPalette.sage)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 9)
@@ -933,7 +933,7 @@ struct RecipesView: View {
                     withAnimation(.smooth(duration: 0.2)) { filters.reset() }
                 } label: {
                     Text("Wyczyść filtry")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.sc(size: 13, weight: .bold))
                         .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 9)

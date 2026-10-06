@@ -79,7 +79,7 @@ struct MealDayTimesCard: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: slot.icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.sc(size: 14, weight: .semibold))
                     .foregroundStyle(slot.cozyAccent)
                     .frame(width: 34, height: 34)
                     .background(Circle().fill(slot.cozyAccent.opacity(scheme == .dark ? 0.16 : 0.12)))
@@ -87,7 +87,7 @@ struct MealDayTimesCard: View {
                 // Godzina na kapsułce pola — jedyny znak, że w oś da się
                 // stuknąć, bez szewronów i podpisów.
                 Text(time ?? "—")
-                    .font(.system(size: 13.5, weight: .bold))
+                    .font(.sc(size: 13.5, weight: .bold))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -98,7 +98,7 @@ struct MealDayTimesCard: View {
                     .background(Capsule(style: .continuous).fill(Color.scChipBg(scheme)))
 
                 Text(slot.shortTitle)
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.sc(size: 10.5, weight: .semibold))
                     .foregroundStyle(Color.scFaint(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -132,11 +132,11 @@ struct MealTimesOrderNotice: View {
         if let pair = schedule.outOfOrderPair(among: slots) {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.sc(size: 11, weight: .semibold))
                     .foregroundStyle(SCPalette.terracotta)
 
                 Text(text(pair))
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.sc(size: 12, weight: .regular))
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -242,7 +242,7 @@ private struct MealTimeEditorSheet: View {
                 // no-opem i UI nie ma prawa udawać, że zmiana przeszła.
                 if !MealSlotSchedule.slotsRequiringTime.contains(slot) {
                     Button("Bez stałej pory", action: onClearTime)
-                        .font(.system(size: 13.5, weight: .semibold))
+                        .font(.sc(size: 13.5, weight: .semibold))
                         .foregroundStyle(SCPalette.terracotta)
                         .frame(maxWidth: .infinity, minHeight: 40)
                 }

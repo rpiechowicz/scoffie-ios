@@ -23,7 +23,7 @@ struct AuthHeaderView: View {
         VStack(alignment: .leading, spacing: 12) {
             title
             Text("Plan posiłków, lista zakupów i asystent, który ułoży tydzień za Was.")
-                .font(.system(size: 16, weight: .regular))
+                .font(.sc(size: 16, weight: .regular))
                 .foregroundStyle(Color.scMuted(colorScheme))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -40,20 +40,20 @@ struct AuthHeaderView: View {
         VStack(alignment: .leading, spacing: 0) {
             (
                 Text("Gotujcie ")
-                    .font(.system(size: 32, weight: .bold))
+                    .font(.sc(size: 32, weight: .bold))
                     .foregroundStyle(Color.scLabel(colorScheme))
                 + Text("razem")
-                    .font(.system(size: 32, weight: .medium).italic())
+                    .font(.sc(size: 32, weight: .medium).italic())
                     .foregroundStyle(SCPalette.terracotta)
                 + Text(",")
-                    .font(.system(size: 32, weight: .bold))
+                    .font(.sc(size: 32, weight: .bold))
                     .foregroundStyle(Color.scLabel(colorScheme))
             )
             .lineHeight(.exact(points: 40))
 
             HStack(alignment: .center, spacing: 3) {
                 Text(typed.isEmpty ? " " : typed)
-                    .font(.system(size: 32, weight: .bold))
+                    .font(.sc(size: 32, weight: .bold))
                     .foregroundStyle(Color.scLabel(colorScheme))
                     .lineHeight(.exact(points: 40))
                     .lineLimit(1)

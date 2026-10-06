@@ -1120,7 +1120,7 @@ struct AssistantView: View {
             scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
         } label: {
             Image(systemName: "arrow.down")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.sc(size: 14, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 40, height: 40)
                 // Szklany krążek jak „na dół” w Telegramie — pływa nad
@@ -1328,7 +1328,7 @@ struct AssistantView: View {
             // cały tydzień”) łamał się na dwa, a pierwsza litera zwijała pole
             // do jednego — powitanie nad nim opadało skokiem o wiersz.
             .lineLimit(draft.isEmpty ? 1...1 : 1...8)
-            .font(.system(size: 16.5))
+            .font(.sc(size: 16.5))
             .tracking(-0.3)
             .foregroundStyle(AssistantLook.ink(scheme))
             .focused($isComposerFocused)
@@ -1371,7 +1371,7 @@ struct AssistantView: View {
                     // Wygaszony: samo szkło, jak pole obok. Jedno szkło, nie
                     // drugie na pierwszym.
                     Image(systemName: store.isSending ? "stop.fill" : "arrow.up")
-                        .font(.system(size: store.isSending ? 18 : 19, weight: .bold))
+                        .font(.sc(size: store.isSending ? 18 : 19, weight: .bold))
                         .foregroundStyle(active ? SCPalette.terracotta : AssistantLook.ink(scheme).opacity(0.45))
                         .contentTransition(.symbolEffect(.replace))
                 }
@@ -1418,10 +1418,10 @@ struct AssistantView: View {
     private var editingBar: some View {
         HStack(spacing: 7) {
             Image(systemName: "pencil")
-                .font(.system(size: 14, weight: .bold))
+                .font(.sc(size: 14, weight: .bold))
                 .foregroundStyle(AssistantLook.terra(scheme))
             Text("Edytujesz wiadomość")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .tracking(-0.2)
                 .foregroundStyle(AssistantLook.ink(scheme))
 
@@ -1433,7 +1433,7 @@ struct AssistantView: View {
                 isComposerFocused = false
             } label: {
                 Text("Anuluj")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .foregroundStyle(AssistantLook.terra(scheme))
                     .frame(height: 36)
                     .padding(.horizontal, 6)
@@ -1899,7 +1899,7 @@ struct AssistantUnavailableView: View {
                 EditorialPageHeader("Asystent")
 
                 Text("Asystent będzie dostępny, gdy wczyta się gospodarstwo.")
-                    .font(.system(size: 15))
+                    .font(.sc(size: 15))
                     .foregroundStyle(Color.scMuted(scheme))
 
                 Spacer()
@@ -1922,7 +1922,7 @@ private struct DaySeparator: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.sc(size: 11, weight: .semibold))
             .foregroundStyle(Color.scMuted(scheme))
             .frame(maxWidth: .infinity)
             .padding(.top, 6)

@@ -37,19 +37,19 @@ struct RecipeFilterPickerRow: View {
                     .frame(width: 32, height: 32)
                     .overlay(
                         Image(systemName: icon)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.sc(size: 14, weight: .semibold))
                             .foregroundStyle(accent)
                     )
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(scheme))
 
                     if chips.isEmpty {
                         Text(placeholder)
-                            .font(.system(size: 12.5))
+                            .font(.sc(size: 12.5))
                             .foregroundStyle(Color.scMuted(scheme))
                             .lineLimit(1)
                             .padding(.top, 2)
@@ -66,7 +66,7 @@ struct RecipeFilterPickerRow: View {
                 }
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.sc(size: 12, weight: .bold))
                     .foregroundStyle(Color.scFaint(scheme))
             }
             .padding(12)
@@ -170,7 +170,7 @@ struct RecipeFilterPage<Content: View>: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if !hint.isEmpty {
                         Text(hint)
-                            .font(.system(size: 13))
+                            .font(.sc(size: 13))
                             .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 6)
@@ -208,21 +208,21 @@ struct RecipeFilterPage<Content: View>: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(verbatim: "\(resultCount)")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.sc(size: 15, weight: .bold))
                         .tracking(-0.3)
                         .monospacedDigit()
                         .foregroundStyle(Color.scLabel(scheme))
                         .contentTransition(.numericText(value: Double(resultCount)))
 
                     Text(verbatim: "z \(totalCount) \(totalContext)")
-                        .font(.system(size: 12.5))
+                        .font(.sc(size: 12.5))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
                 }
 
                 Text(verbatim: selectedCount == 0 ? "Nic nie zaznaczone" : "Zaznaczone: \(selectedCount)")
-                    .font(.system(size: 12))
+                    .font(.sc(size: 12))
                     .monospacedDigit()
                     .foregroundStyle(selectedCount == 0 ? Color.scFaint(scheme) : accent)
                     .contentTransition(.numericText(value: Double(selectedCount)))

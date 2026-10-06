@@ -17,6 +17,10 @@ struct DashboardView: View {
     var body: some View {
         ZStack {
             NavigationMenu()
+                // Rozmiary z makiet liczą się przy budowaniu widoku
+                // (`Font.sc`) — zmiana rozmiaru tekstu w trakcie działania
+                // przebudowuje pulpit, żeby weszła od razu.
+                .scRefreshesOnDynamicType()
         }
         .sheet(item: $recipeLink) { request in
             RecipeLinkSheet(request: request) {

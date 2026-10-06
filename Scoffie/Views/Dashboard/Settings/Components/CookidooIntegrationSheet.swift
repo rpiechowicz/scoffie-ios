@@ -96,13 +96,13 @@ struct CookidooIntegrationSheet: View {
     private var introCard: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "flame.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)))
 
             Text("Połącz konto Cookidoo, aby wysyłać przepisy prosto na swojego Thermomixa. Przepis wyląduje w \u{201E}Mój tydzień\u{201D} i będzie czekał na ekranie urządzenia.")
-                .font(.system(size: 13, weight: .regular))
+                .font(.sc(size: 13, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -124,9 +124,9 @@ struct CookidooIntegrationSheet: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "questionmark.circle.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                 Text("Jak to działa?")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
             }
             .foregroundStyle(SCPalette.terracotta)
         }
@@ -142,7 +142,7 @@ struct CookidooIntegrationSheet: View {
 
             VStack(spacing: 0) {
                 TextField("E-mail", text: $emailDraft)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.sc(size: 15, weight: .medium))
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -168,7 +168,7 @@ struct CookidooIntegrationSheet: View {
                             SecureField("Hasło", text: $passwordDraft)
                         }
                     }
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.sc(size: 15, weight: .medium))
                     .textContentType(.password)
                     .focused($focusedField, equals: .password)
                     .submitLabel(.done)
@@ -178,7 +178,7 @@ struct CookidooIntegrationSheet: View {
                         isPasswordVisible.toggle()
                     } label: {
                         Image(systemName: isPasswordVisible ? "eye.slash.fill" : "eye.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.sc(size: 13, weight: .semibold))
                             .foregroundStyle(Color.scFaint(scheme))
                     }
                     .buttonStyle(.plain)
@@ -215,7 +215,7 @@ struct CookidooIntegrationSheet: View {
             .padding(.top, 4)
 
             Text("Dane logowania są przechowywane w postaci zaszyfrowanej i używane wyłącznie do połączenia z Cookidoo.")
-                .font(.system(size: 11.5, weight: .regular))
+                .font(.sc(size: 11.5, weight: .regular))
                 .foregroundStyle(Color.scFaint(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 6)
@@ -254,17 +254,17 @@ struct CookidooIntegrationSheet: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Połączono z Cookidoo")
-                    .font(.system(size: 15.5, weight: .heavy))
+                    .font(.sc(size: 15.5, weight: .heavy))
                     .foregroundStyle(Color.scLabel(scheme))
 
                 Text(login)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.sc(size: 13, weight: .medium))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
 
                 if let verified = store?.lastVerifiedAt {
                     Text("Ostatnia weryfikacja: \(Self.verifiedFormatter.string(from: verified))")
-                        .font(.system(size: 11.5, weight: .regular))
+                        .font(.sc(size: 11.5, weight: .regular))
                         .foregroundStyle(Color.scFaint(scheme))
                 }
             }
@@ -287,11 +287,11 @@ struct CookidooIntegrationSheet: View {
         if store?.subscriptionInactive == true {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .foregroundStyle(SCPalette.butter)
 
                 Text("Subskrypcja Cookidoo wygląda na nieaktywną — połączenie działa, ale Thermomix może nie pozwolić na gotowanie z przepisów.")
-                    .font(.system(size: 12.5, weight: .regular))
+                    .font(.sc(size: 12.5, weight: .regular))
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -332,11 +332,11 @@ struct CookidooIntegrationSheet: View {
     private var authFailedBanner: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(SCInlineErrorText.tint)
 
             Text("Hasło do Cookidoo się zmieniło albo sesja wygasła. Zaloguj się ponownie, aby przywrócić wysyłanie na Thermomixa.")
-                .font(.system(size: 12.5, weight: .medium))
+                .font(.sc(size: 12.5, weight: .medium))
                 .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
         }

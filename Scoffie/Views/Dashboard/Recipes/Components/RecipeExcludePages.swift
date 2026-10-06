@@ -203,7 +203,7 @@ struct RecipeExcludeDepartmentPage: View {
         sectionLabel("Wyniki")
         if results.isEmpty {
             Text("W tym dziale nie ma takiego składnika.")
-                .font(.system(size: 13.5))
+                .font(.sc(size: 13.5))
                 .foregroundStyle(Color.scMuted(scheme))
                 .padding(.horizontal, 6)
         } else {
@@ -231,7 +231,7 @@ struct RecipeExcludeDepartmentPage: View {
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: count == 0 ? "Nic nie wykluczasz" : PolishPlural.excluded(count))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.sc(size: 15, weight: .bold))
                     .tracking(-0.3)
                     .monospacedDigit()
                     .foregroundStyle(Color.scLabel(scheme))
@@ -240,7 +240,7 @@ struct RecipeExcludeDepartmentPage: View {
                 Text(verbatim: hidden == 0
                      ? "Wszystkie przepisy zostają"
                      : "łącznie ukrywa \(PolishPlural.recipes(hidden))")
-                    .font(.system(size: 12.5))
+                    .font(.sc(size: 12.5))
                     .monospacedDigit()
                     .foregroundStyle(Color.scMuted(scheme))
                     .contentTransition(.numericText(value: Double(hidden)))
@@ -407,7 +407,7 @@ struct RecipeExcludePage: View {
 
                 if list.isEmpty {
                     Text("Przepisy nie mają jeszcze listy składników.")
-                        .font(.system(size: 13))
+                        .font(.sc(size: 13))
                         .foregroundStyle(Color.scMuted(scheme))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(14)
@@ -442,13 +442,13 @@ struct RecipeExcludePage: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(department.name)
-                        .font(.system(size: 15.5, weight: .semibold))
+                        .font(.sc(size: 15.5, weight: .semibold))
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
 
                     Text(subtitle)
-                        .font(.system(size: 12.5, weight: excluded.isEmpty ? .regular : .medium))
+                        .font(.sc(size: 12.5, weight: excluded.isEmpty ? .regular : .medium))
                         .foregroundStyle(excluded.isEmpty ? Color.scMuted(scheme) : SCPalette.terracotta)
                         .lineLimit(1)
                         .contentTransition(.opacity)
@@ -461,7 +461,7 @@ struct RecipeExcludePage: View {
                 }
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.sc(size: 12, weight: .bold))
                     .foregroundStyle(Color.scFaint(scheme))
             }
             .padding(.vertical, 11)
@@ -509,7 +509,7 @@ struct RecipeExcludePage: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text("Wykluczone")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.sc(size: 14, weight: .semibold))
                     .tracking(-0.25)
                     .foregroundStyle(Color.scLabel(scheme))
 
@@ -521,7 +521,7 @@ struct RecipeExcludePage: View {
                     (Text("ukrywa ")
                         + Text(verbatim: "\(hidden)").fontWeight(.semibold).foregroundStyle(Color.scLabel(scheme))
                         + Text(verbatim: " \(PolishPlural.recipesNoun(hidden))"))
-                        .font(.system(size: 12.5))
+                        .font(.sc(size: 12.5))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
@@ -608,7 +608,7 @@ struct RecipeExcludePage: View {
 
         if sections.isEmpty {
             Text("Żaden przepis nie ma takiego składnika.")
-                .font(.system(size: 13.5))
+                .font(.sc(size: 13.5))
                 .foregroundStyle(Color.scMuted(scheme))
                 .padding(.horizontal, 6)
                 .padding(.top, 22)
@@ -695,17 +695,17 @@ struct RecipeExcludePage: View {
             if let undo {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .heavy))
+                        .font(.sc(size: 12, weight: .heavy))
                         .foregroundStyle(SCPalette.terracotta)
 
                     (Text("Wykluczono: ") + Text(undo.exclusion.chipTitle).fontWeight(.bold))
-                        .font(.system(size: 13.5))
+                        .font(.sc(size: 13.5))
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
 
                     Button(action: performUndo) {
                         Text("Cofnij")
-                            .font(.system(size: 13.5, weight: .semibold))
+                            .font(.sc(size: 13.5, weight: .semibold))
                             .foregroundStyle(SCPalette.terracotta)
                             .padding(.horizontal, 12)
                             .frame(height: 32)

@@ -132,7 +132,7 @@ private struct PolishPluralPreviewHost: View {
                             Text(PolishPlural.meals(count))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.sc(size: 14, weight: .medium))
                         .monospacedDigit()
                         .foregroundStyle(Color.scLabel(scheme))
                     }

@@ -89,7 +89,7 @@ struct ShoppingHistoryMonthPage: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(weekEyebrow(week))
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .tracking(1.1)
                     .foregroundStyle(week.isCurrent ? SCPalette.terracotta : Color.scFaint(scheme))
                     .lineLimit(1)

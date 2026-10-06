@@ -96,11 +96,11 @@ struct AssistantQuotaMeter: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .foregroundStyle(AssistantLook.muted(scheme))
                 Spacer(minLength: 8)
                 Text("\(shownUsed) z \(quota.limit)")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(AssistantLook.ink(scheme))
                     .contentTransition(.numericText(value: Double(shownUsed)))
@@ -215,18 +215,18 @@ struct AssistantQuotaNextRow: View {
         if let content {
             HStack(alignment: .center, spacing: 10) {
                 Image(systemName: content.icon)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.sc(size: 13, weight: .bold))
                     .foregroundStyle(AssistantLook.terra(scheme))
                     .frame(width: 18)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(content.title)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.sc(size: 14, weight: .semibold))
                         .tracking(-0.2)
                         .foregroundStyle(AssistantLook.ink(scheme))
                     if let detail = content.detail {
                         Text(detail)
-                            .font(.system(size: 12.5))
+                            .font(.sc(size: 12.5))
                             .monospacedDigit()
                             .foregroundStyle(AssistantLook.muted(scheme))
                     }
@@ -238,7 +238,7 @@ struct AssistantQuotaNextRow: View {
 
                 if let pill = content.pill {
                     Text(pill)
-                        .font(.system(size: 12.5, weight: .bold))
+                        .font(.sc(size: 12.5, weight: .bold))
                         .monospacedDigit()
                         .foregroundStyle(AssistantLook.terra(scheme))
                         .lineLimit(1)
@@ -297,15 +297,15 @@ struct AssistantQuotaSpentCard: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(eyebrow)
-                            .font(.system(size: 10.5, weight: .bold))
+                            .font(.sc(size: 10.5, weight: .bold))
                             .tracking(1.4)
                             .foregroundStyle(AssistantLook.terra(scheme))
                         Text(title)
-                            .font(.system(size: 17, weight: .bold))
+                            .font(.sc(size: 17, weight: .bold))
                             .tracking(-0.4)
                             .foregroundStyle(AssistantLook.ink(scheme))
                         Text("Plan i zakupy działają dalej.")
-                            .font(.system(size: 13.5))
+                            .font(.sc(size: 13.5))
                             .foregroundStyle(AssistantLook.muted(scheme))
                     }
                     .lineLimit(1)

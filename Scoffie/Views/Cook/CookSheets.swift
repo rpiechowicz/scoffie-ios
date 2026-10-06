@@ -17,7 +17,7 @@ struct CookSectionHeader: View {
         HStack(spacing: 7) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.sc(size: 12, weight: .bold))
                     .foregroundStyle(color)
                     .accessibilityHidden(true)
             }
@@ -27,7 +27,7 @@ struct CookSectionHeader: View {
             Spacer(minLength: 8)
             if let count {
                 Text("\(count)")
-                    .font(.system(size: 13))
+                    .font(.sc(size: 13))
                     .monospacedDigit()
                     .foregroundStyle(SCCook.Palette.caption(scheme))
             }
@@ -191,11 +191,11 @@ private struct CookTimerRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.timer.label)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.sc(size: 16, weight: .bold))
                     .foregroundStyle(isPaused ? Color.scMuted(scheme) : Color.scLabel(scheme))
                     .lineLimit(1)
                 Text(captionText)
-                    .font(.system(size: 12))
+                    .font(.sc(size: 12))
                     .foregroundStyle(isOverdue ? color : SCCook.Palette.caption(scheme))
                     .lineLimit(1)
                     .cookRoll(captionText)
@@ -247,7 +247,7 @@ private struct CookTimerRow: View {
     private func sideButton(_ title: String, ink: Color, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.sc(size: 14, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(ink)
                 .lineLimit(1)
@@ -276,7 +276,7 @@ private struct CookTimerRow: View {
                 CookTimerRing(fraction: item.status.remainingFraction, color: tone, lineWidth: SCCook.Stroke.sheetTimerRing)
                     .opacity(isRunning || isPaused ? 1 : 0)
                 Image(systemName: item.primaryIcon)
-                    .font(.system(size: 14, weight: .heavy))
+                    .font(.sc(size: 14, weight: .heavy))
                     .foregroundStyle(filled ? Color.scPageBase(scheme) : (isPaused ? Color.scLabel(scheme) : tone))
                     .offset(x: item.primaryIcon == "play.fill" ? 1 : 0)
                     .contentTransition(.symbolEffect(.replace))
@@ -428,9 +428,9 @@ struct CookIngredientsSheet: View {
         } label: {
             HStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 14, weight: selected ? .bold : .semibold))
+                    .font(.sc(size: 14, weight: selected ? .bold : .semibold))
                 Text("\(count)")
-                    .font(.system(size: 14, weight: selected ? .bold : .semibold))
+                    .font(.sc(size: 14, weight: selected ? .bold : .semibold))
                     .monospacedDigit()
                     .opacity(0.7)
             }
@@ -467,19 +467,19 @@ struct CookIngredientsSheet: View {
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(line.name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.sc(size: 16, weight: .semibold))
                     .foregroundStyle(isDone ? dim : Color.scLabel(scheme))
                     .lineLimit(1)
                 if let caption {
                     HStack(spacing: 4) {
                         if isDone {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .heavy))
+                                .font(.sc(size: 10, weight: .heavy))
                                 .accessibilityHidden(true)
                         }
                         Text(caption)
                     }
-                    .font(.system(size: 12, weight: isNow ? .semibold : .regular))
+                    .font(.sc(size: 12, weight: isNow ? .semibold : .regular))
                     .foregroundStyle(isNow ? SCPalette.terracotta : dim)
                     .lineLimit(1)
                 }
@@ -487,7 +487,7 @@ struct CookIngredientsSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(line.amountText)
-                .font(.system(size: 16, weight: .bold))
+                .font(.sc(size: 16, weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(isDone ? dim : Color.scLabel(scheme))
                 .lineLimit(1)
@@ -518,14 +518,14 @@ private struct CookStepNoIngredients: View {
     var body: some View {
         VStack(spacing: 0) {
             Image(systemName: "basket")
-                .font(.system(size: 30, weight: .light))
+                .font(.sc(size: 30, weight: .light))
                 .foregroundStyle(Color.scFaint(scheme))
             Text("Ten krok bez składników")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.sc(size: 17, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .padding(.top, 14)
             Text(hint)
-                .font(.system(size: 14))
+                .font(.sc(size: 14))
                 .foregroundStyle(Color.scMuted(scheme))
                 .padding(.top, 4)
         }

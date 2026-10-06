@@ -116,7 +116,7 @@ struct StartupLoaderView: View {
 
             VStack(spacing: 0) {
                 Text("Przygotowujemy Twój tydzień")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.sc(size: 18, weight: .semibold))
                     .foregroundStyle(Color.scLabel(colorScheme))
                     .multilineTextAlignment(.center)
                     .padding(.bottom, 8)
@@ -139,7 +139,7 @@ struct StartupLoaderView: View {
     private func statusLine(index: Int) -> some View {
         ZStack {
             Text(Self.statusMessages[index])
-                .font(.system(size: 14))
+                .font(.sc(size: 14))
                 .foregroundStyle(Color.scMuted(colorScheme))
                 .multilineTextAlignment(.center)
                 .id(index)
@@ -321,7 +321,7 @@ private struct DayLoaderTile: View {
                         .foregroundStyle(Self.cream.opacity(0.95))
                         .opacity(fill)
                 }
-                .font(.system(size: 10, weight: .semibold))
+                .font(.sc(size: 10, weight: .semibold))
                 .tracking(0.3)
                 .padding(.top, 6)
 

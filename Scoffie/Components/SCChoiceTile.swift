@@ -126,14 +126,14 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(Self.hyphenated(title))
-                        .font(.system(size: SCChoiceTileMetrics.titleSize, weight: .semibold))
+                        .font(.sc(size: SCChoiceTileMetrics.titleSize, weight: .semibold))
                         .tracking(-0.2)
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
 
                     detail()
-                        .font(.system(size: 12))
+                        .font(.sc(size: 12))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
@@ -196,7 +196,7 @@ struct SCChoiceTile<Media: View, Detail: View>: View {
                 .frame(width: size, height: size)
                 .overlay(
                     Image(systemName: mark == .locked ? "lock.fill" : "checkmark")
-                        .font(.system(size: mark == .locked ? 8.5 : 9.5, weight: .heavy))
+                        .font(.sc(size: mark == .locked ? 8.5 : 9.5, weight: .heavy))
                         // Akcenty w ciemnym motywie są jasne (masło, szałwia) —
                         // biały glif ginął na nich. Ciemny czyta się na każdym.
                         .foregroundStyle(scheme == .dark ? Color.scPageBase(scheme) : Color.white)

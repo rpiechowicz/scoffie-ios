@@ -26,13 +26,13 @@ struct EditorialRecipesHero: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(eyebrow.uppercased())
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .tracking(1.4)
                     .foregroundStyle(accent)
                     .lineLimit(1)
 
                 Text(title)
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.sc(size: 28, weight: .bold))
                     .tracking(-0.5)
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)

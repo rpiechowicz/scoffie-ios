@@ -82,12 +82,12 @@ struct ShoppingProgressHeader: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     CountingNumber(target: bought)
-                        .font(.system(size: 20, weight: .heavy))
+                        .font(.sc(size: 20, weight: .heavy))
                         .tracking(-0.5)
                         .foregroundStyle(Color.scLabel(scheme))
 
                     SCCountingText("z \(total) kupione")
-                        .font(.system(size: 13, weight: .regular))
+                        .font(.sc(size: 13, weight: .regular))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
@@ -104,7 +104,7 @@ struct ShoppingProgressHeader: View {
                         SCCountingText("\(remaining) do kupienia")
                     }
                 }
-                .font(.system(size: 12.5, weight: .regular))
+                .font(.sc(size: 12.5, weight: .regular))
                 .monospacedDigit()
                 .foregroundStyle(isComplete ? SCPalette.sage : Color.scMuted(scheme))
                 .lineLimit(1)

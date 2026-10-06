@@ -52,10 +52,10 @@ struct WelcomeStep2GoalView: View {
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Treningi w tygodniu")
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.sc(size: 15, weight: .semibold))
                                     .foregroundStyle(Color.scLabel(colorScheme))
                                 Text("Im więcej ruchu, tym wyższe zapotrzebowanie.")
-                                    .font(.system(size: 12))
+                                    .font(.sc(size: 12))
                                     .foregroundStyle(Color.scMuted(colorScheme))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -100,11 +100,11 @@ private struct ActivityChip: View {
         Button(action: onTap) {
             VStack(spacing: 5) {
                 Text(level.label)
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.sc(size: 17, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(colorScheme))
                 Text(level.subtitle)
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(.sc(size: 10.5, weight: .medium))
                     .foregroundStyle(isSelected ? SCPalette.terracotta.opacity(0.85) : Color.scMuted(colorScheme))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)

@@ -218,14 +218,14 @@ struct AssistantGroup<Content: View, Aside: View>: View {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     if let title {
                         Text(title)
-                            .font(.system(size: 10.5, weight: .bold))
+                            .font(.sc(size: 10.5, weight: .bold))
                             .tracking(1.4)
                             .textCase(.uppercase)
                             .foregroundStyle(titleColor ?? Color.scFaint(scheme))
                     }
                     Spacer(minLength: 0)
                     aside()
-                        .font(.system(size: 12))
+                        .font(.sc(size: 12))
                         .foregroundStyle(AssistantLook.faint(scheme))
                         .lineLimit(1)
                 }
@@ -283,14 +283,14 @@ struct AssistantRow<Leading: View, Trailing: View>: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: titleSize, weight: titleWeight))
+                    .font(.sc(size: titleSize, weight: titleWeight))
                     .tracking(-0.3)
                     .lineSpacing(2)
                     .foregroundStyle(titleColor ?? AssistantLook.ink(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.system(size: 13, weight: subtitleWeight))
+                        .font(.sc(size: 13, weight: subtitleWeight))
                         .lineSpacing(2)
                         .foregroundStyle(subtitleColor ?? AssistantLook.muted(scheme))
                         .lineLimit(subtitleWraps ? nil : 1)
@@ -304,7 +304,7 @@ struct AssistantRow<Leading: View, Trailing: View>: View {
 
             if chevron {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.sc(size: 13, weight: .bold))
                     .foregroundStyle(AssistantLook.ink(scheme).opacity(0.35))
             }
         }
@@ -379,7 +379,7 @@ struct AssistantTile: View {
             .frame(width: size, height: size)
             .overlay(
                 Image(systemName: icon)
-                    .font(.system(size: 17, weight: .medium))
+                    .font(.sc(size: 17, weight: .medium))
                     .foregroundStyle(color ?? AssistantLook.terra(scheme))
             )
             .accessibilityHidden(true)

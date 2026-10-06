@@ -84,7 +84,7 @@ struct SCSheetIconLabel: View {
                     .transition(.opacity)
             } else {
                 Image(systemName: systemName)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.sc(size: 14, weight: .semibold))
                     .foregroundStyle(glyph)
                     // W górę: stary glif odjeżdża do góry, nowy wjeżdża od dołu —
                     // serce „napełnia się” ruchem, a nie przenikaniem.

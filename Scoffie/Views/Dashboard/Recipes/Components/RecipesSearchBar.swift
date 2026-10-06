@@ -56,7 +56,7 @@ struct RecipesSearchBar: View {
     private var filterButton: some View {
         Button(action: onOpenFilters) {
             Image(systemName: "line.3.horizontal.decrease")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.sc(size: 17, weight: .semibold))
                 .foregroundStyle(hasFilters ? SCPalette.terracotta : Color.scLabel(scheme))
                 .frame(width: Self.height, height: Self.height)
                 .scChromeGlass(
@@ -74,11 +74,11 @@ struct RecipesSearchBar: View {
     private var field: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.sc(size: 16, weight: .semibold))
                 .foregroundStyle(Color.scMuted(scheme))
 
             TextField(prompt, text: $text)
-                .font(.system(size: 16.5))
+                .font(.sc(size: 16.5))
                 .foregroundStyle(Color.scLabel(scheme))
                 .tint(SCPalette.terracotta)
                 .focused($isFocused)
@@ -105,7 +105,7 @@ struct RecipesSearchBar: View {
             isFocused = false
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 15, weight: .bold))
+                .font(.sc(size: 15, weight: .bold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: Self.height, height: Self.height)
                 .scChromeGlass(in: Circle())

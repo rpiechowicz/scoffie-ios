@@ -547,7 +547,7 @@ struct ProductsView: View {
                 // Osobne zdanie, nie osobny wygląd listy: użytkownik ma
                 // wiedzieć, dlaczego widzi krótszą listę niż tydzień temu.
                 Text("Nowa lista po zmianie planu — same dołożone produkty.")
-                    .font(.system(size: 12.5, weight: .regular))
+                    .font(.sc(size: 12.5, weight: .regular))
                     .foregroundStyle(Color.scFaint(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, pageHorizontalPadding)
@@ -755,10 +755,10 @@ struct ProductsView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Przygotowuję listę zakupów")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.sc(size: 17, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
                 Text("Pobieram aktualny stan dla tego tygodnia. Przy kolejnych wejściach aplikacja pokaże zapisany stan od razu.")
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.sc(size: 13, weight: .regular))
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }

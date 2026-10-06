@@ -32,10 +32,10 @@ struct SCSoftButton: View {
                 } else {
                     if let leadingIcon {
                         Image(systemName: leadingIcon)
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.sc(size: 15, weight: .bold))
                     }
                     Text(title)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.sc(size: 17, weight: .semibold))
                         .tracking(-0.3)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -46,7 +46,7 @@ struct SCSoftButton: View {
                         .contentTransition(.opacity)
                     if let trailingIcon {
                         Image(systemName: trailingIcon)
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.sc(size: 15, weight: .bold))
                     }
                 }
             }
@@ -77,7 +77,7 @@ struct SCSoftIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.sc(size: 18, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 56, height: 56)
                 // Neutralne szkło — para dla terakotowego szkła obok.

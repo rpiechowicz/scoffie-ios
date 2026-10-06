@@ -83,17 +83,17 @@ struct ThermomixInfoSheet: View {
     private func infoCard(icon: String, tint: Color, title: String, body: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.sc(size: 22, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 32, height: 32)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 14.5, weight: .bold))
+                    .font(.sc(size: 14.5, weight: .bold))
                     .foregroundStyle(Color.scLabel(scheme))
 
                 Text(body)
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.sc(size: 13, weight: .regular))
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }

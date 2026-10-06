@@ -118,13 +118,13 @@ struct RecipeListContextCard: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.sc(size: 14, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
 
                 Text(row.detail)
-                    .font(.system(size: 12.5))
+                    .font(.sc(size: 12.5))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -140,7 +140,7 @@ struct RecipeListContextCard: View {
             if let action = row.action {
                 Button(action: action.run) {
                     Text(action.title)
-                        .font(.system(size: 13.5, weight: .semibold))
+                        .font(.sc(size: 13.5, weight: .semibold))
                         .tracking(-0.2)
                         .foregroundStyle(row.accent)
                         .padding(.horizontal, 14)
@@ -245,20 +245,20 @@ struct RecipeFitOffChip: View {
         Button(action: onEnable) {
             HStack(spacing: 6) {
                 Image(systemName: "wand.and.stars")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.sc(size: 12, weight: .semibold))
                     .foregroundStyle(Color.scMuted(scheme))
 
                 Text("Bez dopasowania")
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.sc(size: 13.5, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(Color.scLabel(scheme))
 
                 Text(verbatim: "·")
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.sc(size: 13.5, weight: .semibold))
                     .foregroundStyle(Color.scFaint(scheme))
 
                 Text("Włącz")
-                    .font(.system(size: 13.5, weight: .bold))
+                    .font(.sc(size: 13.5, weight: .bold))
                     .tracking(-0.2)
                     .foregroundStyle(SCPalette.sage)
             }
@@ -373,7 +373,7 @@ struct RecipeListEmptyState: View {
 
             if let eyebrow {
                 Text(eyebrow)
-                    .font(.system(size: 10.5, weight: .bold))
+                    .font(.sc(size: 10.5, weight: .bold))
                     .tracking(1.4)
                     .foregroundStyle(accent)
                     .lineLimit(1)
@@ -381,7 +381,7 @@ struct RecipeListEmptyState: View {
             }
 
             Text(title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.sc(size: 17, weight: .semibold))
                 .tracking(-0.3)
                 .foregroundStyle(Color.scLabel(scheme))
                 .multilineTextAlignment(.center)
@@ -389,7 +389,7 @@ struct RecipeListEmptyState: View {
                 .padding(.top, eyebrow == nil ? 14 : 4)
 
             Text(message)
-                .font(.system(size: 13.5))
+                .font(.sc(size: 13.5))
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -407,7 +407,7 @@ struct RecipeListEmptyState: View {
             ForEach(actions.dropFirst(), id: \.title) { action in
                 Button(action: action.run) {
                     Text(action.title)
-                        .font(.system(size: 13.5, weight: .semibold))
+                        .font(.sc(size: 13.5, weight: .semibold))
                         .tracking(-0.2)
                         .foregroundStyle(SCPalette.terracotta)
                         .frame(maxWidth: .infinity)

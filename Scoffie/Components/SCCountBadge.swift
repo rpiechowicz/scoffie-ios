@@ -20,7 +20,7 @@ struct SCCountBadge: View {
 
     var body: some View {
         Text(label)
-            .font(.system(size: 10.5, weight: .heavy))
+            .font(.sc(size: 10.5, weight: .heavy))
             .monospacedDigit()
             .foregroundStyle(.white)
             .lineLimit(1)

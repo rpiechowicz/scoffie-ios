@@ -105,17 +105,17 @@ struct AssistantAnswerFooter: View {
         let label = thinking.duration.map { "Myślałem \(AssistantThoughtLine.clock($0))" } ?? "Myślałem chwilę"
         return HStack(spacing: 5) {
             Image(systemName: "sparkles")
-                .font(.system(size: 10.5, weight: .semibold))
+                .font(.sc(size: 10.5, weight: .semibold))
                 .foregroundStyle(AssistantLook.terra(scheme).opacity(0.8))
                 .accessibilityHidden(true)
             Text(label)
-                .font(.system(size: 12.5, weight: .medium))
+                .font(.sc(size: 12.5, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(AssistantLook.faint(scheme))
                 .lineLimit(1)
             if opens {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.sc(size: 9, weight: .bold))
                     .foregroundStyle(AssistantLook.faint(scheme).opacity(0.8))
                     .accessibilityHidden(true)
             }
@@ -218,7 +218,7 @@ struct AssistantAnswerFooter: View {
     /// nasz systemowy”) — w górę szałwia (jak „zapisane”), w dół terakota.
     private func iconLabel(_ symbol: String, active: Bool, tint: Color? = nil) -> some View {
         Image(systemName: symbol)
-            .font(.system(size: 14.5, weight: .medium))
+            .font(.sc(size: 14.5, weight: .medium))
             .foregroundStyle(active ? (tint ?? AssistantLook.ink(scheme)) : AssistantLook.faint(scheme))
             .contentTransition(.symbolEffect(.replace))
             .frame(width: Self.iconFrame, height: 30)

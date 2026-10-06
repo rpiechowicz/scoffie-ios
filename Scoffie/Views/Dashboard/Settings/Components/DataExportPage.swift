@@ -20,7 +20,7 @@ struct DataExportPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Paczka JSON z Twoim profilem, preferencjami, przepisami, posiłkami, krokami, zgodami i rozmowami z asystentem. Bez danych innych domowników.")
-                    .font(.system(size: 13.5))
+                    .font(.sc(size: 13.5))
                     .lineSpacing(2)
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -30,18 +30,18 @@ struct DataExportPage: View {
                         ZStack {
                             Circle().fill(SCPalette.indigo.opacity(0.18))
                             Image(systemName: "doc.zipper")
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.sc(size: 15, weight: .bold))
                                 .foregroundStyle(SCPalette.indigo)
                         }
                         .frame(width: 36, height: 36)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(fileURL?.lastPathComponent ?? "scoffie-dane.json")
-                                .font(.system(size: 14.5, weight: .semibold))
+                                .font(.sc(size: 14.5, weight: .semibold))
                                 .foregroundStyle(Color.scLabel(scheme))
                                 .lineLimit(1)
                             Text(statusLine)
-                                .font(.system(size: 12.5))
+                                .font(.sc(size: 12.5))
                                 .foregroundStyle(Color.scMuted(scheme))
                         }
                         Spacer(minLength: 0)
@@ -54,9 +54,9 @@ struct DataExportPage: View {
                         ShareLink(item: fileURL) {
                             HStack(spacing: 8) {
                                 Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 14, weight: .bold))
+                                    .font(.sc(size: 14, weight: .bold))
                                 Text("Zapisz albo wyślij")
-                                    .font(.system(size: 15, weight: .bold))
+                                    .font(.sc(size: 15, weight: .bold))
                             }
                             .foregroundStyle(SCPalette.terracotta)
                             .frame(maxWidth: .infinity)
@@ -67,7 +67,7 @@ struct DataExportPage: View {
                     } else if !isLoading {
                         Button(action: load) {
                             Text(errorMessage == nil ? "Przygotuj paczkę" : "Spróbuj ponownie")
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.sc(size: 15, weight: .bold))
                                 .foregroundStyle(SCPalette.terracotta)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 48)
@@ -85,7 +85,7 @@ struct DataExportPage: View {
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
 
                 Text("Żądanie e-mailem działa dalej: \(LegalDocMeta.contactEmail), z adresu przypisanego do konta. Odpowiadamy w ciągu 30 dni.")
-                    .font(.system(size: 12))
+                    .font(.sc(size: 12))
                     .foregroundStyle(Color.scFaint(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }

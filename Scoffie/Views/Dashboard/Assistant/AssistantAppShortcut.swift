@@ -86,12 +86,12 @@ struct AssistantAppShortcutCard: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(shortcut.title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .tracking(-0.2)
                         .foregroundStyle(AssistantLook.ink(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                     Text(shortcut.detail)
-                        .font(.system(size: 13))
+                        .font(.sc(size: 13))
                         .foregroundStyle(AssistantLook.muted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -99,7 +99,7 @@ struct AssistantAppShortcutCard: View {
 
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.sc(size: 11, weight: .bold))
                         .foregroundStyle(AssistantLook.faint(scheme))
                         .frame(width: 28, height: 28)
                         .scTapTarget(drawn: 28)

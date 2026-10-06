@@ -15,7 +15,7 @@ struct ShoppingTag: View {
 
     var body: some View {
         Text(text.uppercased())
-            .font(.system(size: 9.5, weight: .bold))
+            .font(.sc(size: 9.5, weight: .bold))
             .tracking(0.6)
             .foregroundStyle(color)
             .lineLimit(1)
@@ -43,7 +43,7 @@ struct ShoppingEyebrowRow: View {
                 // Wersaliki robi komponent, nie wywołujący: eyebrow jest
                 // wersalikami zawsze i cztery ekrany nie mają czego pilnować.
                 .textCase(.uppercase)
-                .font(.system(size: 11, weight: .bold))
+                .font(.sc(size: 11, weight: .bold))
                 .tracking(1.4)
                 .foregroundStyle(Color.scMuted(scheme))
                 .lineLimit(1)
@@ -53,7 +53,7 @@ struct ShoppingEyebrowRow: View {
 
             if let meta, !meta.isEmpty {
                 SCCountingText(meta)
-                    .font(.system(size: 12.5, weight: .regular))
+                    .font(.sc(size: 12.5, weight: .regular))
                     .monospacedDigit()
                     .foregroundStyle(Color.scFaint(scheme))
                     .lineLimit(1)
@@ -136,7 +136,7 @@ struct ShoppingHistoryRing: View {
 
             if isComplete {
                 Image(systemName: "checkmark")
-                    .font(.system(size: size * 0.42, weight: .heavy))
+                    .font(.sc(size: size * 0.42, weight: .heavy))
                     .foregroundStyle(color)
                     .opacity(drawn >= 0.999 ? 1 : 0)
             }
@@ -173,13 +173,13 @@ struct ShoppingHistoryListRow: View {
                 HStack(alignment: .center, spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.name)
-                            .font(.system(size: 15.5, weight: .semibold))
+                            .font(.sc(size: 15.5, weight: .semibold))
                             .tracking(-0.3)
                             .foregroundStyle(Color.scLabel(scheme))
                             .lineLimit(1)
 
                         Text("Zamknięta \(ShoppingHistoryFormat.closedAt(entry.closedAt)) · \(PolishPlural.products(entry.total))")
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.sc(size: 12, weight: .regular))
                             .foregroundStyle(Color.scFaint(scheme))
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -187,7 +187,7 @@ struct ShoppingHistoryListRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     SCCountingText("\(entry.bought) z \(entry.total)")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.sc(size: 13, weight: .medium))
                         .monospacedDigit()
                         .tracking(-0.1)
                         // Niepełna lista mówi to maślanym kolorem — tym samym,
@@ -197,7 +197,7 @@ struct ShoppingHistoryListRow: View {
                         .fixedSize()
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.sc(size: 12, weight: .bold))
                         .foregroundStyle(Color.scFaint(scheme))
                 }
                 .frame(minHeight: 56)
@@ -245,7 +245,7 @@ struct ShoppingHistoryMonthRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
                         Text(month.name)
-                            .font(.system(size: 15.5, weight: .semibold))
+                            .font(.sc(size: 15.5, weight: .semibold))
                             .tracking(-0.3)
                             .foregroundStyle(Color.scLabel(scheme))
                             .lineLimit(1)
@@ -256,7 +256,7 @@ struct ShoppingHistoryMonthRow: View {
                     }
 
                     Text(meta)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.sc(size: 12, weight: .regular))
                         .foregroundStyle(Color.scFaint(scheme))
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -264,7 +264,7 @@ struct ShoppingHistoryMonthRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.sc(size: 12, weight: .bold))
                     .foregroundStyle(Color.scFaint(scheme))
             }
             .frame(minHeight: 56)
@@ -292,14 +292,14 @@ struct ShoppingSectionTitle: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title)
-                .font(.system(size: 15, weight: .bold))
+                .font(.sc(size: 15, weight: .bold))
                 .tracking(-0.3)
                 .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
 
             if let count {
                 Text(count)
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.sc(size: 13, weight: .regular))
                     .monospacedDigit()
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)

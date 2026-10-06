@@ -74,17 +74,17 @@ struct ShoppingHistoryPage: View {
     private var emptyNote: some View {
         VStack(spacing: 8) {
             Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 20, weight: .semibold))
+                .font(.sc(size: 20, weight: .semibold))
                 .foregroundStyle(Color.scMuted(scheme))
 
             // Krój pustych stanów list (16 heavy / 13), jak `noteCard` Zakupów.
             Text("Historia jest pusta")
-                .font(.system(size: 16, weight: .heavy))
+                .font(.sc(size: 16, weight: .heavy))
                 .tracking(-0.3)
                 .foregroundStyle(Color.scLabel(scheme))
 
             Text("Zamknięte listy zakupów trafią tutaj same.")
-                .font(.system(size: 13, weight: .regular))
+                .font(.sc(size: 13, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)

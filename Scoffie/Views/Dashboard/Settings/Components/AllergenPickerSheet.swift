@@ -102,19 +102,19 @@ struct AllergenSummaryCard: View {
                         .frame(width: 34, height: 34)
                         .overlay(
                             Image(systemName: selected.isEmpty ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(.sc(size: 15, weight: .semibold))
                                 .foregroundStyle(accent)
                                 .contentTransition(.symbolEffect(.replace))
                         )
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title)
-                            .font(.system(size: 15.5, weight: .semibold))
+                            .font(.sc(size: 15.5, weight: .semibold))
                             .tracking(-0.25)
                             .foregroundStyle(Color.scLabel(scheme))
                             .contentTransition(.numericText())
                         Text(subtitle)
-                            .font(.system(size: 12.5))
+                            .font(.sc(size: 12.5))
                             .monospacedDigit()
                             .foregroundStyle(Color.scMuted(scheme))
                             .contentTransition(.numericText())
@@ -124,9 +124,9 @@ struct AllergenSummaryCard: View {
 
                     HStack(spacing: 3) {
                         Text(selected.isEmpty ? "Dodaj" : "Zmień")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.sc(size: 13, weight: .semibold))
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.sc(size: 11, weight: .bold))
                     }
                     .foregroundStyle(SCPalette.terracotta)
                 }
@@ -270,7 +270,7 @@ struct AllergenPickerSheet: View {
                 }
 
                 Text("Laktoza to nietolerancja cukru mlecznego, mleko — alergia na jego białko.")
-                    .font(.system(size: 12))
+                    .font(.sc(size: 12))
                     .foregroundStyle(Color.scFaint(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 6)
@@ -313,17 +313,17 @@ struct AllergenPickerSheet: View {
                     .frame(width: 34, height: 34)
                     .overlay(
                         Image(systemName: allergen.pickerIcon)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.sc(size: 15, weight: .semibold))
                             .foregroundStyle(accent)
                     )
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(allergen.pickerTitle)
-                        .font(.system(size: 15, weight: isOn ? .semibold : .medium))
+                        .font(.sc(size: 15, weight: isOn ? .semibold : .medium))
                         .tracking(-0.25)
                         .foregroundStyle(Color.scLabel(scheme))
                     Text(allergen.pickerDetail)
-                        .font(.system(size: 12))
+                        .font(.sc(size: 12))
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -358,7 +358,7 @@ struct AllergenPickerSheet: View {
                 Text(verbatim: selected.isEmpty
                      ? "Bez alergenów"
                      : "\(selected.count) \(PolishPlural.form(selected.count, one: "alergen", few: "alergeny", many: "alergenów"))")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.sc(size: 15, weight: .bold))
                     .tracking(-0.3)
                     .monospacedDigit()
                     .foregroundStyle(Color.scLabel(scheme))
@@ -368,7 +368,7 @@ struct AllergenPickerSheet: View {
                     Text(verbatim: hiddenRecipes == 0
                          ? "Żaden przepis ich nie zawiera"
                          : "ukrywa \(PolishPlural.recipes(hiddenRecipes))")
-                        .font(.system(size: 12.5))
+                        .font(.sc(size: 12.5))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .contentTransition(.numericText(value: Double(hiddenRecipes)))

@@ -532,7 +532,7 @@ struct SCToastHost: View {
             // zmienia się na oczach.
             ZStack {
                 Image(systemName: toast.style.icon)
-                    .font(.system(size: 12, weight: .heavy))
+                    .font(.sc(size: 12, weight: .heavy))
                     .foregroundStyle(surface)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(toast.style.accent))

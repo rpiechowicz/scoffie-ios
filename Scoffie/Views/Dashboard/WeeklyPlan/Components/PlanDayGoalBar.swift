@@ -230,13 +230,13 @@ struct PlanDayGoalBar: View {
     /// razem i nigdy nie ucinała liczby (ta sama zasada co `MacroMeter.label`).
     private var eatenText: Text {
         let lead = Text("Zjedzone")
-            .font(.system(size: summaryTextSize, weight: .bold))
+            .font(.sc(size: summaryTextSize, weight: .bold))
             .foregroundStyle(SCMacroPalette.calories)
         let value = Text(verbatim: String(nutrition.kcal))
-            .font(.system(size: summaryValueSize, weight: .bold).monospacedDigit())
+            .font(.sc(size: summaryValueSize, weight: .bold).monospacedDigit())
             .foregroundStyle(nutrition.kcal > targets.kcal ? SCMacroPalette.calories : Color.scLabel(scheme))
         let goal = Text(verbatim: "z \(targets.kcal) kcal")
-            .font(.system(size: summaryTextSize, weight: .semibold).monospacedDigit())
+            .font(.sc(size: summaryTextSize, weight: .semibold).monospacedDigit())
             .foregroundStyle(Color.scMuted(scheme))
         return Text("\(lead) \(value) \(goal)")
     }
@@ -246,14 +246,14 @@ struct PlanDayGoalBar: View {
     private func plannedText(_ kcal: Int) -> Text {
         guard kcal > 0 else {
             return Text("nic w planie")
-                .font(.system(size: summaryTextSize, weight: .semibold))
+                .font(.sc(size: summaryTextSize, weight: .semibold))
                 .foregroundStyle(Color.scMuted(scheme))
         }
         let lead = Text("w planie")
-            .font(.system(size: summaryTextSize, weight: .semibold))
+            .font(.sc(size: summaryTextSize, weight: .semibold))
             .foregroundStyle(Color.scMuted(scheme))
         let value = Text(verbatim: String(kcal))
-            .font(.system(size: summaryTextSize, weight: .bold).monospacedDigit())
+            .font(.sc(size: summaryTextSize, weight: .bold).monospacedDigit())
             .foregroundStyle(Color.scLabel(scheme))
         return Text("\(lead) \(value)")
     }

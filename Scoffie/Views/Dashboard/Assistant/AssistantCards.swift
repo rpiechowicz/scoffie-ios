@@ -37,7 +37,7 @@ private struct WeekRail: View {
                 } label: {
                     VStack(spacing: 5) {
                         Text(day.shortName)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.sc(size: 11, weight: .semibold))
                             .tracking(0.2)
                             .foregroundStyle(selected ? AssistantLook.terra(scheme) : AssistantLook.faint(scheme))
                             .lineLimit(1)
@@ -55,7 +55,7 @@ private struct WeekRail: View {
                                     Circle().fill(AssistantLook.sage(scheme))
                                     Circle().stroke(Color.white.opacity(0.9), lineWidth: 1.5)
                                     Image(systemName: "checkmark")
-                                        .font(.system(size: 7, weight: .black))
+                                        .font(.sc(size: 7, weight: .black))
                                         .foregroundStyle(Color.white)
                                 }
                                 .frame(width: 12, height: 12)
@@ -66,7 +66,7 @@ private struct WeekRail: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                                     .overlay(alignment: .bottomTrailing) {
                                         Text("\(day.slots.count)")
-                                            .font(.system(size: 10, weight: .bold))
+                                            .font(.sc(size: 10, weight: .bold))
                                             .monospacedDigit()
                                             .foregroundStyle(Color.white)
                                             .shadow(color: Color.black.opacity(0.35), radius: 1, y: 1)
@@ -109,11 +109,11 @@ private struct DayBlock: View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(day.shortName)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.sc(size: 13, weight: .bold))
                     .foregroundStyle(AssistantLook.ink(scheme))
                     .lineLimit(1)
                 Text(Self.dayNumber(day))
-                    .font(.system(size: 12))
+                    .font(.sc(size: 12))
                     .monospacedDigit()
                     .foregroundStyle(AssistantLook.faint(scheme))
             }
@@ -155,11 +155,11 @@ private struct ExpandRow: View {
         Button(action: action) {
             HStack {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.sc(size: 14, weight: .semibold))
                     .tracking(-0.2)
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.sc(size: 13, weight: .bold))
                     .rotationEffect(.degrees(expanded ? 180 : 0))
             }
             .foregroundStyle(AssistantLook.terra(scheme))
@@ -565,7 +565,7 @@ struct AssistantClarifyCard: View {
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(card.question)
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.sc(size: 17, weight: .semibold))
                             .tracking(-0.4)
                             .lineSpacing(2)
                             .foregroundStyle(AssistantLook.ink(scheme))
@@ -573,7 +573,7 @@ struct AssistantClarifyCard: View {
 
                         if let hint = card.hint, !hint.isEmpty {
                             Text(hint)
-                                .font(.system(size: 13.5))
+                                .font(.sc(size: 13.5))
                                 .lineSpacing(2)
                                 .foregroundStyle(AssistantLook.muted(scheme))
                                 .fixedSize(horizontal: false, vertical: true)
@@ -673,7 +673,7 @@ struct AssistantOptionsCard: View {
 
             if card.options.isEmpty {
                 Text("Nie mam teraz dań do pokazania.")
-                    .font(.system(size: 14))
+                    .font(.sc(size: 14))
                     .foregroundStyle(AssistantLook.muted(scheme))
                     .padding(.horizontal, AssistantCardMetrics.inset)
                     .padding(.vertical, 18)
@@ -742,7 +742,7 @@ struct AssistantOptionsCard: View {
                 )
                 if chosen {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.sc(size: 17, weight: .semibold))
                         .foregroundStyle(AssistantLook.sage(scheme))
                         .accessibilityHidden(true)
                 }
@@ -793,12 +793,12 @@ private struct OptionsBrowseRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .tracking(-0.3)
                         .foregroundStyle(AssistantLook.terra(scheme))
                         .lineHeight(.exact(points: 20))
                     Text(subtitle)
-                        .font(.system(size: 13))
+                        .font(.sc(size: 13))
                         .foregroundStyle(AssistantLook.muted(scheme))
                         .lineHeight(.exact(points: 17))
                         .lineLimit(1)
@@ -806,7 +806,7 @@ private struct OptionsBrowseRow: View {
 
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.sc(size: 13, weight: .bold))
                     .foregroundStyle(AssistantLook.ink(scheme).opacity(0.35))
             }
             .padding(.leading, 16)
@@ -1169,7 +1169,7 @@ private struct AssistantOptionsStorySheet: View {
                     OptionsKesMark(size: 15, color: light ? Color.white : AssistantLook.terraFill(scheme))
                         .accessibilityHidden(true)
                     Text("Asystent")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.sc(size: 17, weight: .semibold))
                         .tracking(-0.4)
                         .foregroundStyle(light ? Color.white : AssistantLook.ink(scheme))
                 }
@@ -1197,7 +1197,7 @@ private struct AssistantOptionsStorySheet: View {
     private func closeButton(light: Bool) -> some View {
         Button { dismiss() } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.sc(size: 12, weight: .semibold))
                 .foregroundStyle(light ? AssistantLook.ink(.light) : AssistantLook.ink(scheme))
                 .frame(width: 34, height: 34)
                 // Szklany krzyżyk jak `SCSheetCloseButton` (Liquid Glass) —
@@ -1346,7 +1346,7 @@ private struct AssistantOptionsStorySheet: View {
                         ZStack {
                             AssistantLook.terraTint(scheme)
                             Image(systemName: "fork.knife")
-                                .font(.system(size: 38, weight: .medium))
+                                .font(.sc(size: 38, weight: .medium))
                                 .foregroundStyle(AssistantLook.terra(scheme).opacity(0.5))
                         }
                     }
@@ -1419,7 +1419,7 @@ private struct AssistantOptionsStorySheet: View {
     private var eyebrowRow: some View {
         HStack(spacing: 8) {
             Text(eyebrowText)
-                .font(.system(size: 11, weight: .bold))
+                .font(.sc(size: 11, weight: .bold))
                 .tracking(0.9)
                 .textCase(.uppercase)
                 .foregroundStyle(AssistantLook.terra(scheme))
@@ -1434,7 +1434,7 @@ private struct AssistantOptionsStorySheet: View {
                             index,
                             shift: 10,
                             Text(tag)
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.sc(size: 11, weight: .bold))
                                 .tracking(0.3)
                                 .foregroundStyle(AssistantLook.terra(scheme))
                                 .lineHeight(.exact(points: 13))
@@ -1453,7 +1453,7 @@ private struct AssistantOptionsStorySheet: View {
 
     private func titleText(_ option: OptionsCardItemDTO) -> some View {
         Text(option.title)
-            .font(.system(size: 30, weight: .bold))
+            .font(.sc(size: 30, weight: .bold))
             .tracking(-0.8)
             .foregroundStyle(AssistantLook.ink(scheme))
             .lineHeight(.exact(points: 34))
@@ -1464,7 +1464,7 @@ private struct AssistantOptionsStorySheet: View {
 
     private func descriptionText(_ description: String) -> some View {
         Text(description)
-            .font(.system(size: 15))
+            .font(.sc(size: 15))
             .tracking(-0.2)
             .foregroundStyle(AssistantLook.muted(scheme))
             .lineHeight(.exact(points: 21))
@@ -1497,19 +1497,19 @@ private struct AssistantOptionsStorySheet: View {
                 endStep(1, rise: 14) {
                     VStack(spacing: 0) {
                         Text("Coś innego")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.sc(size: 11, weight: .bold))
                             .tracking(0.9)
                             .textCase(.uppercase)
                             .foregroundStyle(AssistantLook.terra(scheme))
                             .lineHeight(.exact(points: 14))
                         Text("Żadne nie pasuje?")
-                            .font(.system(size: 32, weight: .bold))
+                            .font(.sc(size: 32, weight: .bold))
                             .tracking(-0.9)
                             .foregroundStyle(AssistantLook.ink(scheme))
                             .lineHeight(.exact(points: 36))
                             .padding(.top, 10)
                         Text(endBody)
-                            .font(.system(size: 15))
+                            .font(.sc(size: 15))
                             .foregroundStyle(AssistantLook.muted(scheme))
                             .lineHeight(.exact(points: 21))
                             .fixedSize(horizontal: false, vertical: true)
@@ -1689,7 +1689,7 @@ private struct OptionsMacroStats: View {
 
                 ViewThatFits(in: .horizontal) {
                     Text("na porcję")
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(.sc(size: 12.5, weight: .medium))
                         .foregroundStyle(AssistantLook.faint(scheme))
                         .lineLimit(1)
                         .fixedSize()
@@ -1715,11 +1715,11 @@ private struct OptionsMacroStats: View {
     private func metric(_ value: Int, unit: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             OptionsStatNumber(value: value, armed: armed)
-                .font(.system(size: 22, weight: .bold))
+                .font(.sc(size: 22, weight: .bold))
                 .tracking(-0.6)
                 .foregroundStyle(AssistantLook.ink(scheme))
             Text(unit)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(AssistantLook.faint(scheme))
                 .contentTransition(.opacity)
                 .animation(.easeOut(duration: 0.2), value: unit)
@@ -1786,7 +1786,7 @@ private struct OptionsMacroStats: View {
                 }
             }
         }
-        .font(.system(size: 12.5))
+        .font(.sc(size: 12.5))
         .monospacedDigit()
         .lineLimit(1)
         .minimumScaleFactor(0.85)
@@ -2006,7 +2006,7 @@ struct AssistantSwapCard: View {
                     dish(from, label: "Teraz", now: true)
                     HStack(spacing: 12) {
                         Image(systemName: "arrow.down")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.sc(size: 15, weight: .bold))
                             .foregroundStyle(AssistantLook.terra(scheme))
                             .frame(width: 46)
                         AssistantCardRule()
@@ -2023,7 +2023,7 @@ struct AssistantSwapCard: View {
                     AllergenChipFlow(spacing: 6) {
                         ForEach(card.deltas) { delta in
                             Text(delta.label.isEmpty ? delta.value : "\(delta.value) \(delta.label)")
-                                .font(.system(size: 12.5, weight: .bold))
+                                .font(.sc(size: 12.5, weight: .bold))
                                 .monospacedDigit()
                                 .foregroundStyle(delta.good ? AssistantLook.sage(scheme) : AssistantLook.muted(scheme))
                                 .padding(.horizontal, 10)
@@ -2059,12 +2059,12 @@ struct AssistantSwapCard: View {
             AssistantThumbnail(url: nil, size: 46, dimmed: now)
             VStack(alignment: .leading, spacing: 1) {
                 Text(label)
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.sc(size: 11.5, weight: .semibold))
                     .tracking(0.5)
                     .textCase(.uppercase)
                     .foregroundStyle(now ? AssistantLook.faint(scheme) : AssistantLook.terra(scheme))
                 Text(side.title)
-                    .font(.system(size: 15.5, weight: now ? .medium : .semibold))
+                    .font(.sc(size: 15.5, weight: now ? .medium : .semibold))
                     .tracking(-0.3)
                     .foregroundStyle(AssistantLook.ink(scheme))
                     .lineLimit(2)
@@ -2075,7 +2075,7 @@ struct AssistantSwapCard: View {
                 CountingNumber(target: side.kcalPerServing)
                 Text("kcal")
             }
-            .font(.system(size: 13, weight: .semibold))
+            .font(.sc(size: 13, weight: .semibold))
             .foregroundStyle(now ? AssistantLook.muted(scheme) : AssistantLook.ink(scheme))
             .fixedSize()
         }
@@ -2112,7 +2112,7 @@ struct AssistantRemoveMealCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     AssistantCardLabel(text: "Powód propozycji")
                     Text(reason)
-                        .font(.system(size: 14))
+                        .font(.sc(size: 14))
                         .lineSpacing(2)
                         .foregroundStyle(AssistantLook.muted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
@@ -2211,7 +2211,7 @@ struct AssistantHouseholdSplitCard: View {
                 ZStack {
                     Circle().fill(AssistantLook.ink(scheme).opacity(0.06))
                     Text(portion.initial)
-                        .font(.system(size: 13.5, weight: .bold))
+                        .font(.sc(size: 13.5, weight: .bold))
                         .foregroundStyle(AssistantLook.muted(scheme))
                 }
                 .frame(width: 32, height: 32)
@@ -2219,12 +2219,12 @@ struct AssistantHouseholdSplitCard: View {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 7) {
                         Text(portion.displayName)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.sc(size: 15, weight: .semibold))
                             .tracking(-0.3)
                             .foregroundStyle(AssistantLook.ink(scheme))
                         if !portion.goalLabel.isEmpty {
                             Text(portion.goalLabel)
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.sc(size: 11, weight: .bold))
                                 .tracking(0.2)
                                 .foregroundStyle(AssistantLook.terra(scheme))
                                 .padding(.horizontal, 8)
@@ -2235,7 +2235,7 @@ struct AssistantHouseholdSplitCard: View {
                     }
                     if let note = portion.note, !note.isEmpty {
                         Text(note)
-                            .font(.system(size: 13))
+                            .font(.sc(size: 13))
                             .foregroundStyle(AssistantLook.muted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -2248,7 +2248,7 @@ struct AssistantHouseholdSplitCard: View {
                         CountingNumber(target: portion.kcal)
                         Text("kcal")
                     }
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.sc(size: 13.5, weight: .semibold))
                     .foregroundStyle(AssistantLook.muted(scheme))
                     .fixedSize()
                 }
@@ -2282,19 +2282,19 @@ struct AssistantMacroGapCard: View {
                             CountingNumber(target: card.current)
                             Text(card.unit)
                         }
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.sc(size: 13, weight: .bold))
                         .foregroundStyle(AssistantLook.ink(scheme))
                     }
                     Spacer(minLength: 8)
                     HStack(spacing: 4) {
                         Text("Cel")
                         Text("\(card.target) \(card.unit)")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.sc(size: 13, weight: .bold))
                             .monospacedDigit()
                             .foregroundStyle(AssistantLook.ink(scheme))
                     }
                 }
-                .font(.system(size: 13))
+                .font(.sc(size: 13))
                 .foregroundStyle(AssistantLook.muted(scheme))
 
                 AssistantTargetBar(value: card.current, target: card.target, color: AssistantLook.indigo(scheme))
@@ -2323,7 +2323,7 @@ struct AssistantMacroGapCard: View {
                 Button { onAsk(booster.askPrompt) } label: {
                     HStack(alignment: .center, spacing: 12) {
                         Text(booster.text)
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.sc(size: 15, weight: .medium))
                             .tracking(-0.3)
                             .foregroundStyle(AssistantLook.ink(scheme))
                             .multilineTextAlignment(.leading)
@@ -2332,12 +2332,12 @@ struct AssistantMacroGapCard: View {
                         Spacer(minLength: 8)
 
                         Text(booster.amountLabel(unit: card.unit))
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.sc(size: 14, weight: .bold))
                             .monospacedDigit()
                             .foregroundStyle(AssistantLook.sage(scheme))
 
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.sc(size: 13, weight: .bold))
                             .foregroundStyle(AssistantLook.ink(scheme).opacity(0.35))
                     }
                     .padding(.horizontal, AssistantCardMetrics.inset)
@@ -2420,7 +2420,7 @@ struct AssistantShoppingListCard: View {
 
             if let restLine {
                 Text(restLine)
-                    .font(.system(size: 13))
+                    .font(.sc(size: 13))
                     .foregroundStyle(AssistantLook.faint(scheme))
                     .padding(.horizontal, AssistantCardMetrics.inset)
                     .padding(.top, 8)
@@ -2448,13 +2448,13 @@ struct AssistantShoppingListCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(group.department)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.sc(size: 12, weight: .bold))
                         .tracking(0.6)
                         .textCase(.uppercase)
                         .foregroundStyle(AssistantLook.faint(scheme))
                     Spacer(minLength: 8)
                     Text("\(done) z \(group.rows.count)")
-                        .font(.system(size: 12))
+                        .font(.sc(size: 12))
                         .monospacedDigit()
                         .foregroundStyle(AssistantLook.faint(scheme))
                 }
@@ -2465,7 +2465,7 @@ struct AssistantShoppingListCard: View {
                             if entry.isChecked {
                                 Circle().fill(AssistantLook.sage(scheme))
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 11, weight: .black))
+                                    .font(.sc(size: 11, weight: .black))
                                     .foregroundStyle(Color.white)
                             } else {
                                 Circle().stroke(AssistantLook.ink(scheme).opacity(0.28), lineWidth: 1.5)
@@ -2473,7 +2473,7 @@ struct AssistantShoppingListCard: View {
                         }
                         .frame(width: 20, height: 20)
                         Text(entry.label)
-                            .font(.system(size: 15))
+                            .font(.sc(size: 15))
                             .tracking(-0.2)
                             .foregroundStyle(entry.isChecked ? AssistantLook.faint(scheme) : AssistantLook.ink(scheme))
                             .lineLimit(1)
@@ -2541,7 +2541,7 @@ struct AssistantAppliedCard: View {
                     }
                     Spacer(minLength: 0)
                 }
-                .font(.system(size: 13))
+                .font(.sc(size: 13))
                 .foregroundStyle(AssistantLook.muted(scheme))
                 .padding(.horizontal, AssistantCardMetrics.inset)
                 .padding(.top, 14)
@@ -2550,7 +2550,7 @@ struct AssistantAppliedCard: View {
 
             ForEach(card.notes, id: \.self) { note in
                 Text(note)
-                    .font(.system(size: 12.5))
+                    .font(.sc(size: 12.5))
                     .foregroundStyle(AssistantLook.faint(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, AssistantCardMetrics.inset)

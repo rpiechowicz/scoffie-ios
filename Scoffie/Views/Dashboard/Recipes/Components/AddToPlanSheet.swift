@@ -407,7 +407,7 @@ struct AddToPlanSheet: View {
             shiftWeek(by: delta)
         } label: {
             Image(systemName: systemName)
-                .font(.system(size: 10, weight: .bold))
+                .font(.sc(size: 10, weight: .bold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 26, height: 26)
                 // Szklany krążek jak strzałki paska tygodnia (`EditorialWeekBar`).
@@ -732,7 +732,7 @@ struct AddToPlanSheet: View {
 
     private func slotTitle(_ slot: MealSlot, size: CGFloat, isSelected: Bool) -> some View {
         Text(slot.title)
-            .font(.system(size: size, weight: isSelected ? .bold : .semibold))
+            .font(.sc(size: size, weight: isSelected ? .bold : .semibold))
             .tracking(-0.2)
             .foregroundStyle(isSelected ? slot.cozyAccent : Color.scLabel(scheme))
             .lineLimit(1)
@@ -741,7 +741,7 @@ struct AddToPlanSheet: View {
 
     private func slotTime(_ time: String) -> some View {
         Text(time)
-            .font(.system(size: 11.5, weight: .medium))
+            .font(.sc(size: 11.5, weight: .medium))
             .monospacedDigit()
             .foregroundStyle(Color.scMuted(scheme))
             .lineLimit(1)
@@ -861,7 +861,7 @@ struct AddToPlanSheet: View {
     private var totalServingsSection: some View {
         HStack(spacing: 12) {
             Text("Razem")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.sc(size: 15, weight: .semibold))
                 .tracking(-0.2)
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -869,7 +869,7 @@ struct AddToPlanSheet: View {
             // Liczba roluje — przy stepperze i przy regule auto, gdy chipy
             // „Dla kogo” przestawiają porcje.
             Text("\(portions.servings)")
-                .font(.system(size: 20, weight: .heavy))
+                .font(.sc(size: 20, weight: .heavy))
                 .tracking(-0.3)
                 .monospacedDigit()
                 .foregroundStyle(Color.scLabel(scheme))
@@ -917,7 +917,7 @@ struct AddToPlanSheet: View {
             // Jedno zdanie o tym, co się stanie. Słowa i cyfry rolują przy
             // każdej zmianie wyboru nad nim.
             Text(summaryText)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .tracking(-0.2)
                 .monospacedDigit()
                 .foregroundStyle(Color.scMuted(scheme))
@@ -984,13 +984,13 @@ struct AddToPlanSheet: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("ZAMIENISZ")
-                    .font(.system(size: 10.5, weight: .bold))
+                    .font(.sc(size: 10.5, weight: .bold))
                     .tracking(1.4)
                     .foregroundStyle(accent)
                     .lineLimit(1)
 
                 Text(meal.recipe.name)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.sc(size: 14, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
@@ -1002,7 +1002,7 @@ struct AddToPlanSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(accent)
                 // Strzałki obracają się raz przy każdej zmianie dania.
                 .symbolEffect(.rotate, value: meal.recipe.id)

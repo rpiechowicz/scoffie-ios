@@ -74,16 +74,16 @@ struct AuthFeaturesView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text("Asystent Scoffie")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .tracking(-0.2)
                         .foregroundStyle(Color.scLabel(colorScheme))
                     Image(systemName: "sparkles")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.sc(size: 11, weight: .bold))
                         .foregroundStyle(SCPalette.terracotta)
                 }
                 if !compact {
                     Text("Ułoży tydzień, podmieni danie, policzy makro.")
-                        .font(.system(size: 12.5))
+                        .font(.sc(size: 12.5))
                         .foregroundStyle(Color.scMuted(colorScheme))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -109,14 +109,14 @@ struct AuthFeaturesView: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(feature.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.sc(size: 14, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(Color.scLabel(colorScheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                 if !compact {
                     Text(feature.caption)
-                        .font(.system(size: 12))
+                        .font(.sc(size: 12))
                         .foregroundStyle(Color.scMuted(colorScheme))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)

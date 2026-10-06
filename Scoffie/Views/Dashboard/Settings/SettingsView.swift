@@ -729,12 +729,12 @@ struct SettingsView: View {
             EditorialSettingsInfoTile()
 
             Text("Wersja")
-                .font(.system(size: 15.5, weight: .semibold))
+                .font(.sc(size: 15.5, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(appVersionLabel)
-                .font(.system(size: 14, weight: .regular))
+                .font(.sc(size: 14, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
         }
         .padding(.horizontal, 16)
@@ -766,7 +766,7 @@ struct SettingsView: View {
                     }
 
                     Text("Nadaj nazwę miejscu, w którym domownicy planują posiłki i robią zakupy razem.")
-                        .font(.system(size: 13.5, weight: .regular))
+                        .font(.sc(size: 13.5, weight: .regular))
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -888,7 +888,7 @@ struct SettingsView: View {
                     // Bez zgody systemu przygaszenie tłumaczy karta wyżej.
                     if systemAllowsNotifications && !notificationsEnabled {
                         Text("Wszystkie powiadomienia są wyciszone. Włącz główny przełącznik, aby zarządzać typami przypomnień.")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.sc(size: 12, weight: .medium))
                             .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 6)
@@ -955,7 +955,7 @@ struct SettingsView: View {
                             )
                         )
                     Image(systemName: bellIsOn ? "bell.fill" : "bell.slash.fill")
-                        .font(.system(size: 28, weight: .heavy))
+                        .font(.sc(size: 28, weight: .heavy))
                         .foregroundStyle(SettingsAccent.coral)
                         .contentTransition(.symbolEffect(.replace))
                 }
@@ -963,7 +963,7 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(notificationsHeroTitle)
-                        .font(.system(size: 17, weight: .heavy))
+                        .font(.sc(size: 17, weight: .heavy))
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(scheme))
                         .fixedSize(horizontal: false, vertical: true)
@@ -971,7 +971,7 @@ struct SettingsView: View {
                         .id(notificationsHeroTitle)
 
                     Text(notificationsHeroSubtitle)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.sc(size: 12, weight: .medium))
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1123,11 +1123,11 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.sc(size: 15, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
 
                 Text(subtitle)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.sc(size: 12, weight: .regular))
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1170,7 +1170,7 @@ struct SettingsView: View {
                     }
 
                     Text("Wybierz motyw, którego aplikacja będzie używać domyślnie. Auto przełącza się razem z systemem.")
-                        .font(.system(size: 13.5, weight: .regular))
+                        .font(.sc(size: 13.5, weight: .regular))
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -1207,17 +1207,17 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(themeEyebrow(for: theme).uppercased())
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.sc(size: 10, weight: .bold))
                         .tracking(1.6)
                         .foregroundStyle(SCPalette.terracotta)
 
                     Text(theme.title)
-                        .font(.system(size: 20, weight: .heavy))
+                        .font(.sc(size: 20, weight: .heavy))
                         .tracking(-0.4)
                         .foregroundStyle(Color.scLabel(scheme))
 
                     Text(themeDescription(for: theme))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.sc(size: 12, weight: .medium))
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1343,7 +1343,7 @@ struct SettingsView: View {
             } content: {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Aplikacja użyje tych ustawień na liście przepisów: dieta i alergeny odsiewają dania, a cel decyduje, które trafią na górę.")
-                        .font(.system(size: 13.5, weight: .regular))
+                        .font(.sc(size: 13.5, weight: .regular))
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -1488,11 +1488,11 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(goal.title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .foregroundStyle(Color.scLabel(scheme))
 
                     Text(goal.subtitle)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.sc(size: 12, weight: .regular))
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1538,13 +1538,13 @@ struct SettingsView: View {
     private var calorieSuggestionRow: some View {
         HStack(spacing: 12) {
             Image(systemName: "lightbulb.fill")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.sc(size: 12, weight: .semibold))
                 .foregroundStyle(SCPalette.butter)
                 .frame(width: 22)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(calorieSuggestionText)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.sc(size: 12, weight: .medium))
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -1562,7 +1562,7 @@ struct SettingsView: View {
                 }
             } label: {
                 Text("Ustaw")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.sc(size: 12, weight: .bold))
                     .foregroundStyle(SCPalette.terracotta)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -1616,11 +1616,11 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(diet.title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .foregroundStyle(Color.scLabel(scheme))
 
                     Text(diet.subtitle)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.sc(size: 12, weight: .regular))
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1679,7 +1679,7 @@ struct SettingsView: View {
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Uzupełnij sylwetkę w „Twoje dane”, a rozbijemy dzienny cel na białko, węglowodany i tłuszcze.")
-                            .font(.system(size: 12.5, weight: .medium))
+                            .font(.sc(size: 12.5, weight: .medium))
                             .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
 
@@ -1710,9 +1710,9 @@ struct SettingsView: View {
         } label: {
             HStack(spacing: 3) {
                 Text("Twoje dane")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
             }
             .foregroundStyle(SCPalette.terracotta)
             .contentShape(Rectangle())
@@ -1771,11 +1771,11 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(macro.title)
-                    .font(.system(size: 14.5, weight: .semibold))
+                    .font(.sc(size: 14.5, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
 
                 Text(isOverridden ? "Twoja wartość" : "Wyliczone")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.sc(size: 11, weight: .medium))
                     .foregroundStyle(isOverridden ? macro.accent : Color.scFaint(scheme))
             }
 
@@ -1783,13 +1783,13 @@ struct SettingsView: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text("\(value)")
-                    .font(.system(size: 17, weight: .heavy))
+                    .font(.sc(size: 17, weight: .heavy))
                     .monospacedDigit()
                     .foregroundStyle(Color.scLabel(scheme))
                     .contentTransition(.numericText(value: Double(value)))
 
                 Text("g")
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.sc(size: 11.5, weight: .semibold))
                     .foregroundStyle(Color.scMuted(scheme))
             }
             .frame(minWidth: 58, alignment: .trailing)
@@ -1834,7 +1834,7 @@ struct SettingsView: View {
             withAnimation(.smooth(duration: 0.18)) { action() }
         } label: {
             Image(systemName: systemName)
-                .font(.system(size: 12, weight: .bold))
+                .font(.sc(size: 12, weight: .bold))
                 .foregroundStyle(accent)
                 .frame(width: 34, height: 30)
                 .contentShape(Rectangle())
@@ -1852,11 +1852,11 @@ struct SettingsView: View {
         return HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Z makr wychodzi \(macros.totalKcal) kcal")
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(.sc(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
 
                 Text(macroFooterNote(diff: diff))
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.sc(size: 11.5, weight: .medium))
                     .foregroundStyle(abs(diff) > 60 ? SCPalette.terracotta : Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1867,7 +1867,7 @@ struct SettingsView: View {
                     withAnimation(.smooth(duration: 0.22)) { resetMacroOverrides() }
                 } label: {
                     Text("Policz")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.sc(size: 12, weight: .bold))
                         .foregroundStyle(SCPalette.terracotta)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -1904,10 +1904,10 @@ struct SettingsView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Dzienny cel")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.sc(size: 15, weight: .semibold))
                             .foregroundStyle(Color.scLabel(scheme))
                         Text("Aplikacja podpowie, jak rozłożyć posiłki w ciągu dnia.")
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.sc(size: 12, weight: .regular))
                             .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -2103,7 +2103,7 @@ struct SettingsView: View {
 
             TextField("Np. Dom", text: $createHouseholdName)
                 .textInputAutocapitalization(.words)
-                .font(.system(size: 15.5, weight: .medium))
+                .font(.sc(size: 15.5, weight: .medium))
                 .foregroundStyle(Color.scLabel(scheme))
                 .tint(SCPalette.terracotta)
                 .padding(.horizontal, 14)
@@ -2133,7 +2133,7 @@ struct SettingsView: View {
             HStack {
                 Spacer()
                 Text("\(trimmedCreateHouseholdName.count)/\(Self.householdNameMaxLength)")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.sc(size: 11, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(
                         trimmedCreateHouseholdName.count > Self.householdNameMaxLength
@@ -2181,14 +2181,14 @@ struct SettingsView: View {
                         ProgressView()
                             .controlSize(.small)
                         Text("Wczytuję domowników…")
-                            .font(.system(size: 12.5, weight: .medium))
+                            .font(.sc(size: 12.5, weight: .medium))
                             .foregroundStyle(Color.scMuted(scheme))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
                 } else if householdMembers.isEmpty {
                     Text("Nie udało się wczytać domowników.")
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(.sc(size: 12.5, weight: .medium))
                         .foregroundStyle(Color.scMuted(scheme))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
@@ -2219,7 +2219,7 @@ struct SettingsView: View {
 
             if !canCreateInvitations, let owner = householdOwner {
                 Text("Zaprasza właściciel: \(HouseholdMemberStyle.shortName(owner.displayName))")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.sc(size: 12, weight: .medium))
                     .foregroundStyle(Color.scFaint(scheme))
                     .padding(.horizontal, 6)
                     .padding(.top, 10)
@@ -2288,18 +2288,18 @@ struct SettingsView: View {
                 .frame(width: 40, height: 40)
                 .overlay(
                     Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.sc(size: 16, weight: .bold))
                         .foregroundStyle(SCPalette.terracotta)
                 )
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(isReady ? "Zaproś domownika" : "Przygotuj zaproszenie")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.sc(size: 15, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(SCPalette.terracotta)
                 Text("Link dla jednej osoby · ważny 7 dni")
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.sc(size: 12.5, weight: .medium))
                     .foregroundStyle(Color.scMuted(scheme))
             }
             .lineLimit(1)
@@ -2313,7 +2313,7 @@ struct SettingsView: View {
                         .tint(SCPalette.terracotta)
                 } else {
                     Image(systemName: isReady ? "square.and.arrow.up" : "arrow.clockwise")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.sc(size: 14, weight: .semibold))
                         .foregroundStyle(SCPalette.terracotta)
                 }
             }
@@ -2431,16 +2431,16 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(invitation.householdName)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .foregroundStyle(Color.scLabel(scheme))
 
                     Text(invitation.subtitle)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.sc(size: 12, weight: .regular))
                         .foregroundStyle(Color.scMuted(scheme))
 
                     if let expiry = invitation.expiresAtText {
                         Text("Ważne do: \(expiry)")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.sc(size: 11, weight: .medium))
                             .foregroundStyle(Color.scMuted(scheme))
                     }
                 }
@@ -2458,7 +2458,7 @@ struct SettingsView: View {
                     Task { await sessionStore.declineInvitation(token: invitation.token) }
                 } label: {
                     Text("Odrzuć")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.sc(size: 13, weight: .semibold))
                         .foregroundStyle(Color.scLabel(scheme))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
@@ -2479,7 +2479,7 @@ struct SettingsView: View {
                     }
                 } label: {
                     Text(hasHousehold ? "Przenieś się" : "Dołącz")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.sc(size: 13, weight: .bold))
                         .foregroundStyle(SCPalette.terracotta)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
@@ -2507,11 +2507,11 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Brak gospodarstwa")
-                        .font(.system(size: 17, weight: .heavy))
+                        .font(.sc(size: 17, weight: .heavy))
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(scheme))
                     Text("Utwórz wspólne miejsce do planowania posiłków i listy zakupów.")
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(.sc(size: 12.5, weight: .medium))
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -2557,9 +2557,9 @@ struct SettingsView: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .heavy))
+                    .font(.sc(size: 13, weight: .heavy))
                 Text(title)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .tracking(-0.1)
             }
             .foregroundStyle(SCPalette.terracotta)
@@ -2605,7 +2605,7 @@ struct SettingsView: View {
 
             HStack(spacing: 6) {
                 Text(member.displayName)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.sc(size: 15, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
@@ -2651,7 +2651,7 @@ struct SettingsView: View {
     /// a nie plakietka.
     private func memberBadge(_ text: String, color: Color) -> some View {
         Text(text)
-            .font(.system(size: 9.5, weight: .heavy))
+            .font(.sc(size: 9.5, weight: .heavy))
             .tracking(0.8)
             .foregroundStyle(color)
             .padding(.horizontal, 6)
@@ -2672,7 +2672,7 @@ struct SettingsView: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .heavy))
+                .font(.sc(size: 13, weight: .heavy))
                 .foregroundStyle(Color.scMuted(scheme))
                 .frame(width: 32, height: 32)
                 .scChromeGlass(in: Circle())
@@ -2912,7 +2912,7 @@ struct ProfileAvatar: View {
         Self.gradient(index: colorIndex, seed: seed.isEmpty ? displayName : seed)
         .overlay(
             Text(Self.initials(for: displayName))
-                .font(.system(size: size * 0.40, weight: .semibold))
+                .font(.sc(size: size * 0.40, weight: .semibold))
                 .tracking(-0.3)
                 .foregroundStyle(.white)
                 .monospacedDigit()
@@ -3075,7 +3075,7 @@ private struct CalorieGoalEditor: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .lastTextBaseline, spacing: 8) {
                 Text(shown, format: .number.grouping(.never))
-                    .font(.system(size: 44, weight: .heavy))
+                    .font(.sc(size: 44, weight: .heavy))
                     .tracking(-1.4)
                     .foregroundStyle(SCPalette.terracotta)
                     .monospacedDigit()
@@ -3090,7 +3090,7 @@ private struct CalorieGoalEditor: View {
                     )
 
                 Text("kcal / dzień")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .tracking(-0.1)
                     .foregroundStyle(Color.scMuted(scheme))
             }
@@ -3129,7 +3129,7 @@ private struct CalorieGoalEditor: View {
                     Spacer()
                     Text("\(range.upperBound)")
                 }
-                .font(.system(size: 11, weight: .medium))
+                .font(.sc(size: 11, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(Color.scFaint(scheme))
             }

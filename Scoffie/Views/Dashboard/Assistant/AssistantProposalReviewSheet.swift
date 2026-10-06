@@ -415,7 +415,7 @@ struct AssistantProposalReviewSheet: View {
             VStack(alignment: .leading, spacing: 20) {
                 if sections.isEmpty {
                     Text("Ta propozycja nie zmienia nic dla tej osoby.")
-                        .font(.system(size: 14))
+                        .font(.sc(size: 14))
                         .foregroundStyle(AssistantLook.muted(scheme))
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
@@ -502,7 +502,7 @@ struct AssistantProposalReviewSheet: View {
                 VStack(alignment: .leading, spacing: 3) {
                     mealLine(row)
                     Text(row.title)
-                        .font(.system(size: 15, weight: row.isRemoval ? .regular : .semibold))
+                        .font(.sc(size: 15, weight: row.isRemoval ? .regular : .semibold))
                         .tracking(-0.3)
                         .foregroundStyle(row.isRemoval ? AssistantLook.faint(scheme) : AssistantLook.ink(scheme))
                         .strikethrough(row.isRemoval, color: AssistantLook.faint(scheme))
@@ -514,7 +514,7 @@ struct AssistantProposalReviewSheet: View {
 
                 if row.kcal > 0 {
                     Text("\(row.kcal) kcal")
-                        .font(.system(size: 12.5, weight: .semibold))
+                        .font(.sc(size: 12.5, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(AssistantLook.faint(scheme))
                         .lineLimit(1)
@@ -538,7 +538,7 @@ struct AssistantProposalReviewSheet: View {
                     swapButton(swap)
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .foregroundStyle(AssistantLook.muted(scheme))
                         .frame(width: 40, height: 44)
                         .contentShape(Rectangle())
@@ -566,11 +566,11 @@ struct AssistantProposalReviewSheet: View {
         HStack(spacing: 5) {
             if let slot = row.slot {
                 Image(systemName: slot.icon)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.sc(size: 10, weight: .bold))
                     .foregroundStyle(slot.cozyAccent)
             }
             Text(row.slot?.title ?? row.mealLabel)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.sc(size: 11, weight: .semibold))
                 .tracking(0.4)
                 .textCase(.uppercase)
                 .foregroundStyle(AssistantLook.faint(scheme))
@@ -611,7 +611,7 @@ struct AssistantProposalReviewSheet: View {
                     .strikethrough(true, color: AssistantLook.faint(scheme))
                     .lineLimit(1)
             }
-            .font(.system(size: 12.5))
+            .font(.sc(size: 12.5))
             .foregroundStyle(AssistantLook.faint(scheme))
         case .removed(let reason):
             changeTag(
@@ -626,9 +626,9 @@ struct AssistantProposalReviewSheet: View {
     private func changeTag(_ title: String, icon: String, color: Color) -> some View {
         HStack(spacing: 3) {
             Image(systemName: icon)
-                .font(.system(size: 8.5, weight: .bold))
+                .font(.sc(size: 8.5, weight: .bold))
             Text(title)
-                .font(.system(size: 11.5, weight: .semibold))
+                .font(.sc(size: 11.5, weight: .semibold))
                 .lineLimit(1)
         }
         .foregroundStyle(color)
@@ -645,7 +645,7 @@ struct AssistantProposalReviewSheet: View {
         return ZStack {
             Circle().fill(AssistantLook.sage(scheme))
             Image(systemName: "checkmark")
-                .font(.system(size: 9, weight: .heavy))
+                .font(.sc(size: 9, weight: .heavy))
                 .foregroundStyle(Color.white)
         }
         .frame(width: 19, height: 19)
@@ -687,12 +687,12 @@ struct AssistantProposalReviewSheet: View {
         return VStack(spacing: 12) {
             VStack(spacing: 3) {
                 Text(copy.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.sc(size: 15, weight: .semibold))
                     .tracking(-0.3)
                     .foregroundStyle(AssistantLook.ink(scheme))
                     .contentTransition(.numericText())
                 Text(copy.body)
-                    .font(.system(size: 13))
+                    .font(.sc(size: 13))
                     .foregroundStyle(AssistantLook.muted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .contentTransition(.numericText())
@@ -784,9 +784,9 @@ private struct ProposalRegenerateLink: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                 Text(title)
-                    .font(.system(size: 14.5, weight: .semibold))
+                    .font(.sc(size: 14.5, weight: .semibold))
                     .tracking(-0.2)
             }
             .foregroundStyle(AssistantLook.terra(scheme))
@@ -819,14 +819,14 @@ private struct ProposalAcceptButton: View {
                     ProgressView().controlSize(.small).tint(sage)
                 }
                 Text(title)
-                    .font(.system(size: size.fontSize, weight: .semibold))
+                    .font(.sc(size: size.fontSize, weight: .semibold))
                     .tracking(-0.3)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                     .contentTransition(.numericText())
                 if !isBusy {
                     Image(systemName: icon)
-                        .font(.system(size: size.iconSize, weight: .bold))
+                        .font(.sc(size: size.iconSize, weight: .bold))
                 }
             }
             .foregroundStyle(sage)

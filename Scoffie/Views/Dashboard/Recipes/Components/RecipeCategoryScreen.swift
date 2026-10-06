@@ -94,7 +94,7 @@ struct RecipeCategoryScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(countLine(shown: rows.count, total: fitted.count, hidden: personalization.hiddenCount(in: all)))
-                        .font(.system(size: 13.5, weight: .medium))
+                        .font(.sc(size: 13.5, weight: .medium))
                         .foregroundStyle(Color.scMuted(scheme))
                         .monospacedDigit()
                         .contentTransition(.numericText())

@@ -536,7 +536,7 @@ struct PlanSlotPickerSheet: View {
             EditorialRecipeCover(recipe: recipe, size: 28, cornerRadius: 8)
 
             Text(recipe.name)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .tracking(-0.2)
                 .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
@@ -566,11 +566,11 @@ struct PlanSlotPickerSheet: View {
         } else {
             HStack(spacing: 8) {
                 Image(systemName: "person.fill")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .foregroundStyle(Color.scFaint(scheme))
 
                 Text("Dla Ciebie · domowników dodasz w Ustawieniach")
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.sc(size: 12.5, weight: .medium))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)

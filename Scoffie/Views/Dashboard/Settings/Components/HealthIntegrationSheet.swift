@@ -90,13 +90,13 @@ struct HealthIntegrationSheet: View {
     private var introCard: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "figure.walk")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)))
 
             Text("Połącz aplikację ze Zdrowiem, aby widzieć dzienne kroki w zakładce Dziś pod kaloriami i zbierać statystyki aktywności. Kroki są tylko odczytywane — aplikacja niczego nie zapisuje do Zdrowia.")
-                .font(.system(size: 13, weight: .regular))
+                .font(.sc(size: 13, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -130,7 +130,7 @@ struct HealthIntegrationSheet: View {
             .padding(.top, 4)
 
             Text("iOS zapyta o zgodę na odczyt kroków. Zgodą zarządzasz potem w Ustawienia → Prywatność i bezpieczeństwo → Zdrowie.")
-                .font(.system(size: 11.5, weight: .regular))
+                .font(.sc(size: 11.5, weight: .regular))
                 .foregroundStyle(Color.scFaint(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 6)
@@ -186,7 +186,7 @@ struct HealthIntegrationSheet: View {
                 // więc wybór pokazuje kółko `SCRadioMark`, jak kafle planów.
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: icon)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scMuted(scheme))
 
                     Spacer(minLength: 0)
@@ -195,12 +195,12 @@ struct HealthIntegrationSheet: View {
                 }
 
                 Text(title)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
 
                 Text(subtitle)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.sc(size: 11, weight: .medium))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
             }
@@ -233,11 +233,11 @@ struct HealthIntegrationSheet: View {
     private var garminHowToCard: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(SCPalette.sage)
 
             Text("Kroki z Garmina czytamy przez Zdrowie. W aplikacji Garmin Connect włącz zapisywanie kroków do Apple Health: Więcej → Ustawienia → Zdrowie użytkownika → Apple Health.")
-                .font(.system(size: 12.5, weight: .regular))
+                .font(.sc(size: 12.5, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -261,16 +261,16 @@ struct HealthIntegrationSheet: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Połączono ze Zdrowiem")
-                    .font(.system(size: 15.5, weight: .heavy))
+                    .font(.sc(size: 15.5, weight: .heavy))
                     .foregroundStyle(Color.scLabel(scheme))
 
                 if let todaySteps = store?.todaySteps {
                     Text("Dzisiaj: \(todaySteps) kroków")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.sc(size: 13, weight: .medium))
                         .foregroundStyle(Color.scMuted(scheme))
                 } else if let since = store?.enabledAtKey {
                     Text("Synchronizacja od \(since)")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.sc(size: 13, weight: .medium))
                         .foregroundStyle(Color.scMuted(scheme))
                 }
             }
@@ -297,13 +297,13 @@ struct HealthIntegrationSheet: View {
         if store?.lastWindowWasEmpty == true {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .foregroundStyle(SCPalette.butter)
 
                 Text(selectedSource == .garmin
                     ? "Zdrowie nie zwraca żadnych kroków z Garmina. Upewnij się, że Garmin Connect zapisuje kroki do Apple Health i że zegarek się zsynchronizował."
                     : "Zdrowie nie zwraca żadnych kroków. Jeśli licznik stoi pusty, sprawdź Ustawienia → Prywatność i bezpieczeństwo → Zdrowie → Scoffie i włącz odczyt Kroków.")
-                    .font(.system(size: 12.5, weight: .regular))
+                    .font(.sc(size: 12.5, weight: .regular))
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -327,10 +327,10 @@ struct HealthIntegrationSheet: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Dzienny cel")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.sc(size: 15, weight: .semibold))
                             .foregroundStyle(Color.scLabel(scheme))
                         Text("Pasek w zakładce Dziś pokazuje postęp względem tej liczby.")
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.sc(size: 12, weight: .regular))
                             .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -357,14 +357,14 @@ struct HealthIntegrationSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .lastTextBaseline, spacing: 8) {
                 Text(stepsGoal, format: .number.grouping(.never))
-                    .font(.system(size: 44, weight: .heavy))
+                    .font(.sc(size: 44, weight: .heavy))
                     .tracking(-1.4)
                     .foregroundStyle(SCPalette.terracotta)
                     .monospacedDigit()
                     .contentTransition(.numericText(value: Double(stepsGoal)))
 
                 Text("kroków / dzień")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .tracking(-0.1)
                     .foregroundStyle(Color.scMuted(scheme))
             }
@@ -387,7 +387,7 @@ struct HealthIntegrationSheet: View {
                     Spacer()
                     Text("\(Self.stepsGoalMax)")
                 }
-                .font(.system(size: 11, weight: .medium))
+                .font(.sc(size: 11, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(Color.scFaint(scheme))
             }
@@ -417,11 +417,11 @@ struct HealthIntegrationSheet: View {
     private var unavailableCard: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "heart.slash.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(Color.scFaint(scheme))
 
             Text("Zdrowie nie jest dostępne na tym urządzeniu.")
-                .font(.system(size: 13, weight: .regular))
+                .font(.sc(size: 13, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
         }

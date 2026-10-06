@@ -63,9 +63,9 @@ struct AssistantThinkingSheet: View {
         if let duration = thinking.duration {
             HStack(spacing: 4) {
                 Image(systemName: "clock")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                 Text(AssistantThoughtLine.clock(duration))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .monospacedDigit()
             }
             .foregroundStyle(AssistantLook.muted(scheme))
@@ -183,7 +183,7 @@ private struct ThinkingRow: View {
                 Circle().fill(Color.scPageBase(scheme))
                 Circle().fill(AssistantLook.quietTint(scheme))
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.sc(size: 12, weight: .semibold))
                     .foregroundStyle(AssistantLook.muted(scheme))
             }
             .frame(width: Self.disc, height: Self.disc)
@@ -192,14 +192,14 @@ private struct ThinkingRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.sc(size: 15, weight: .medium))
                         .tracking(-0.2)
                         .foregroundStyle(AssistantLook.ink(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                     if let detail = entry.step?.detail, !detail.isEmpty {
                         // Najwyżej dwie linie — fakty, nie przepisana prośba.
                         Text(detail)
-                            .font(.system(size: 13))
+                            .font(.sc(size: 13))
                             .lineSpacing(1)
                             .foregroundStyle(AssistantLook.muted(scheme))
                             .lineLimit(2)
@@ -210,7 +210,7 @@ private struct ThinkingRow: View {
 
                 if let seconds = entry.seconds {
                     Text(AssistantThoughtLine.clock(TimeInterval(seconds)))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.sc(size: 13, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(AssistantLook.faint(scheme))
                 }

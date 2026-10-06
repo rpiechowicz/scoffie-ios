@@ -425,9 +425,9 @@ struct RecipeFilterSheet: View {
                 if !locked.isEmpty {
                     HStack(spacing: 6) {
                         Image(systemName: "lock.fill")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.sc(size: 10, weight: .bold))
                         Text("Z Twojego profilu · zmienisz w Ustawieniach")
-                            .font(.system(size: 12))
+                            .font(.sc(size: 12))
                     }
                     .foregroundStyle(Color.scFaint(scheme))
                     .padding(.horizontal, 6)
@@ -518,20 +518,20 @@ struct RecipeFilterSheet: View {
                         .frame(width: 32, height: 32)
                         .overlay(
                             Image(systemName: "nosign")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.sc(size: 14, weight: .bold))
                                 .foregroundStyle(SCPalette.terracotta)
                         )
 
                     VStack(alignment: .leading, spacing: 0) {
                         Text(excludeTitle(own: own.count, profile: profileChips.count))
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.sc(size: 15, weight: .semibold))
                             .tracking(-0.3)
                             .foregroundStyle(Color.scLabel(scheme))
                             .contentTransition(.interpolate)
 
                         if chips.isEmpty {
                             Text("Np. papryka, grzyby, kolendra")
-                                .font(.system(size: 12.5))
+                                .font(.sc(size: 12.5))
                                 .foregroundStyle(Color.scMuted(scheme))
                                 .padding(.top, 2)
                         } else {
@@ -547,7 +547,7 @@ struct RecipeFilterSheet: View {
                     }
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.sc(size: 12, weight: .bold))
                         .foregroundStyle(Color.scFaint(scheme))
                 }
                 .padding(12)
@@ -593,14 +593,14 @@ struct RecipeFilterSheet: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(verbatim: "\(count)")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.sc(size: 15, weight: .bold))
                         .tracking(-0.3)
                         .monospacedDigit()
                         .foregroundStyle(Color.scLabel(scheme))
                         .contentTransition(.numericText(value: Double(count)))
 
                     Text(verbatim: "z \(index.total) \(totalContext)")
-                        .font(.system(size: 12.5))
+                        .font(.sc(size: 12.5))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
@@ -849,7 +849,7 @@ private struct RecipeFilterCategorySplit: View {
                             }
 
                         Text(verbatim: "\(left)")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.sc(size: 11, weight: .bold))
                             .monospacedDigit()
                             .foregroundStyle(accent)
                             .contentTransition(.numericText(value: Double(left)))

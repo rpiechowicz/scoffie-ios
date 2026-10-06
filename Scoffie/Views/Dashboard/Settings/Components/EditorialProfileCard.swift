@@ -49,12 +49,12 @@ struct EditorialProfileCard: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(displayNameLabel)
-                    .font(.system(size: 15.5, weight: .semibold))
+                    .font(.sc(size: 15.5, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
 
                 Text(emailLabel)
-                    .font(.system(size: 12.5, weight: .regular))
+                    .font(.sc(size: 12.5, weight: .regular))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -63,7 +63,7 @@ struct EditorialProfileCard: View {
 
             if showsChevron {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .foregroundStyle(Color.scFaint(scheme))
             }
         }

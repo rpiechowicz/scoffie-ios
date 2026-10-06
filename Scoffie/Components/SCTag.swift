@@ -19,10 +19,10 @@ struct SCTag: View {
         HStack(spacing: 5) {
             // VoiceOver czyta sam tytuł — nazwa glifu („leaf fill”) nic nie mówi.
             Image(systemName: icon)
-                .font(.system(size: 10.5, weight: .bold))
+                .font(.sc(size: 10.5, weight: .bold))
                 .accessibilityHidden(true)
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .tracking(-0.2)
                 .lineLimit(1)
         }

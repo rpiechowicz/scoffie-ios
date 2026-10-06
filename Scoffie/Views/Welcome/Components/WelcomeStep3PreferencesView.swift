@@ -103,7 +103,7 @@ struct WelcomeStep3PreferencesView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("\(calorieGoal)")
-                    .font(.system(size: 38, weight: .heavy))
+                    .font(.sc(size: 38, weight: .heavy))
                     .tracking(-0.8)
                     .foregroundStyle(SCPalette.terracotta)
                     .monospacedDigit()
@@ -113,7 +113,7 @@ struct WelcomeStep3PreferencesView: View {
                         value: calorieGoal
                     )
                 Text("kcal / dzień")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.sc(size: 14, weight: .medium))
                     .foregroundStyle(Color.scMuted(colorScheme))
             }
 
@@ -134,7 +134,7 @@ struct WelcomeStep3PreferencesView: View {
                 Spacer()
                 Text("3 500")
             }
-            .font(.system(size: 11, weight: .medium))
+            .font(.sc(size: 11, weight: .medium))
             .foregroundStyle(Color.scFaint(colorScheme))
             .monospacedDigit()
         }
@@ -195,16 +195,16 @@ struct WelcomeStep3PreferencesView: View {
                     .fill(accent)
                     .frame(width: 7, height: 7)
                 Text(title)
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.sc(size: 13.5, weight: .semibold))
                     .foregroundStyle(Color.scLabel(colorScheme))
                 Spacer(minLength: 8)
                 Text("\(grams) g")
-                    .font(.system(size: 13.5, weight: .bold))
+                    .font(.sc(size: 13.5, weight: .bold))
                     .foregroundStyle(Color.scLabel(colorScheme))
                     .monospacedDigit()
                     .contentTransition(.numericText(value: Double(grams)))
                 Text("\(percent)%")
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.sc(size: 11.5, weight: .medium))
                     .foregroundStyle(Color.scFaint(colorScheme))
                     .monospacedDigit()
                     .contentTransition(.numericText(value: Double(percent)))

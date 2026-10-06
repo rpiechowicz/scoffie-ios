@@ -45,7 +45,7 @@ struct AssistantIconTile: View {
             .frame(width: size, height: size)
             .overlay(
                 Image(systemName: icon)
-                    .font(.system(size: size * 0.5, weight: .semibold))
+                    .font(.sc(size: size * 0.5, weight: .semibold))
                     .foregroundStyle(accent.color)
             )
     }
@@ -98,7 +98,7 @@ struct AssistantTextButton: View {
     var body: some View {
         Button(role: role, action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.sc(size: 15, weight: .semibold))
                 .foregroundStyle(role == .destructive ? SCPalette.terracotta : Color.scMuted(scheme))
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)

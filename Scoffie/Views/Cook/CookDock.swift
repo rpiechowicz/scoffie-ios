@@ -196,7 +196,7 @@ struct CookDock: View {
                                 .alignmentGuide(.top) { $0[VerticalAlignment.center] + SCCook.Spacing.islandBadgeInset }
                         }
                     Text("Składniki")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.sc(size: 16, weight: .bold))
                 }
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(maxWidth: .infinity)
@@ -240,7 +240,7 @@ struct CookDock: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 17, weight: .bold))
+                .font(.sc(size: 17, weight: .bold))
                 .foregroundStyle(tint)
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: SCCook.Size.islandButton, height: SCCook.Size.islandButton)
@@ -415,7 +415,7 @@ struct CookTimerCapsule: View {
             )
             .opacity(isRunning || isPaused ? 1 : 0)
             Image(systemName: glyph ?? item.primaryIcon)
-                .font(.system(size: isSingle && isOverdue ? 15 : 11, weight: .heavy))
+                .font(.sc(size: isSingle && isOverdue ? 15 : 11, weight: .heavy))
                 .foregroundStyle(glyphColor)
                 .offset(x: glyph == "play.fill" ? 1 : 0)
                 .contentTransition(.symbolEffect(.replace))
@@ -530,9 +530,9 @@ struct CookTimerCapsule: View {
     private var startPill: some View {
         HStack(spacing: 7) {
             Image(systemName: "play.fill")
-                .font(.system(size: 12, weight: .heavy))
+                .font(.sc(size: 12, weight: .heavy))
             Text("Start")
-                .font(.system(size: 15, weight: .heavy))
+                .font(.sc(size: 15, weight: .heavy))
         }
         .foregroundStyle(Color.scPageBase(scheme))
         .padding(.leading, 12)
@@ -616,12 +616,12 @@ struct CookTimerBadge: View {
             if isPending {
                 Circle().fill(color)
                 Image(systemName: "play.fill")
-                    .font(.system(size: 8, weight: .heavy))
+                    .font(.sc(size: 8, weight: .heavy))
                     .foregroundStyle(Color.scPageBase(scheme))
                     .offset(x: 0.5)
             } else if isOverdue {
                 Image(systemName: "bell.fill")
-                    .font(.system(size: 10, weight: .heavy))
+                    .font(.sc(size: 10, weight: .heavy))
                     .foregroundStyle(Color.scPageBase(scheme))
             } else {
                 CookTimerRing(
@@ -664,7 +664,7 @@ private struct CookIslandBadge: View {
     var body: some View {
         let visible = count > 0
         Text("\(shown)")
-            .font(.system(size: 10.5, weight: .heavy))
+            .font(.sc(size: 10.5, weight: .heavy))
             .monospacedDigit()
             .foregroundStyle(.white)
             .cookRoll(shown)
@@ -733,7 +733,7 @@ private struct CookBasketGlyph: View {
 
     private var basket: some View {
         Image(systemName: "basket")
-            .font(.system(size: 18, weight: .medium))
+            .font(.sc(size: 18, weight: .medium))
             .foregroundStyle(callID != nil ? SCPalette.terracotta : Color.scLabel(scheme))
             .animation(.easeInOut(duration: 0.3), value: callID != nil)
     }
