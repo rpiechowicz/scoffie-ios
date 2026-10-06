@@ -2652,7 +2652,7 @@ final class SessionStore {
         if let sex {
             // Niepotwierdzone „Nie podaję” wygrywa ze starą płcią z serwera,
             // dopóki zapis go nie ponowi — inaczej arkusz pokazałby ją z powrotem.
-            if !defaults.bool(forKey: ProfileKeys.sexClearPending) {
+            if defaults.string(forKey: ProfileKeys.sexClearPending) == nil {
                 defaults.set(sex.lowercased(), forKey: ProfileKeys.sex)
             }
         } else {
@@ -2984,13 +2984,17 @@ final class SessionStore {
         }
         // Skasowanie płci: wybrane teraz albo niepotwierdzone z wcześniejszego
         // zapisu, który padł (`sexClearPending`) — ponawiamy je, dopóki serwer
-        // nie potwierdzi, chyba że w międzyczasie wybrano płeć.
-        let clearsSex = clearSex
-            || ((sex ?? "").isEmpty && UserDefaults.standard.bool(forKey: ProfileKeys.sexClearPending))
-        if clearsSex {
+        // nie potwierdzi, chyba że w międzyczasie wybrano płeć. Każde nowe
+        // skasowanie dostaje własny znacznik: spóźnione potwierdzenie STARSZEGO
+        // zapisu nie zdejmie flagi nowszego, który jeszcze nie doszedł.
+        let pendingClear = UserDefaults.standard.string(forKey: ProfileKeys.sexClearPending)
+        var clearToken: String?
+        if clearSex || ((sex ?? "").isEmpty && pendingClear != nil) {
+            let token = clearSex ? UUID().uuidString : (pendingClear ?? UUID().uuidString)
+            clearToken = token
             data["sex"] = NSNull()
             UserDefaults.standard.removeObject(forKey: ProfileKeys.sex)
-            UserDefaults.standard.set(true, forKey: ProfileKeys.sexClearPending)
+            UserDefaults.standard.set(token, forKey: ProfileKeys.sexClearPending)
         } else if let sex, !sex.isEmpty {
             data["sex"] = sex.uppercased()
             UserDefaults.standard.set(sex.lowercased(), forKey: ProfileKeys.sex)
@@ -3006,7 +3010,8 @@ final class SessionStore {
                 payload: ["userId": userId, "data": data],
                 as: WsEnvelope<BackendUserProfileDTO>.self
             )
-            if envelope.ok, clearsSex {
+            if envelope.ok, let clearToken,
+               UserDefaults.standard.string(forKey: ProfileKeys.sexClearPending) == clearToken {
                 UserDefaults.standard.removeObject(forKey: ProfileKeys.sexClearPending)
             }
             return envelope.ok
