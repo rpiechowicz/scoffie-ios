@@ -19,7 +19,9 @@ import Foundation
 /// dania, które i tak widać na górze listy. Kuchnie (kółka na wierzchu
 /// filtrów wszystkich przepisów) mają zdjęcia wybrane ręcznie
 /// (`RecipeFilterCoverPicks`) i wybierają PIERWSZE, zanim przepisy zajmą
-/// kafelki diet i cech na podstronach.
+/// kafelki diet i cech na podstronach; diety, cechy i okazje też biorą
+/// najpierw wybrane ręcznie, a automat tylko, gdy wybranego nie ma w puli
+/// albo ukrywa go profil.
 struct RecipeFilterCovers {
     private(set) var diets: [RecipeDietFilter: Recipe] = [:]
     private(set) var traits: [RecipeTraitFilter: Recipe] = [:]
@@ -37,21 +39,28 @@ struct RecipeFilterCovers {
             }
         }
         for diet in RecipeDietFilter.allCases {
-            diets[diet] = picker.pick { facts[$0].diets.contains(diet) }
+            diets[diet] = picker.pick(preferring: RecipeFilterCoverPicks.ids("diet:\(diet.rawValue)")) {
+                facts[$0].diets.contains(diet)
+            }
         }
         for trait in RecipeTraitFilter.allCases {
-            traits[trait] = picker.pick { facts[$0].traits.contains(trait) }
+            traits[trait] = picker.pick(preferring: RecipeFilterCoverPicks.ids("trait:\(trait.rawValue)")) {
+                facts[$0].traits.contains(trait)
+            }
         }
         for moment in RecipeMoment.allCases {
-            moments[moment] = picker.pick { facts[$0].moments.contains(moment) }
+            moments[moment] = picker.pick(preferring: RecipeFilterCoverPicks.ids("moment:\(moment.rawValue)")) {
+                facts[$0].moments.contains(moment)
+            }
         }
     }
 }
 
 /// To samo dla filtrów kategorii: aspekt → opcja → przepis. Pula arkusza
 /// kategorii jest już po dopasowaniu do profilu (o ile jest włączone), więc
-/// tu nic nie trzeba omijać. Rodzaj dania i smak biorą najpierw zdjęcia
-/// wybrane ręcznie (`RecipeFilterCoverPicks`) — o ile są w puli i pasują.
+/// tu nic nie trzeba omijać. Rodzaj dania, smak, mięso i pora w planie biorą
+/// najpierw zdjęcia wybrane ręcznie (`RecipeFilterCoverPicks`) — o ile są
+/// w puli i pasują.
 struct RecipeFacetCovers {
     private var covers: [RecipeFacetKind: [String: Recipe]] = [:]
 

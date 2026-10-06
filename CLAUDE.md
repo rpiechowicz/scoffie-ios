@@ -86,8 +86,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   okazje — każda wpycha kafelki). Wykres kalorii (`RecipeFilterKcalChart`) USUNIĘTY. Kafelki i siatki TYLKO na
   podstronach — nie wracać z nimi na wierzch. Zdjęcia kółek i smaku (6.10.2026: „ciut większe”, „bardziej pasujące”):
   rozmiar z szerokości kolumny (po 4 w rzędzie ~68 pt, po 5 ~61 pt, smak 44 pt), a przepisy na zdjęciach wybrane RĘCZNIE
-  z arkuszy miniatur katalogu — `RecipeFilterCoverPicks` (rodzaj dania × kategoria, smak, kuchnia; po dwa: główny
-  i zapas bez mięsa), automat `RecipeCoverPicker` tylko, gdy wybranego nie ma w puli albo ukrywa go profil. „Filtry” działają
+  z arkuszy miniatur katalogu — `RecipeFilterCoverPicks` (rodzaj dania × kategoria, smak, kuchnia, a od wieczora 6.10
+  też kafelki podstron: diety, cechy, okazje i sezon, mięso w obiadach i kolacjach, pora przekąsek — bez „Ulubionych”
+  i „Thermomixa”; po dwa: główny i zapas), automat `RecipeCoverPicker` tylko, gdy wybranego nie ma w puli albo ukrywa go profil. „Filtry” działają
   NA ŻYWO (bez szkicu i „Pokaż”), stopka „N z M przepisów” + tekstowe „Gotowe” (lupa odpadła). Filtry kategorii =
   sekcja „Filtrów”, gdy lista stoi w kategorii (ekran albo zakładka wyników, `scope`), bez kuchni i okazji kategorii;
   bez zakresu — wiersze „Filtry kategorii”. Podstrony Filtrów („Więcej filtrów”, Wyklucz składniki → dział) i filtry
