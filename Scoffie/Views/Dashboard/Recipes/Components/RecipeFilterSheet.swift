@@ -9,10 +9,12 @@ import SwiftUI
 // `scScrollEdgeFade`). Pod nim (6.10.2026 wieczór, po pięciu rundach podglądu
 // — Rafał: „prościej, ale nie smutno”): w kategorii rodzaj dania jako kółka ze
 // zdjęciem dania (na stałe, bez przewijania w bok) i smak jako dwa kafle ze
-// zdjęciem; czas przygotowania jako przełącznik w kolorze; reszta to JEDNA
-// lista jak Ustawienia iOS (kolorowy kafelek ikony, wartość po prawej):
-// mięso / pora kategorii, trudność i kalorie (systemowe menu), dieta,
-// składniki i „Więcej filtrów” (podstrona z cechami, kuchnią i okazjami).
+// zdjęciem, a w filtrach wszystkich przepisów kuchnia ze zdjęciami (G1); czas
+// przygotowania jako przełącznik Liquid Glass (L2); reszta to JEDNA lista jak
+// Ustawienia iOS (kolorowy kafelek ikony, wartość po prawej): mięso / pora
+// kategorii, trudność i kalorie (systemowe menu), dieta, składniki i —
+// w kategorii — „Więcej filtrów” (cechy, kuchnia, okazje), a globalnie
+// „Okazje i sezon” i „Cechy” wprost.
 // Kafelki ze zdjęciami i siatki stoją tylko na podstronach. Bez kategorii
 // w zakresie, a z filtrami którejś kategorii — karta „Filtry kategorii”, żeby
 // widać było wszystko, co zawęża listę. Na dole liczba przepisów i „Gotowe”.
@@ -20,7 +22,7 @@ import SwiftUI
 // Zmiany idą OD RAZU do Przepisów (6.10.2026 — wcześniej kopia robocza
 // i „Pokaż”): lista pod arkuszem i liczba w stopce zmieniają się z każdym
 // stuknięciem, więc zamknięcie gestem niczego nie gubi, a „Gotowe” tylko
-// zamyka. Dalsze kroki — „Więcej filtrów”, „Wyklucz składniki” i jego działy —
+// zamyka. Dalsze kroki — „Więcej filtrów”, „Bez składników” i jego działy —
 // to PUSH w stosie arkusza (systemowy pasek z tytułem i „wstecz”), nie
 // kolejne arkusze na arkuszu.
 struct RecipeFilterSheet: View {
