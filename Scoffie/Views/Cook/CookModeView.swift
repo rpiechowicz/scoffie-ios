@@ -160,8 +160,9 @@ struct CookModeView: View {
                             }
                         },
                         onSilence: {
-                            // Dźwięk jest jeden — „Wycisz” ucisza każdy
-                            // dzwoniący timer, kapsuły dalej mocno pulsują.
+                            // Dźwięk jest jeden — „Tylko wycisz” (menu „…”)
+                            // ucisza każdy dzwoniący timer, kapsuły dalej
+                            // mocno pulsują; stuknięcie w nie = arkusz Timery.
                             let ids = ringing.map(\.id)
                             withAnimation(.easeOut(duration: 0.25)) {
                                 store.update { session in
