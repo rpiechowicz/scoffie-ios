@@ -6,15 +6,16 @@ import SwiftUI
 // w `components/filtry-final.jsx`).
 //
 // Nagłówek stoi przypięty nad przewijaną treścią (jak w każdym arkuszu,
-// `scScrollEdgeFade`). Pod nim SAME WIERSZE w kartach, jak Ustawienia iOS
-// (Rafał 6.10.2026: „za dużo tego, pomieszane, mega nieczytelne”): karta
-// kategorii, gdy lista stoi w kategorii (rodzaj dania, mięso, pora — wiersz
-// z podstroną; smak — przełącznik w wierszu), „Najważniejsze” (czas
-// i trudność — systemowe menu, kalorie — podstrona z wykresem), „Dieta
-// i składniki” i „Więcej” (cechy, kuchnia, okazje i sezon). Kafelki ze
-// zdjęciami i wykres stoją TYLKO na podstronach. Bez kategorii w zakresie,
-// a z filtrami którejś kategorii — karta „Filtry kategorii”, żeby widać było
-// wszystko, co zawęża listę. Na dole liczba przepisów i „Gotowe”.
+// `scScrollEdgeFade`). Pod nim (6.10.2026 wieczór, po pięciu rundach podglądu
+// — Rafał: „prościej, ale nie smutno”): w kategorii rodzaj dania jako kółka ze
+// zdjęciem dania (na stałe, bez przewijania w bok) i smak jako dwa kafle ze
+// zdjęciem; czas przygotowania jako przełącznik w kolorze; reszta to JEDNA
+// lista jak Ustawienia iOS (kolorowy kafelek ikony, wartość po prawej):
+// mięso / pora kategorii, trudność i kalorie (systemowe menu), dieta,
+// składniki i „Więcej filtrów” (podstrona z cechami, kuchnią i okazjami).
+// Kafelki ze zdjęciami i siatki stoją tylko na podstronach. Bez kategorii
+// w zakresie, a z filtrami którejś kategorii — karta „Filtry kategorii”, żeby
+// widać było wszystko, co zawęża listę. Na dole liczba przepisów i „Gotowe”.
 //
 // Zmiany idą OD RAZU do Przepisów (6.10.2026 — wcześniej kopia robocza
 // i „Pokaż”): lista pod arkuszem i liczba w stopce zmieniają się z każdym
@@ -117,22 +118,6 @@ struct RecipeFilterSheet: View {
         fit ? RecipeDietFilter.lockedByProfile(personalization) : []
     }
 
-    /// Pole celu na linijce kalorii: od śniadania (25 % dnia) do obiadu
-    /// (40 %) — te same udziały, którymi cel porządkuje katalog.
-    private var goalZone: ClosedRange<Int>? {
-        guard fit, personalization.hasAnyPreference else { return nil }
-        let daily = Double(personalization.dailyCalorieGoal)
-        let lower = Self.roundedToStep(daily * personalization.calorieShare(for: .breakfast))
-        let upper = Self.roundedToStep(daily * personalization.calorieShare(for: .lunch))
-        guard upper > lower else { return nil }
-        return lower...upper
-    }
-
-    private static func roundedToStep(_ kcal: Double) -> Int {
-        let step = Double(RecipeFilterOptions.calorieStep)
-        return Int((kcal / step).rounded() * step)
-    }
-
     /// Z profilu, a nie ma własnego kafelka w Diecie: pozostałe alergeny
     /// i diety spoza kafelków. Stoją z kłódką na górze listy działów.
     private var profileChips: [RecipeFilterChipLine.Chip] {
@@ -183,7 +168,6 @@ struct RecipeFilterSheet: View {
                         facetCovers: { facetCovers(for: $0) },
                         profileChips: profileChips,
                         lockedDiets: lockedDiets,
-                        goalZone: goalZone,
                         totalContext: totalContext,
                         onDone: { dismiss() }
                     )
@@ -215,11 +199,11 @@ struct RecipeFilterSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         if let category = sectionCategory {
-                            categorySection(category)
+                            dishSection(category)
+                            tasteSection(category)
                         }
-                        essentialsSection
-                        dietAndIngredientsSection
-                        moreSection
+                        timeSection
+                        listSection(sectionCategory)
                         if !otherFilteredCategories.isEmpty {
                             categoryFiltersSection
                         }
@@ -297,78 +281,57 @@ struct RecipeFilterSheet: View {
 
     // MARK: - Kategoria
 
-    /// Aspekty kategorii w jej karcie — rodzaj dania, smak, mięso, pora.
-    /// Kuchnia i okazje kategorii zostają w „Więcej”, bo to te same osie, co
-    /// filtry wszystkich przepisów (dwie „Kuchnie” w jednym arkuszu czytałyby
-    /// się jak błąd).
+    /// Aspekty kategorii, które stoją w arkuszu: rodzaj dania, smak, mięso,
+    /// pora. Kuchnia i okazje kategorii zostają w „Więcej filtrów”, bo to te
+    /// same osie, co filtry wszystkich przepisów (dwie „Kuchnie” w jednym
+    /// arkuszu czytałyby się jak błąd).
     static func inlineFacets(for category: RecipesCategory) -> [RecipeFacet] {
         RecipeCategoryFacets.facets(for: category).filter { !$0.kind.hidesEmptyOptions }
     }
 
-    /// Karta kategorii: smak jako przełącznik w wierszu (dwie opcje i „każdy”
-    /// mieszczą się obok tytułu), reszta aspektów jako wiersze z podstroną.
-    private func categorySection(_ category: RecipesCategory) -> some View {
-        let accent = RecipeAccent.accent(for: category)
-        let facets = Self.inlineFacets(for: category)
+    private func facet(_ kind: RecipeFacetKind, in category: RecipesCategory) -> RecipeFacet? {
+        Self.inlineFacets(for: category).first { $0.kind == kind }
+    }
 
-        return RecipeFilterSection(title: RecipesConstants.displayName(for: category)) {
-            RecipeFilterPickerGroup {
-                ForEach(Array(facets.enumerated()), id: \.element.id) { offset, facet in
-                    if offset > 0 {
-                        RecipeFilterPickerDivider()
-                    }
-                    if facet.kind == .taste {
-                        RecipeFilterSegmentRow(
-                            icon: Self.facetIcon(facet.kind, in: category),
-                            title: facet.title,
-                            choices: Self.tasteChoices,
-                            selection: tasteSelection(for: category),
-                            accent: accent
-                        )
-                    } else {
-                        RecipeFilterPickerRow(
-                            icon: Self.facetIcon(facet.kind, in: category),
-                            title: facet.title,
-                            placeholder: RecipeFilterPickerRow.placeholder(from: facet.options.map(\.title)),
-                            chips: facet.options
-                                .filter { filters.categoryFilters[category]?.contains($0.id, in: facet.kind) ?? false }
-                                .map { RecipeFilterChipLine.Chip(id: $0.id, title: $0.title) },
-                            accent: accent
-                        ) { openPane = .facet(category, facet.kind) }
-                    }
-                }
+    /// Rodzaj dania — kółka ze zdjęciem dania, na stałe (bez przewijania w bok).
+    @ViewBuilder
+    private func dishSection(_ category: RecipesCategory) -> some View {
+        if let facet = facet(.dish, in: category) {
+            let covers = facetCovers(for: category)
+            RecipeFilterSection(title: facet.title, top: 6) {
+                RecipeFacetPhotoGrid(
+                    options: facet.options,
+                    accent: RecipeAccent.accent(for: category),
+                    icon: RecipesConstants.icon(for: category),
+                    isOn: { filters.categoryFilters[category]?.contains($0, in: .dish) ?? false },
+                    cover: { covers.cover(for: $0, in: .dish) },
+                    onToggle: { filters.toggle($0, in: .dish, for: category) }
+                )
             }
         }
     }
 
-    /// „Każdy · Słodki · Słony” — krótkie nazwy, żeby segmenty zmieściły się
-    /// obok tytułu wiersza.
-    private static let tasteChoices: [RecipeFilterChoice<String?>] = [
-        .init(value: nil, title: "Każdy"),
-        .init(value: "sweet", title: "Słodki"),
-        .init(value: "savory", title: "Słony")
-    ]
-
-    /// Smak kategorii jako jedna wartość — oba zaznaczone znaczą to samo,
-    /// co żaden („każdy”).
-    private func tasteSelection(for category: RecipesCategory) -> Binding<String?> {
-        Binding(
-            get: {
-                let picks = filters.categoryFilters[category]?.picks[.taste] ?? []
-                return picks.count == 1 ? picks.first : nil
-            },
-            set: { option in
-                withAnimation(.smooth(duration: 0.22)) {
-                    filters.select(option, in: .taste, for: category)
-                }
+    /// Smak — dwa kafle ze zdjęciem słodkiego i słonego dania z tej kategorii.
+    @ViewBuilder
+    private func tasteSection(_ category: RecipesCategory) -> some View {
+        if let facet = facet(.taste, in: category) {
+            let covers = facetCovers(for: category)
+            let picks = filters.categoryFilters[category]?.picks[.taste] ?? []
+            RecipeFilterSection(title: facet.title) {
+                RecipeTasteTiles(
+                    options: facet.options,
+                    selection: picks.count == 1 ? picks.first : nil,
+                    cover: { covers.cover(for: $0, in: .taste) },
+                    onSelect: { filters.select($0, in: .taste, for: category) }
+                )
             }
-        )
+        }
     }
 
     /// Ikona wiersza aspektu — rodzaj dania bierze ikonę kategorii.
     static func facetIcon(_ kind: RecipeFacetKind, in category: RecipesCategory) -> String {
         switch kind {
-        case .taste:   return "circle.lefthalf.filled"
+        case .taste:   return "birthday.cake.fill"
         case .dish:    return RecipesConstants.icon(for: category)
         case .protein: return "fish.fill"
         case .slot:    return "clock.fill"
@@ -377,8 +340,8 @@ struct RecipeFilterSheet: View {
         }
     }
 
-    /// Filtry kategorii, które działają na listę, choć ich sekcji nie ma na
-    /// wierzchu (Filtry z korzenia Przepisów) — wiersz na kategorię, push do
+    /// Filtry kategorii, które działają na listę, choć ich sekcji nie ma
+    /// w arkuszu (Filtry z korzenia Przepisów) — wiersz na kategorię, push do
     /// jej aspektów. Bez tego „Wyczyść” zdejmowałby coś, czego nie widać.
     private var categoryFiltersSection: some View {
         let categories = otherFilteredCategories
@@ -386,13 +349,14 @@ struct RecipeFilterSheet: View {
             RecipeFilterPickerGroup {
                 ForEach(Array(categories.enumerated()), id: \.element) { offset, category in
                     if offset > 0 {
-                        RecipeFilterPickerDivider()
+                        RecipeFilterListDivider()
                     }
-                    RecipeFilterPickerRow(
+                    let chips = Self.facetChips(of: filters.categoryFilters[category], in: category)
+                    RecipeFilterListButtonRow(
                         icon: RecipesConstants.icon(for: category),
                         title: RecipesConstants.displayName(for: category),
-                        placeholder: "",
-                        chips: Self.facetChips(of: filters.categoryFilters[category], in: category),
+                        value: Self.summary(chips.map(\.title)),
+                        isActive: !chips.isEmpty,
                         accent: RecipeAccent.accent(for: category)
                     ) { openPane = .category(category) }
                 }
@@ -410,13 +374,32 @@ struct RecipeFilterSheet: View {
         }
     }
 
-    // MARK: - Najważniejsze
+    /// Wartość wiersza z kilku wybranych: „Wege”, „Wege +2”.
+    static func summary(_ titles: [String], none: String = "Dowolne") -> String {
+        guard let first = titles.first else { return none }
+        return titles.count > 1 ? "\(first) +\(titles.count - 1)" : first
+    }
+
+    // MARK: - Czas
 
     private static let timeChoices: [RecipeFilterChoice<Int?>] =
         [.init(value: nil, title: "Dowolny")]
         + RecipeFilterOptions.prepTimeChoices.map { minutes in
-            RecipeFilterChoice<Int?>(value: minutes, title: "do \(minutes) min")
+            RecipeFilterChoice<Int?>(value: minutes, title: "\(minutes) min")
         }
+
+    /// Czas przygotowania — przełącznik w kolorze, wybór od ręki.
+    private var timeSection: some View {
+        RecipeFilterSection(title: "Czas przygotowania") {
+            RecipeFilterSegment(
+                choices: Self.timeChoices,
+                selection: $filters.maxPrepTimeMinutes,
+                accent: SCPalette.terracotta
+            )
+        }
+    }
+
+    // MARK: - Lista
 
     private static let difficultyChoices: [RecipeFilterChoice<Difficulty?>] = [
         .init(value: nil, title: "Dowolna"),
@@ -425,146 +408,108 @@ struct RecipeFilterSheet: View {
         .init(value: .hard, title: "Trudna")
     ]
 
-    /// Czas i trudność — systemowe menu w wierszu; kalorie — podstrona
-    /// z wykresem rozkładu, który sam jest suwakiem.
-    private var essentialsSection: some View {
-        let kcal = filters.maxCaloriesPerServing
-
-        return RecipeFilterSection(title: "Najważniejsze") {
-            RecipeFilterPickerGroup {
-                RecipeFilterMenuRow(
-                    icon: "clock",
-                    title: "Czas",
-                    choices: Self.timeChoices,
-                    selection: $filters.maxPrepTimeMinutes
-                )
-                RecipeFilterPickerDivider()
-                RecipeFilterMenuRow(
-                    icon: "chart.bar",
-                    title: "Trudność",
-                    choices: Self.difficultyChoices,
-                    selection: $filters.difficulty
-                )
-                RecipeFilterPickerDivider()
-                RecipeFilterValueRow(
-                    icon: "flame",
-                    title: "Kalorie na porcję",
-                    value: kcal.map { "do \($0) kcal" } ?? "Dowolne",
-                    isActive: kcal != nil
-                ) { openPane = .calories }
-            }
+    /// Progi kalorii w menu. Limit ustawiony inaczej (stary wykres, inny
+    /// próg) dochodzi do listy, żeby menu pokazało, co działa.
+    private var calorieChoices: [RecipeFilterChoice<Int?>] {
+        var limits = [300, 400, 500, 600, 700, 800]
+        if let current = filters.maxCaloriesPerServing, !limits.contains(current) {
+            limits.append(current)
+            limits.sort()
         }
+        return [.init(value: nil, title: "Dowolne")]
+            + limits.map { RecipeFilterChoice<Int?>(value: $0, title: "do \($0) kcal") }
     }
 
-    // MARK: - Dieta i składniki
-
-    /// Dieta i wykluczanie — dwa wiersze z podstronami. Ile przepisów chowają
-    /// wykluczenia, stoi przy etykiecie karty.
-    private var dietAndIngredientsSection: some View {
-        let hidden = index.hiddenCount(by: filters.excludedIngredients, fit: fit)
-        let own = filters.excludedIngredients
-            .sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
-        let excluded = profileChips + own.map { RecipeFilterChipLine.Chip(id: $0.id, title: $0.chipTitle) }
+    /// Reszta filtrów jako JEDNA lista jak Ustawienia iOS: kolorowy kafelek
+    /// ikony, wartość po prawej (wybrana w kapsułce). Trudność i kalorie =
+    /// systemowe menu; mięso / pora kategorii, dieta, składniki i „Więcej
+    /// filtrów” = podstrona.
+    private func listSection(_ category: RecipesCategory?) -> some View {
+        let otherFacets = category.map { cat in
+            Self.inlineFacets(for: cat).filter { $0.kind != .dish && $0.kind != .taste }
+        } ?? []
         let locked = lockedDiets
         let diets = RecipeDietFilter.allCases
             .filter { locked.contains($0) || filters.diets.contains($0) }
-            .map { RecipeFilterChipLine.Chip(id: $0.rawValue, title: $0.title, locked: locked.contains($0)) }
-
-        return RecipeFilterSection(title: "Dieta i składniki") {
-            if hidden > 0 {
-                hiddenLabel(hidden)
-                    .transition(.opacity)
-            }
-        } content: {
-            RecipeFilterPickerGroup {
-                RecipeFilterPickerRow(
-                    icon: "leaf.fill",
-                    title: "Dieta",
-                    placeholder: RecipeFilterPickerRow.placeholder(
-                        from: RecipeFilterPickerRow.sentence(RecipeDietFilter.allCases.map { $0.title.lowercased() })
-                    ),
-                    chips: diets,
-                    accent: SCPalette.sage
-                ) { openPane = .diets }
-
-                RecipeFilterPickerDivider()
-
-                RecipeFilterPickerRow(
-                    icon: "nosign",
-                    title: "Wyklucz składniki",
-                    placeholder: "Np. papryka, grzyby, kolendra",
-                    chips: excluded
-                ) { openPane = .exclude }
-            }
-        }
-        .animation(.smooth(duration: 0.2), value: hidden)
-    }
-
-    // MARK: - Więcej filtrów
-
-    /// Podstrony arkusza (push w jego stosie): grupy „Więcej filtrów”,
-    /// wykluczanie składników i filtry kategorii spoza zakresu. Trzy siatki
-    /// kafelków jedna pod drugą — cechy, kuchnie, okazje i pory roku, ponad 25
-    /// kafelków — robiły z arkusza nieczytelną ścianę (Rafał, 28.09.2026).
-    enum Pane: Hashable {
-        case traits, cuisines, moments, exclude, diets, calories
-        /// Jeden aspekt kategorii z zakresu (rodzaj dania, mięso, pora).
-        case facet(RecipesCategory, RecipeFacetKind)
-        /// Wszystkie aspekty kategorii spoza zakresu („Filtry kategorii”).
-        case category(RecipesCategory)
-    }
-
-    private var moreSection: some View {
-        let traits = RecipeTraitFilter.allCases.filter { filters.traits.contains($0) }
-        let cuisines = RecipeCuisine.allCases.filter { filters.cuisines.contains($0) }
-        let moments = RecipeMoment.allCases.filter { filters.moments.contains($0) }
+            .map(\.title)
+        let excluded = profileChips.map(\.title)
+            + filters.excludedIngredients
+                .sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
+                .map(\.chipTitle)
+        let more = filters.traits.count + filters.cuisines.count + filters.moments.count
 
         return RecipeFilterSection(title: "Więcej") {
             RecipeFilterPickerGroup {
-                RecipeFilterPickerRow(
-                    icon: "sparkles",
-                    title: "Cechy",
-                    placeholder: RecipeFilterPickerRow.placeholder(
-                        from: RecipeFilterPickerRow.sentence(RecipeTraitFilter.visibleCases.map { $0.title.lowercased() })
-                    ),
-                    chips: traits.map { RecipeFilterChipLine.Chip(id: $0.rawValue, title: $0.title) },
+                if let category {
+                    ForEach(otherFacets) { facet in
+                        let picked = facet.options
+                            .filter { filters.categoryFilters[category]?.contains($0.id, in: facet.kind) ?? false }
+                            .map(\.title)
+                        RecipeFilterListButtonRow(
+                            icon: Self.facetIcon(facet.kind, in: category),
+                            title: facet.title,
+                            value: Self.summary(picked),
+                            isActive: !picked.isEmpty,
+                            accent: RecipeAccent.accent(for: category)
+                        ) { openPane = .facet(category, facet.kind) }
+                        RecipeFilterListDivider()
+                    }
+                }
+
+                RecipeFilterListMenuRow(
+                    icon: "chart.bar.fill",
+                    title: "Trudność",
+                    choices: Self.difficultyChoices,
+                    selection: $filters.difficulty,
                     accent: SCPalette.indigo
-                ) { openPane = .traits }
-
-                RecipeFilterPickerDivider()
-
-                RecipeFilterPickerRow(
-                    icon: "globe.europe.africa.fill",
-                    title: "Kuchnia",
-                    placeholder: RecipeFilterPickerRow.placeholder(
-                        from: RecipeFilterPickerRow.sentence(RecipeCuisine.allCases.map { $0.title.lowercased() })
-                    ),
-                    chips: cuisines.map { RecipeFilterChipLine.Chip(id: $0.rawValue, title: $0.title) },
+                )
+                RecipeFilterListDivider()
+                RecipeFilterListMenuRow(
+                    icon: "flame.fill",
+                    title: "Kalorie na porcję",
+                    choices: calorieChoices,
+                    selection: $filters.maxCaloriesPerServing,
+                    accent: SCPalette.terracotta
+                )
+                RecipeFilterListDivider()
+                RecipeFilterListButtonRow(
+                    icon: "leaf.fill",
+                    title: "Dieta",
+                    value: Self.summary(diets),
+                    isActive: !diets.isEmpty,
                     accent: SCPalette.sage
-                ) { openPane = .cuisines }
-
-                RecipeFilterPickerDivider()
-
-                RecipeFilterPickerRow(
-                    icon: "calendar",
-                    title: "Okazje i sezon",
-                    placeholder: RecipeFilterPickerRow.placeholder(
-                        from: RecipeFilterPickerRow.sentence(RecipeMoment.allCases.map(\.summaryTitle))
-                    ),
-                    chips: moments.map { RecipeFilterChipLine.Chip(id: $0.rawValue, title: $0.title) },
+                ) { openPane = .diets }
+                RecipeFilterListDivider()
+                RecipeFilterListButtonRow(
+                    icon: "nosign",
+                    title: "Bez składników",
+                    value: Self.summary(excluded, none: "Żadnych"),
+                    isActive: !excluded.isEmpty,
                     accent: SCPalette.rose
-                ) { openPane = .moments }
+                ) { openPane = .exclude }
+                RecipeFilterListDivider()
+                RecipeFilterListButtonRow(
+                    icon: "sparkles",
+                    title: "Więcej filtrów",
+                    value: more > 0 ? "Wybrane: \(more)" : "Cechy, kuchnia…",
+                    isActive: more > 0,
+                    accent: SCPalette.lavender
+                ) { openPane = .more }
             }
         }
     }
 
-    // MARK: - Wykluczanie
+    // MARK: - Podstrony
 
-    private func hiddenLabel(_ count: Int) -> some View {
-        (Text("ukrywa ")
-            + Text(verbatim: "\(count)").fontWeight(.semibold).foregroundStyle(Color.scLabel(scheme))
-            + Text(verbatim: " \(PolishPlural.recipesNoun(count))"))
-            .monospacedDigit()
+    /// Podstrony arkusza (push w jego stosie). Kafelki ze zdjęciami stoją
+    /// TYLKO tu — na wierzchu arkusza są zdjęcia rodzaju dania, smak, czas
+    /// i jedna lista (6.10.2026, Rafał: „prościej, ale nie smutno”).
+    enum Pane: Hashable {
+        case traits, cuisines, moments, exclude, diets, more
+        /// Jeden aspekt kategorii z zakresu (mięso, pora).
+        case facet(RecipesCategory, RecipeFacetKind)
+        /// Wszystkie aspekty kategorii spoza zakresu („Filtry kategorii”).
+        case category(RecipesCategory)
     }
 
     // MARK: - Stopka
@@ -665,8 +610,6 @@ private struct RecipeFilterPane: View {
     let profileChips: [RecipeFilterChipLine.Chip]
     /// Diety z profilu — kafelki z kłódką.
     let lockedDiets: Set<RecipeDietFilter>
-    /// Cel kalorii na posiłek — szałwiowy odcinek na osi wykresu.
-    let goalZone: ClosedRange<Int>?
     let totalContext: String
     let onDone: () -> Void
 
@@ -761,27 +704,77 @@ private struct RecipeFilterPane: View {
             )
         case .diets:
             dietPage
-        case .calories:
-            RecipeFilterPage(
-                title: "Kalorie na porcję",
-                selectedCount: filters.maxCaloriesPerServing == nil ? 0 : 1,
-                resultCount: resultCount,
-                totalCount: index.total,
-                totalContext: totalContext,
-                onClear: { filters.maxCaloriesPerServing = nil },
-                onDone: onDone
-            ) {
-                RecipeFilterKcalChart(
-                    value: $filters.maxCaloriesPerServing,
-                    histogram: index.kcalHistogram(filters, fit: fit),
-                    goalZone: goalZone
-                )
-            }
+        case .more:
+            morePage
         case .facet(let category, let kind):
             facetPage(category, kind: kind)
         case .category(let category):
             categoryPage(category)
         }
+    }
+
+    /// „Więcej filtrów” — cechy, kuchnia, okazje i sezon jako wiersze; każdy
+    /// wpycha swoje kafelki (`NavigationLink` w stosie arkusza).
+    private var morePage: some View {
+        let traits = RecipeTraitFilter.allCases.filter { filters.traits.contains($0) }.map(\.title)
+        let cuisines = RecipeCuisine.allCases.filter { filters.cuisines.contains($0) }.map(\.title)
+        let moments = RecipeMoment.allCases.filter { filters.moments.contains($0) }.map(\.title)
+
+        return RecipeFilterPage(
+            title: "Więcej filtrów",
+            accent: SCPalette.lavender,
+            selectedCount: traits.count + cuisines.count + moments.count,
+            resultCount: resultCount,
+            totalCount: index.total,
+            totalContext: totalContext,
+            onClear: {
+                filters.traits = []
+                filters.cuisines = []
+                filters.moments = []
+            },
+            onDone: onDone
+        ) {
+            RecipeFilterPickerGroup {
+                moreLink(.traits, icon: "sparkles", title: "Cechy", picked: traits, accent: SCPalette.indigo)
+                RecipeFilterListDivider()
+                moreLink(.cuisines, icon: "globe.europe.africa.fill", title: "Kuchnia", picked: cuisines, accent: SCPalette.sage)
+                RecipeFilterListDivider()
+                moreLink(.moments, icon: "calendar", title: "Okazje i sezon", picked: moments, accent: SCPalette.rose)
+            }
+        }
+    }
+
+    private func moreLink(
+        _ pane: RecipeFilterSheet.Pane,
+        icon: String,
+        title: String,
+        picked: [String],
+        accent: Color
+    ) -> some View {
+        NavigationLink {
+            RecipeFilterPane(
+                pane: pane,
+                filters: $filters,
+                fit: fit,
+                index: index,
+                covers: covers,
+                facetCovers: facetCovers,
+                profileChips: profileChips,
+                lockedDiets: lockedDiets,
+                totalContext: totalContext,
+                onDone: onDone
+            )
+        } label: {
+            RecipeFilterListRowLabel(
+                icon: icon,
+                title: title,
+                value: RecipeFilterSheet.summary(picked),
+                isActive: !picked.isEmpty,
+                accent: accent,
+                trailingIcon: "chevron.right"
+            )
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
     }
 
     /// Dieta — kafelki ze zdjęciem dania; diety z profilu z kłódką.

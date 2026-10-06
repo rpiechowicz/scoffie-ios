@@ -72,12 +72,15 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   na korzeniu i w kategorii = `recipesSearchDock` (jedna droga), stoi nad paskiem zakładek, który się NIE zwija.
   Zjeżdżanie paska szukania obok zwiniętej ikony (liczone z przewijania) USUNIĘTE tego samego dnia: iOS nie mówi, kiedy
   pasek się rozwija (np. stuknięciem w zwiniętą ikonę), i pasek szukania nachodził na zakładki. Krążek Filtrów BEZ `GlassEffectContainer` (w grupie był martwy
-  pod systemowym `TabView`), plakietka wprost na krążku. Arkusz „Filtry” = SAME WIERSZE w kartach jak Ustawienia iOS
-  (6.10.2026 wieczór, Rafał: „za dużo, pomieszane, mega nieczytelne”): karta kategorii (smak = systemowy segment w wierszu,
-  rodzaj dania / mięso / pora = wiersz → podstrona `Pane.facet`), „Najważniejsze” (czas, trudność = `RecipeFilterMenuRow`
-  z systemowym menu; kalorie = `RecipeFilterValueRow` → podstrona z wykresem), „Dieta i składniki” (dieta → podstrona
-  z kafelkami, wyklucz składniki), „Więcej” (cechy, kuchnia, okazje). Kafelki ze zdjęciami i wykres TYLKO na podstronach
-  — nie wracać z siatkami na wierzch. „Filtry” działają
+  pod systemowym `TabView`), plakietka wprost na krążku. Arkusz „Filtry” (6.10.2026 wieczór, po pięciu rundach podglądu
+  w artefakcie — Rafał: „przekombinowane” → „za smutno” → „prościej, ale z kolorem”): w kategorii rodzaj dania =
+  kółka ze zdjęciem dania NA STAŁE (`RecipeFacetPhotoGrid`: ≤ 5 w rzędzie, więcej — rzędy po 4), smak = dwa kafle ze
+  zdjęciem (`RecipeTasteTiles`, drugie stuknięcie odznacza); czas = przełącznik w kolorze (`RecipeFilterSegment`);
+  reszta = JEDNA lista jak Ustawienia iOS (`RecipeFilterListMenuRow` / `RecipeFilterListButtonRow`: pełny kolorowy
+  kafelek ikony, wartość po prawej, wybrana w kapsułce): mięso / pora kategorii → `Pane.facet`, trudność i kalorie
+  (progi 300–800) = systemowe menu, dieta → kafelki, „Bez składników”, „Więcej filtrów” (`Pane.more`: cechy, kuchnia,
+  okazje — każda wpycha kafelki). Wykres kalorii (`RecipeFilterKcalChart`) USUNIĘTY. Kafelki i siatki TYLKO na
+  podstronach — nie wracać z nimi na wierzch. „Filtry” działają
   NA ŻYWO (bez szkicu i „Pokaż”), stopka „N z M przepisów” + tekstowe „Gotowe” (lupa odpadła). Filtry kategorii =
   sekcja „Filtrów”, gdy lista stoi w kategorii (ekran albo zakładka wyników, `scope`), bez kuchni i okazji kategorii;
   bez zakresu — wiersze „Filtry kategorii”. Podstrony Filtrów („Więcej filtrów”, Wyklucz składniki → dział) i filtry
