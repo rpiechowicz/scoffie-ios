@@ -61,11 +61,12 @@ import SwiftUI
 /// a plan dnia stoi bladą warstwą pod każdym torem (`planned`), więc poranne
 /// „kcal 0/2100” nie wygląda jak plan, który zginął.
 ///
-/// **Przejście Plan ↔ Dziś**: ten sam układ, więc przechodzą LICZBY. Pigułka
-/// zakładki, na którą się weszło, staje na pierwszej klatce z liczbami
-/// pigułki poprzedniej (`PlanDayGoalFace` z `SCTabBarChrome.goalBarFaces`),
-/// a potem cyfry rolują się do własnych (`numericText`, jak każda liczba
-/// w aplikacji), a tory dojeżdżają.
+/// **Przejście Plan ↔ Pulpit** (Rafał 6.10.2026: „ten komponent ma być na obu
+/// stronach i ma tylko dynamicznie zmieniać stan”): ten sam układ, więc
+/// przechodzą liczby i paski. Zanim zakładka się przełączy, menu wkłada do
+/// `SCTabBarChrome.goalBarHandoff` twarz pigułki, z której się wychodzi
+/// (`PlanDayGoalFace`) — pierwsza klatka nowej zakładki rysuje dokładnie ją,
+/// a potem paski rosną albo maleją i cyfry rolują do własnych wartości.
 struct PlanDayGoalBar: View {
     let nutrition: PlanDayNutrition
     let targets: DailyNutritionTargets
@@ -89,10 +90,6 @@ struct PlanDayGoalBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scTabIsActive) private var isActiveTab
     @Environment(\.scTabBarChrome) private var tabBarChrome
-    @Environment(\.sessionStore) private var sessionStore
-
-    /// Twarz pigułki z poprzedniej zakładki na czas przejścia — `nil` = własna.
-    @State private var handoff: PlanDayGoalFace?
     /// Trwa przejście — kolumny dostają ruch przejścia zamiast zwykłej
     /// sprężyny zmiany liczb.
     @State private var isHandingOff = false
@@ -120,16 +117,7 @@ struct PlanDayGoalBar: View {
 
     /// To, co pigułka rysuje: w trakcie przejścia twarz z poprzedniej
     /// zakładki, potem własna.
-    private var face: PlanDayGoalFace { handoff ?? ownFace }
-
-    /// Pigułka po drugiej stronie przejścia.
-    private var handoffPartner: DashboardTab? {
-        switch tab {
-        case .plan: .calendar
-        case .calendar: .plan
-        default: nil
-        }
-    }
+    private var face: PlanDayGoalFace { tabBarChrome.goalBarHandoff[tab] ?? ownFace }
 
     /// Szerokość pigułki na zakładce o szerokości `pageWidth` — JEDNA reguła
     /// dla Planu i Pulpitu, żeby pigułka przy zmianie zakładki stała w tym
@@ -201,28 +189,21 @@ struct PlanDayGoalBar: View {
         }
     }
 
-    /// Pierwsza klatka = pigułka z poprzedniej zakładki, potem jednym ruchem
-    /// własna.
+    /// Pierwsza klatka = pigułka z poprzedniej zakładki (już w stanie — patrz
+    /// `goalBarHandoff`), potem jednym ruchem własna.
     private func startHandoff() {
-        guard !reduceMotion,
-              let partner = handoffPartner,
-              sessionStore.previousDashboardTab == partner,
-              let from = tabBarChrome.goalBarFaces[partner],
-              from.fingerprint != ownFace.fingerprint
-        else { return }
-
-        var instant = Transaction()
-        instant.disablesAnimations = true
-        withTransaction(instant) {
-            handoff = from
-            isHandingOff = true
+        guard let from = tabBarChrome.goalBarHandoff[tab] else { return }
+        guard !reduceMotion, from.fingerprint != ownFace.fingerprint else {
+            tabBarChrome.goalBarHandoff[tab] = nil
+            return
         }
+        isHandingOff = true
 
         Task { @MainActor in
             // Klatka z twarzą poprzedniej zakładki musi wejść na ekran, zanim
             // ruszy przejście — inaczej SwiftUI zlepia oba zapisy w jeden.
             try? await Task.sleep(for: .milliseconds(32))
-            withAnimation(Self.handoffMotion) { handoff = nil }
+            withAnimation(Self.handoffMotion) { tabBarChrome.goalBarHandoff[tab] = nil }
             // Po ostatniej kolumnie wraca zwykła sprężyna zmiany liczb.
             try? await Task.sleep(for: .milliseconds(800))
             isHandingOff = false

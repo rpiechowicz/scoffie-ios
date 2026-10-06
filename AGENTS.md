@@ -50,9 +50,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   USUNIĘTY. Tygodnie trzech dni wczytywane raz na dobę (`loadDayWindow`: sąsiedni pierwszy, oglądany ostatni — nasłuch
   socketu idzie za tygodniem oglądanego dnia). Pigułka = `PlanDayGoalBar(planned:)` w TYM SAMYM jednym wierszu co Plan (kcal + B/T/W, zjedzone; plan dnia
   bladą warstwą pod torami) — zdanie „Zjedzone X z Y kcal · w planie Z” USUNIĘTE 6.10.2026 wieczorem (Rafał: „kompaktowe,
-  czytelne, w 1 wierszu”; dwa układy psuły przejście). Przejście Plan ↔ Dziś: pigułka zakładki, na którą się weszło
-  z drugiej, na pierwszej klatce ma liczby tamtej (`PlanDayGoalFace` z `SCTabBarChrome.goalBarFaces`,
-  `SessionStore.previousDashboardTab`), potem cyfry rolują (`SCMotion.textRoll`) i tory dojeżdżają. Nie wracać do dwóch
+  czytelne, w 1 wierszu”; dwa układy psuły przejście). Przejście Plan ↔ Pulpit = jeden komponent, który zmienia stan (Rafał 6.10.2026): menu, ZANIM
+  przełączy zakładkę (wiązanie `selection` w `NavigationMenu` + `onChange` dla przełączeń z kodu), wkłada twarz wychodzącej
+  pigułki (`PlanDayGoalFace` z `SCTabBarChrome.goalBarFaces`) do `goalBarHandoff[docelowa]`; pierwsza klatka nowej zakładki
+  rysuje ją, potem pigułka zdejmuje ją ruchem — liczba i pasek każdej kolumny razem (0,55 s), kolumny co 0,05 s. Nie wracać do dwóch
   układów ani do animowania wysokości szkła. Zakres wczoraj · dziś · jutro jest CELOWY — dalsze dni ogląda się i planuje w Planie. Pusta pora / pusty dzień dziś i jutro = „Zaplanuj” (pierwsza pigułka w kolorze pory + pusty talerz jako
   przycisk) → `SessionStore.planSlotRequest` (`PlanSlotRequest`) + `dashboardTab = .plan`; Plan zdejmuje prośbę,
   `DatesViewModel.show(day:)`, otwiera „Wybierz przepis” na tę porę („dla kogo”: `[]` = cały dom, `[ja]`, gdy ktoś
