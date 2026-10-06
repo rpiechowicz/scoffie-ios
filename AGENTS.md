@@ -84,7 +84,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   kafelek ikony, wartość po prawej, wybrana w kapsułce): mięso / pora kategorii → `Pane.facet`, trudność i kalorie
   (progi 300–800) = systemowe menu, dieta → kafelki, „Bez składników” (strona `RecipeExcludePage` ma ten sam tytuł), „Więcej filtrów” (`Pane.more`: cechy, kuchnia,
   okazje — każda wpycha kafelki). Wykres kalorii (`RecipeFilterKcalChart`) USUNIĘTY. Kafelki i siatki TYLKO na
-  podstronach — nie wracać z nimi na wierzch. „Filtry” działają
+  podstronach — nie wracać z nimi na wierzch. Zdjęcia kółek i smaku (6.10.2026: „ciut większe”, „bardziej pasujące”):
+  rozmiar z szerokości kolumny (po 4 w rzędzie ~68 pt, po 5 ~61 pt, smak 44 pt), a przepisy na zdjęciach wybrane RĘCZNIE
+  z arkuszy miniatur katalogu — `RecipeFilterCoverPicks` (rodzaj dania × kategoria, smak, kuchnia; po dwa: główny
+  i zapas bez mięsa), automat `RecipeCoverPicker` tylko, gdy wybranego nie ma w puli albo ukrywa go profil. „Filtry” działają
   NA ŻYWO (bez szkicu i „Pokaż”), stopka „N z M przepisów” + tekstowe „Gotowe” (lupa odpadła). Filtry kategorii =
   sekcja „Filtrów”, gdy lista stoi w kategorii (ekran albo zakładka wyników, `scope`), bez kuchni i okazji kategorii;
   bez zakresu — wiersze „Filtry kategorii”. Podstrony Filtrów („Więcej filtrów”, Wyklucz składniki → dział) i filtry

@@ -362,14 +362,31 @@ struct RecipeFacetPhotoGrid: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    private static let photo: CGFloat = 56
+    /// Szerokość siatki — z niej rozmiar zdjęcia.
+    @State private var width: CGFloat = 0
+
+    /// Zdjęcie tak duże, jak pozwala kolumna (Rafał 6.10.2026: „obrazki
+    /// posiłków ciut większe”): w rzędzie po cztery ~68 pt, po pięć ~61 pt
+    /// (było 56 w obu), z miejscem na pierścień zaznaczenia (3 pt odstępu).
+    private static let maxPhoto: CGFloat = 68
+    private static let ringGap: CGFloat = 3
+
+    private var columnCount: Int { options.count <= 5 ? max(options.count, 1) : 4 }
+    /// Pięć w rzędzie stoi ciaśniej — inaczej zdjęcia nie urosłyby wcale.
+    private var spacing: CGFloat { columnCount >= 5 ? 4 : 8 }
+
+    private var photo: CGFloat {
+        guard width > 0 else { return 56 }
+        let column = (width - spacing * CGFloat(columnCount - 1)) / CGFloat(columnCount)
+        return min(Self.maxPhoto, max(48, column - Self.ringGap * 2))
+    }
 
     private var columns: [GridItem] {
-        let count = options.count <= 5 ? max(options.count, 1) : 4
-        return Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: count)
+        Array(repeating: GridItem(.flexible(), spacing: spacing, alignment: .top), count: columnCount)
     }
 
     var body: some View {
+        let photo = self.photo
         LazyVGrid(columns: columns, alignment: .center, spacing: 14) {
             ForEach(options) { option in
                 let selected = isOn(option.id)
@@ -378,10 +395,10 @@ struct RecipeFacetPhotoGrid: View {
                 } label: {
                     VStack(spacing: 6) {
                         RecipeFilterCoverThumb(recipe: cover(option.id), icon: icon, accent: accent)
-                            .frame(width: Self.photo, height: Self.photo)
+                            .frame(width: photo, height: photo)
                             .clipShape(Circle())
                             .overlay(Circle().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
-                            .padding(4)
+                            .padding(Self.ringGap)
                             .overlay(
                                 Circle()
                                     .strokeBorder(accent, lineWidth: 2.5)
@@ -413,6 +430,7 @@ struct RecipeFacetPhotoGrid: View {
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .sensoryFeedback(.selection, trigger: options.filter { isOn($0.id) }.map(\.id))
     }
 }
@@ -449,8 +467,8 @@ struct RecipeTasteTiles: View {
                 } label: {
                     HStack(spacing: 10) {
                         RecipeFilterCoverThumb(recipe: cover(option.id), icon: Self.icon(for: option.id), accent: accent)
-                            .frame(width: 38, height: 38)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .frame(width: 44, height: 44)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                         Text(option.title)
                             .font(.sc(size: 15, weight: .bold))
@@ -463,7 +481,7 @@ struct RecipeTasteTiles: View {
                     }
                     .padding(.leading, 7)
                     .padding(.trailing, 10)
-                    .frame(height: 52)
+                    .frame(height: 58)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(isOn ? accent.opacity(scheme == .dark ? 0.18 : 0.14) : Color.scTileBg(scheme))

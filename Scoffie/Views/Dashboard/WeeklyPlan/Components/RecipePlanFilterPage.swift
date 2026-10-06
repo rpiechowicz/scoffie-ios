@@ -66,7 +66,7 @@ struct RecipePlanFilterPage: View {
     /// Zdjęcia kafelków — przykład dania dla każdej opcji, raz na otwarcie.
     private var covers: RecipeFacetCovers {
         if let covers = valuesBox.covers { return covers }
-        let covers = RecipeFacetCovers(facets: facets, recipes: recipes, values: values)
+        let covers = RecipeFacetCovers(facets: facets, recipes: recipes, values: values, category: category)
         valuesBox.covers = covers
         return covers
     }
