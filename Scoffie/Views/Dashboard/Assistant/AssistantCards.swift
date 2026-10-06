@@ -196,9 +196,6 @@ struct AssistantPlanWeekCard: View {
     /// Zamiana jednego dania z arkusza przeglądu — zwykła wiadomość.
     var onAsk: ((String) -> Void)? = nil
     var onCompose: () -> Void = {}
-    /// Id wiadomości, która właśnie przyszła; `nil` dla historii — patrz
-    /// `ProposalAutoPresent`.
-    var autoPresentID: String? = nil
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.recipeCatalogStore) private var recipeCatalog
@@ -357,10 +354,6 @@ struct AssistantPlanWeekCard: View {
         .sheet(isPresented: $showsChanges) {
             AssistantPlanChangesSheet(changes: changes, members: members, me: sessionStore.currentUserId)
         }
-        .task(id: autoPresentID) {
-            guard await ProposalAutoPresent.shouldOpen(autoPresentID, state: card.state, isEmpty: storyEntries.isEmpty) else { return }
-            presented = OptionsSheetPage(id: 0)
-        }
     }
 
     private var browseSubtitle: String {
@@ -386,9 +379,6 @@ struct AssistantPlanDayCard: View {
     /// Zamiana jednego dania z arkusza przeglądu — zwykła wiadomość.
     var onAsk: ((String) -> Void)? = nil
     var onCompose: () -> Void = {}
-    /// Id wiadomości, która właśnie przyszła; `nil` dla historii — patrz
-    /// `ProposalAutoPresent`.
-    var autoPresentID: String? = nil
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.recipeCatalogStore) private var recipeCatalog
@@ -512,33 +502,14 @@ struct AssistantPlanDayCard: View {
         .sheet(isPresented: $showsChanges) {
             AssistantPlanChangesSheet(changes: changes, members: members, me: sessionStore.currentUserId)
         }
-        .task(id: autoPresentID) {
-            guard await ProposalAutoPresent.shouldOpen(autoPresentID, state: card.state, isEmpty: card.slots.isEmpty) else { return }
-            presented = OptionsSheetPage(id: 0)
-        }
     }
 }
 
-/// Świeża propozycja dnia albo tygodnia otwiera przegląd dań SAMA
-/// (24.09.2026, Rafał: „sheet z podglądem powinien się z defaultu otwierać
-/// zawsze”) — jak karta dań do wyboru. Jedno danie = arkusz z jedną stroną
-/// i od razu „Wszystko pasuje?” obok, kilka = strony po kolei od pierwszego.
-/// RAZ na wiadomość (leniwa lista odtwarza stan wiersza przy każdym powrocie
-/// na ekran), nigdy dla historii i nigdy dla propozycji, której nie da się
-/// już zapisać ani zmienić (zapisana, cofnięta, nieaktualna, wygasła) —
-/// tam arkusz otwiera tylko dotknięcie.
-@MainActor
-private enum ProposalAutoPresent {
-    private static var opened = Set<String>()
-
-    static func shouldOpen(_ id: String?, state: AgentCardStateDTO, isEmpty: Bool) async -> Bool {
-        guard let id, !isEmpty, state.isPending, !opened.contains(id) else { return false }
-        opened.insert(id)
-        // Najpierw karta wjeżdża pod tekstem, potem arkusz — nie oba naraz.
-        try? await Task.sleep(for: .milliseconds(450))
-        return !Task.isCancelled
-    }
-}
+// Świeża propozycja dnia albo tygodnia NIE otwiera przeglądu sama (6.10.2026,
+// „jak od Apple”): arkusz zasłaniał odpowiedź, na którą użytkownik czekał.
+// Przegląd otwiera dopiero dotknięcie dania albo „Przeglądaj dania”. Sama
+// otwiera się tylko karta dań do wyboru (`AssistantOptionsCard`) — tam arkusz
+// JEST odpowiedzią.
 
 // MARK: - Przegląd dań propozycji
 
