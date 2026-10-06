@@ -3,21 +3,25 @@ import SwiftUI
 
 /// Koniec timera w aplikacji (ST4, D35): pełny ekran bez doku — tarcza
 /// z czasem po terminie liczonym w górę, tytuł i treść alertu ze scenariusza,
-/// inne trwające timery, „Jeszcze chwilę?” +1 / +2 / +5 min i „Gotowe —
-/// dalej”. „Wycisz” zostawia timer po czasie (kapsuła pulsuje mocno), dopóki
-/// nie padnie „Gotowe”.
+/// inne trwające timery, a na dole, w zasięgu kciuka, jak alarm systemu
+/// (6.10.2026, „mokre ręce”): duże „Gotowe”, obok „+1 min” i „…” z rzadszymi
+/// ruchami (+2 / +5 min, „Tylko wycisz”). Wcześniej było tu pięć przycisków,
+/// a najczęstszy — „Wycisz” — stał mały w górnym rogu, poza kciukiem.
+/// „Tylko wycisz” zostawia timer po czasie (kapsuła pulsuje mocno); stuknięcie
+/// w nią otwiera arkusz Timery z „Gotowe” i „+1 min”.
 ///
-/// Tarcza, aureole, dzwonek i „Gotowe — dalej” są w kolorze TEGO timera
+/// Tarcza, aureole, dzwonek i „Gotowe” są w kolorze TEGO timera
 /// (runda 3: „każdy inny timer inny kolor”) — ten sam kolor co jego kapsuła.
 ///
 /// Kilka dzwoni naraz (runda 8: „lepszy design i płynne przełączenie”): nad
 /// tarczą przełącznik — kapsuła każdego dzwoniącego timera (dzwonek w jego
 /// kolorze, nazwa, czas po terminie), wybrana na tincie swojego koloru,
 /// zaznaczenie przejeżdża między kapsułami. Stuknięcie albo przeciągnięcie
-/// tarczy w bok zmienia timer W MIEJSCU: ekran, tło i panel stoją, tarcza
+/// tarczy w bok zmienia timer W MIEJSCU: ekran, tło i przyciski stoją, tarcza
 /// i aureole przenikają (wskazówka nie cofa się po obwodzie), kolor przechodzi
-/// płynnie, nazwa, tytuł i „było … min” rolują. „Gotowe — dalej” przy jednym
-/// zostawia ekran drugiemu tym samym ruchem; „Wycisz” ucisza wszystkie.
+/// płynnie, nazwa i tytuł rolują. „Gotowe” i „+1 min” dotyczą pokazywanego
+/// timera — ekran przechodzi na następny dzwoniący tym samym ruchem;
+/// „Tylko wycisz” ucisza wszystkie.
 struct CookAlarmView: View {
     let session: CookSession
     /// Dzwoniące timery w kolejności kroków (`CookSession.ringingTimers`) —
@@ -101,7 +105,7 @@ struct CookAlarmView: View {
                     .cookReveal(hasAppeared, order: 2)
                 }
                 Spacer(minLength: 16)
-                panel
+                actions
                     .cookReveal(hasAppeared, order: 3)
             }
             .padding(.horizontal, SCCook.Spacing.page)
@@ -126,7 +130,7 @@ struct CookAlarmView: View {
             await CookEntrance.breathe()
             hasAppeared = true
         }
-        .accessibilityAction(named: "Gotowe — dalej") { onDone(item.id) }
+        .accessibilityAction(named: "Gotowe") { onDone(item.id) }
     }
 
     // MARK: - Kilka naraz
@@ -210,7 +214,7 @@ struct CookAlarmView: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    /// Dźwięk alarmu co 2 s, dopóki nie padnie „Wycisz” albo „Gotowe” —
+    /// Dźwięk alarmu co 2 s, dopóki nie padnie „Tylko wycisz”, „+min” albo „Gotowe” —
     /// widok znika z ekranu, a zadanie razem z nim. Gdy dzwoni alarm
     /// systemowy (`CookAlarmScheduler`, runda 11 — dźwięk alarmu telefonu),
     /// ekran swojego nie dokłada; własny dźwięk zostaje zapasem na brak
@@ -230,27 +234,11 @@ struct CookAlarmView: View {
         }
     }
 
+    /// Sam pierścień kroków — „Wycisz” zszedł z rogu do „…” na dole
+    /// („Tylko wycisz”), w zasięgu kciuka.
     private var topBar: some View {
-        HStack(spacing: 10) {
-            CookStepRing(count: session.stepCount, current: session.stepIndex)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Button(action: onSilence) {
-                HStack(spacing: 6) {
-                    Image(systemName: "speaker.slash")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("Wycisz")
-                        .font(.system(size: 14, weight: .bold))
-                }
-                .foregroundStyle(Color.scLabel(scheme))
-                .padding(.horizontal, 12)
-                .frame(height: 36)
-                // Szkło jak pierścień kroków obok (`SCSheetIconSurface`) —
-                // oba pływają nad zdjęciem pod welonem.
-                .scChromeGlass(in: Capsule())
-                .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-        }
+        CookStepRing(count: session.stepCount, current: session.stepIndex)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Tarcza jak stoper (runda 4: „teksty wychodzą poza zegar — doszlifuj
@@ -258,8 +246,8 @@ struct CookAlarmView: View {
     /// smugą — raz na minutę po czasie, bez powrotu na start (`CookAlarmBezel`).
     /// W krążku zostają tylko trzy krótkie wiersze, każdy w szerokości, która
     /// mieści się w kole: nazwa timera z dzwonkiem, licznik i „po czasie”.
-    /// Dłuższe maleją, zamiast wychodzić poza tarczę; na czas nastawienia
-    /// („było 10–12 min”) jest miejsce w panelu „Jeszcze chwilę?”.
+    /// Dłuższe maleją, zamiast wychodzić poza tarczę; czas nastawienia
+    /// („było 10–12 min”) stoi w nagłówku „…”, przy +2 / +5 min.
     private var dial: some View {
         let minutes = Int(over) / 60
         let counter = CookClock.overdueText(over)
@@ -336,60 +324,96 @@ struct CookAlarmView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var panel: some View {
-        let shape = RoundedRectangle(cornerRadius: SCCook.Radius.alarmPanel, style: .continuous)
-        return VStack(alignment: .leading, spacing: 10) {
-            // Na ile był nastawiony — tu, przy „+min”, bo od tego zależy,
-            // ile dołożyć (w tarczy się nie mieścił).
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Jeszcze chwilę?")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color.scMuted(scheme))
-                Spacer(minLength: 8)
-                Text("było \(CookClock.duration(item.timer))")
-                    .font(.system(size: 13, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(SCCook.Palette.caption(scheme))
-                    .lineLimit(1)
-                    .cookRoll(item.timer.id)
-            }
-            .padding(.horizontal, 4)
-            // „+N min” — neutralne szkło w jednej grupie (Liquid Glass).
-            GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 8) {
-                ForEach([1, 2, 5], id: \.self) { minutes in
-                    Button { onExtend(item.id, minutes * 60) } label: {
-                        Text("+\(minutes) min")
-                            .font(.system(size: 16, weight: .bold))
-                            .monospacedDigit()
-                            .foregroundStyle(Color.scLabel(scheme))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: SCCook.Height.alarmExtend)
-                            .scChromeGlass(in: Capsule())
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            }
-            Button { onDone(item.id) } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 16, weight: .bold))
-                    Text("Gotowe — dalej")
-                        .cookText(SCCook.Typography.buttonQuiet)
-                }
-                .foregroundStyle(color)
-                .frame(maxWidth: .infinity)
-                .frame(height: SCCook.Height.alarmDone)
-                .scSoftCapsule(color)
-                .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
+    // MARK: - Akcje
+
+    /// Na dole, w zasięgu kciuka — jak alarm systemu: duże „Gotowe” i jedna
+    /// akcja dodatkowa („+1 min”), a rzadsze ruchy w systemowym menu „…”.
+    /// Główna po prawej (pod kciukiem), „…” najdalej od niej. Dawny panel
+    /// „Jeszcze chwilę?” (+1 / +2 / +5 min nad „Gotowe — dalej”) odpadł — jego
+    /// przyciski stoją tu, a „było 10 min” w nagłówku menu, przy +2 / +5.
+    private var actions: some View {
+        // TODO token: spacing.cookAlarmActionGap (10) — odstęp przycisków na dole.
+        HStack(spacing: 10) {
+            moreMenu
+            extendButton
+            doneButton
         }
-        .padding(14)
-        .background(shape.fill(SCCook.Palette.dockSurface(scheme)))
-        .overlay(shape.strokeBorder(SCCook.Palette.dockStroke(scheme), lineWidth: 1))
+    }
+
+    /// „Gotowe” — kończy POKAZYWANY timer (i idzie krok dalej, gdy stoimy na
+    /// jego kroku); przy kilku dzwoniących ekran zostaje następnemu.
+    /// Pełny kolor timera — jedyna kryjąca kontrolka ekranu.
+    private var doneButton: some View {
+        Button { onDone(item.id) } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 17, weight: .heavy))
+                Text("Gotowe")
+                    .cookText(SCCook.Typography.buttonQuiet)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Color.scPageBase(scheme))
+            .frame(maxWidth: .infinity)
+            .frame(height: SCCook.Height.alarmDone)
+            .scChromeGlass(in: Capsule(), tint: color)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.96))
+        .accessibilityLabel("Gotowe: \(item.timer.label)")
+        .accessibilityHint(items.count > 1 ? "Kończy ten timer, ekran przejdzie do następnego" : "Kończy timer")
+    }
+
+    /// „+1 min” — dokłada minutę POKAZYWANEMU timerowi; ten przestaje
+    /// dzwonić i wraca do odliczania.
+    private var extendButton: some View {
+        Button { onExtend(item.id, 60) } label: {
+            Text("+1 min")
+                .cookText(SCCook.Typography.buttonQuiet)
+                .monospacedDigit()
+                .lineLimit(1)
+                .fixedSize()
+                .foregroundStyle(Color.scLabel(scheme))
+                // TODO token: spacing.cookAlarmExtendInset (22). Wysokość jak
+                // „Gotowe” (`height.cookAlarmDone`), żeby rząd był równy —
+                // `height.cookAlarmExtend` (52) został bez użycia.
+                .padding(.horizontal, 22)
+                .frame(height: SCCook.Height.alarmDone)
+                .scChromeGlass(in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.96))
+        .accessibilityLabel("Dodaj minutę: \(item.timer.label)")
+    }
+
+    /// „…” — systemowe menu: +2 / +5 min dla pokazywanego timera (w nagłówku
+    /// czas, na jaki był nastawiony) i „Tylko wycisz” — dla WSZYSTKICH
+    /// dzwoniących, bez kończenia (dźwięk jest jeden).
+    private var moreMenu: some View {
+        Menu {
+            Section {
+                ForEach([2, 5], id: \.self) { minutes in
+                    Button("+\(minutes) min") { onExtend(item.id, minutes * 60) }
+                }
+            } header: {
+                Text("Jeszcze chwilę? Było \(CookClock.duration(item.timer))")
+            }
+            Section {
+                Button(action: onSilence) {
+                    Label(items.count > 1 ? "Tylko wycisz wszystkie" : "Tylko wycisz", systemImage: "speaker.slash")
+                }
+            }
+        } label: {
+            // Szkło jako CAŁA etykieta menu — iOS 26 rozwija menu z krążka.
+            Image(systemName: "ellipsis")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(Color.scLabel(scheme))
+                .frame(width: SCCook.Height.alarmDone, height: SCCook.Height.alarmDone)
+                .scChromeGlass(in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .menuOrder(.fixed)
+        .accessibilityLabel("Więcej")
     }
 }
 
