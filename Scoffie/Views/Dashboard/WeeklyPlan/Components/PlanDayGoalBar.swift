@@ -53,6 +53,17 @@ import SwiftUI
 /// Szerokość pigułki ustawia `WeeklyPlanView` — to ona zna wymiar zakładki.
 /// Cztery kolumny potrzebują jej więcej niż dwa wiersze po trzy, bo najdłuższy
 /// podpis („kcal 1135/2100") musi się zmieścić obok trzech makr.
+///
+/// **Na „Dziś” pigułka MÓWI, co liczy** (6.10.2026, Plan i Kalendarz
+/// z wyostrzonymi rolami). Plan sumuje to, co zaplanowane, a „Dziś” — to, co
+/// odhaczone; ta sama pigułka z „kcal 0/2100” rano wyglądała jak plan, który
+/// gdzieś zginął. Z `planned` (tylko „Dziś”) nad makrami stoi więc zdanie
+/// „Zjedzone 1200 z 2100 kcal · w planie 1800” z torem kalorii pod spodem,
+/// a kolumna kalorii schodzi z rzędu — te same liczby nie stoją dwa razy.
+///
+/// Pigułki Planu i „Dziś” NIE przechodzą jedna w drugą przy zmianie zakładki
+/// (dawne `handoff` przez `SCTabBarChrome.goalSnapshot`, 4.10.2026): to dwie
+/// różne liczby, a rosnące tory mówiły, że to jedna, która się zmieniła.
 struct PlanDayGoalBar: View {
     let nutrition: PlanDayNutrition
     let targets: DailyNutritionTargets
@@ -65,16 +76,17 @@ struct PlanDayGoalBar: View {
     /// dojdzie, tym samym kolorem, tylko ściszonym.
     ///
     /// `nil` w Planie tygodnia — tam pigułka liczy SAM plan, więc zapowiadać
-    /// go drugi raz nie ma czym.
+    /// go drugi raz nie ma czym. Podane (zakładka „Dziś”) przełącza też układ
+    /// na zdanie „Zjedzone … · w planie …” — patrz komentarz typu.
     var planned: PlanDayNutrition?
     let action: () -> Void
 
-    @Environment(\.scTabIsActive) private var isActiveTab
-    @Environment(\.scTabBarChrome) private var chrome
-    /// Liczby pigułki z zakładki, z której właśnie się przyszło — przez
-    /// pierwszą klatkę wejścia pigułka pokazuje je, a potem ROŚNIE (albo
-    /// maleje) sprężyną do własnych. `nil` = własne liczby.
-    @State private var handoff: PlanDayGoalSnapshot?
+    @Environment(\.colorScheme) private var scheme
+
+    // Zdanie „Zjedzone … · w planie …” w stopniach `MacroMeter` (wartość 13,
+    // reszta 11), skalowanych z Dynamic Type tak samo jak tamte podpisy.
+    @ScaledMetric(relativeTo: .footnote) private var summaryValueSize: CGFloat = 13
+    @ScaledMetric(relativeTo: .caption2) private var summaryTextSize: CGFloat = 11
 
     /// Promień rogu szkła i obszaru dotyku — jedna liczba, żeby te dwa
     /// kształty nie mogły się rozjechać.
@@ -82,62 +94,13 @@ struct PlanDayGoalBar: View {
 
     /// Ile kalorii zostaje do celu; ujemne znaczy „ponad cel". Na ekranie tej
     /// liczby nie ma — idzie wyłącznie do opisu dla VoiceOver.
-    private var remaining: Int { shown.targets.kcal - shown.nutrition.kcal }
+    private var remaining: Int { targets.kcal - nutrition.kcal }
 
     /// Wszystko, co ma przejść płynnie przy zmianie dnia, przy dołożeniu
     /// posiłku i po przestawieniu celu w Ustawieniach — jedna wartość, jedna
     /// sprężyna. Cele są w odcisku celowo: bez nich powrót z suwaka kalorii
     /// podmieniał mianownik i przeskakiwał cztery tory bez ruchu.
     private var fingerprint: String {
-        let macros = shown.targets.macros
-        return "\(shown.nutrition.kcal).\(shown.nutrition.protein).\(shown.nutrition.fat).\(shown.nutrition.carbs)"
-            + "|\(shown.targets.kcal).\(macros?.proteinG ?? 0).\(macros?.fatG ?? 0).\(macros?.carbsG ?? 0)"
-            + "|\(shown.planned?.kcal ?? -1).\(shown.planned?.protein ?? -1)"
-            + ".\(shown.planned?.fat ?? -1).\(shown.planned?.carbs ?? -1)"
-    }
-
-    /// Jedna sprężyna dla cyfr i torów pod nimi. `MacroProgressTrack` ma
-    /// własną domyślną (0,4 s) i przy 0,36 s na cyfrach kreska lądowała
-    /// chwilę po liczbie — dwie sprężyny w jednej kolumnie widać jako dwie.
-    static let animation: Animation = .spring(response: 0.36, dampingFraction: 0.9)
-
-    /// To, co pigułka rysuje: przekazane liczby w chwili wejścia na zakładkę,
-    /// poza tym własne.
-    private var shown: PlanDayGoalSnapshot {
-        handoff ?? PlanDayGoalSnapshot(nutrition: nutrition, targets: targets, planned: planned)
-    }
-
-    var body: some View {
-        bar
-            // Plan i Kalendarz mają DWIE pigułki, a zakładki przenikają się
-            // przy przełączeniu. Na czystym szkle widać było podmianę jednej
-            // pigułki na drugą (Rafał 4.10.2026: „powinno animowanie rosnąć,
-            // a nie przełączać się”). Wchodząca pigułka startuje więc z liczb
-            // wychodzącej i dojeżdża do swoich tą samą sprężyną co przy
-            // zmianie dnia — czyta się jako JEDNA pigułka, której paski rosną.
-            .onChange(of: isActiveTab) { _, active in
-                guard active else { return }
-                if let previous = chrome.goalSnapshot {
-                    var still = Transaction()
-                    still.disablesAnimations = true
-                    withTransaction(still) { handoff = previous }
-                    DispatchQueue.main.async {
-                        withAnimation(Self.animation) { handoff = nil }
-                    }
-                }
-                report()
-            }
-            .onChange(of: fingerprintOfOwn, initial: true) { _, _ in report() }
-    }
-
-    /// Aktywna zakładka zostawia swoje liczby dla następnej.
-    private func report() {
-        guard isActiveTab else { return }
-        chrome.goalSnapshot = PlanDayGoalSnapshot(nutrition: nutrition, targets: targets, planned: planned)
-    }
-
-    /// Odcisk WŁASNYCH liczb (nie przekazanych) — do meldowania zmian.
-    private var fingerprintOfOwn: String {
         let macros = targets.macros
         return "\(nutrition.kcal).\(nutrition.protein).\(nutrition.fat).\(nutrition.carbs)"
             + "|\(targets.kcal).\(macros?.proteinG ?? 0).\(macros?.fatG ?? 0).\(macros?.carbsG ?? 0)"
@@ -145,46 +108,38 @@ struct PlanDayGoalBar: View {
             + ".\(planned?.fat ?? -1).\(planned?.carbs ?? -1)"
     }
 
+    /// Jedna sprężyna dla cyfr i torów pod nimi. `MacroProgressTrack` ma
+    /// własną domyślną (0,4 s) i przy 0,36 s na cyfrach kreska lądowała
+    /// chwilę po liczbie — dwie sprężyny w jednej kolumnie widać jako dwie.
+    static let animation: Animation = .spring(response: 0.36, dampingFraction: 0.9)
+
+    var body: some View {
+        bar
+    }
+
     private var bar: some View {
         Button(action: action) {
-            HStack(alignment: .top, spacing: 8) {
-                MacroMeter(
-                    letter: "kcal",
-                    title: "Kalorie",
-                    value: shown.nutrition.kcal,
-                    target: shown.targets.kcal,
-                    plannedValue: shown.planned?.kcal,
-                    color: SCMacroPalette.calories,
-                    unit: "kilokalorii",
-                    accessibilityDetail: remainingDetail,
-                    animation: Self.animation
+            content
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // `interactive()` daje szkłu reakcję na dotyk — tę samą, którą ma
+                // dolne menu. `PlanPressStyle` dokłada ściśnięcie treści, więc
+                // pigułka odpowiada dokładnie jak wiersz osi nad nią.
+                // Czyste szkło, jak dolne menu (`scChromeGlass`). Tekst osi
+                // przewijany pod pigułką przebijał przez nie ostro — dawniej gasiła
+                // go kryjąca warstwa tła w szkle (matowa plama), teraz rozmyty pas
+                // pod pigułką (`SCScrollEdgeBlur` w `WeeklyPlanView`).
+                .scChromeGlass(in: .rect(cornerRadius: Self.cornerRadius), interactive: true)
+                // Bez tego stuknięcie łapie się WYŁĄCZNIE na rysowanej treści:
+                // na cyfrach, na literach i na kilku punktach pasków. Padding,
+                // przerwy między kolumnami i całe tło szkła były martwe — pigułka
+                // otwierała arkusz tylko wtedy, gdy palec trafił w tekst.
+                // `glassEffect` sam obszaru dotyku nie ustawia, bo rysuje tło,
+                // a nie kształt przycisku.
+                .contentShape(
+                    RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                 )
-                // Szerokość z podpisu, nie z podziału na cztery — patrz
-                // komentarz typu. Tor pod spodem i tak wypełnia całą kolumnę.
-                .fixedSize(horizontal: true, vertical: false)
-
-                macroMeters
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // `interactive()` daje szkłu reakcję na dotyk — tę samą, którą ma
-            // dolne menu. `PlanPressStyle` dokłada ściśnięcie treści, więc
-            // pigułka odpowiada dokładnie jak wiersz osi nad nią.
-            // Czyste szkło, jak dolne menu (`scChromeGlass`). Tekst osi
-            // przewijany pod pigułką przebijał przez nie ostro — dawniej gasiła
-            // go kryjąca warstwa tła w szkle (matowa plama), teraz rozmyty pas
-            // pod pigułką (`SCScrollEdgeBlur` w `WeeklyPlanView`).
-            .scChromeGlass(in: .rect(cornerRadius: Self.cornerRadius), interactive: true)
-            // Bez tego stuknięcie łapie się WYŁĄCZNIE na rysowanej treści:
-            // na cyfrach, na literach i na kilku punktach pasków. Padding,
-            // przerwy między kolumnami i całe tło szkła były martwe — pigułka
-            // otwierała arkusz tylko wtedy, gdy palec trafił w tekst.
-            // `glassEffect` sam obszaru dotyku nie ustawia, bo rysuje tło,
-            // a nie kształt przycisku.
-            .contentShape(
-                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-            )
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))
         .animation(Self.animation, value: fingerprint)
@@ -196,6 +151,110 @@ struct PlanDayGoalBar: View {
         // stuknąć — VoiceOver czytał liczby i nie miał czego aktywować.
         .accessibilityElement(children: .combine)
         .accessibilityHint("Otwiera cel dnia")
+    }
+
+    /// Treść pigułki: w Planie cztery kolumny w jednym wierszu, na „Dziś”
+    /// zdanie o zjedzonych i planie nad trzema makrami.
+    @ViewBuilder
+    private var content: some View {
+        if let planned {
+            VStack(alignment: .leading, spacing: 6) {
+                eatenSummary(planned: planned)
+                HStack(alignment: .top, spacing: 8) {
+                    macroMeters
+                }
+            }
+        } else {
+            HStack(alignment: .top, spacing: 8) {
+                MacroMeter(
+                    letter: "kcal",
+                    title: "Kalorie",
+                    value: nutrition.kcal,
+                    target: targets.kcal,
+                    color: SCMacroPalette.calories,
+                    unit: "kilokalorii",
+                    accessibilityDetail: remainingDetail,
+                    animation: Self.animation
+                )
+                // Szerokość z podpisu, nie z podziału na cztery — patrz
+                // komentarz typu. Tor pod spodem i tak wypełnia całą kolumnę.
+                .fixedSize(horizontal: true, vertical: false)
+
+                macroMeters
+            }
+        }
+    }
+
+    /// „Zjedzone 1200 z 2100 kcal” · „w planie 1800” i tor kalorii na całą
+    /// szerokość pigułki — zjedzone pełnym kolorem, plan dnia blado pod nim
+    /// (`MacroProgressTrack.plannedProgress`, ta sama warstwa co dotąd).
+    private func eatenSummary(planned: PlanDayNutrition) -> some View {
+        let target = targets.kcal
+        let progress = target > 0 ? Double(nutrition.kcal) / Double(target) : 0
+        let plannedProgress: Double? = target > 0 && planned.kcal > nutrition.kcal
+            ? Double(planned.kcal) / Double(target)
+            : nil
+
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                eatenText
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .layoutPriority(1)
+
+                Spacer(minLength: 4)
+
+                plannedText(planned.kcal)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .contentTransition(.numericText())
+
+            MacroProgressTrack(
+                progress: progress,
+                color: SCMacroPalette.calories,
+                plannedProgress: plannedProgress,
+                height: 4,
+                animation: Self.animation
+            )
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Zjedzone: \(nutrition.kcal) z \(target) kilokalorii, \(remainingDetail), "
+                + (planned.kcal > 0 ? "w planie \(planned.kcal) kilokalorii" : "nic w planie")
+        )
+    }
+
+    /// „Zjedzone 1200 z 2100 kcal” — jeden `Text`, żeby całość skalowała się
+    /// razem i nigdy nie ucinała liczby (ta sama zasada co `MacroMeter.label`).
+    private var eatenText: Text {
+        let lead = Text("Zjedzone")
+            .font(.system(size: summaryTextSize, weight: .bold))
+            .foregroundStyle(SCMacroPalette.calories)
+        let value = Text(verbatim: String(nutrition.kcal))
+            .font(.system(size: summaryValueSize, weight: .bold).monospacedDigit())
+            .foregroundStyle(nutrition.kcal > targets.kcal ? SCMacroPalette.calories : Color.scLabel(scheme))
+        let goal = Text(verbatim: "z \(targets.kcal) kcal")
+            .font(.system(size: summaryTextSize, weight: .semibold).monospacedDigit())
+            .foregroundStyle(Color.scMuted(scheme))
+        return Text("\(lead) \(value) \(goal)")
+    }
+
+    /// „w planie 1800” — ile stoi w planie TEGO dnia dla mnie. Dzień bez
+    /// planu mówi to słowami, a nie zerem.
+    private func plannedText(_ kcal: Int) -> Text {
+        guard kcal > 0 else {
+            return Text("nic w planie")
+                .font(.system(size: summaryTextSize, weight: .semibold))
+                .foregroundStyle(Color.scMuted(scheme))
+        }
+        let lead = Text("w planie")
+            .font(.system(size: summaryTextSize, weight: .semibold))
+            .foregroundStyle(Color.scMuted(scheme))
+        let value = Text(verbatim: String(kcal))
+            .font(.system(size: summaryTextSize, weight: .bold).monospacedDigit())
+            .foregroundStyle(Color.scLabel(scheme))
+        return Text("\(lead) \(value)")
     }
 
     /// „zostało 965 kilokalorii" albo „230 kilokalorii ponad cel" — to, co
@@ -222,27 +281,27 @@ struct PlanDayGoalBar: View {
             MacroMeter(
                 letter: "B",
                 title: "Białko",
-                value: shown.nutrition.protein,
-                target: shown.targets.macros?.proteinG,
-                plannedValue: shown.planned?.protein,
+                value: nutrition.protein,
+                target: targets.macros?.proteinG,
+                plannedValue: planned?.protein,
                 color: SCMacroPalette.protein,
                 animation: Self.animation
             )
             MacroMeter(
                 letter: "T",
                 title: "Tłuszcze",
-                value: shown.nutrition.fat,
-                target: shown.targets.macros?.fatG,
-                plannedValue: shown.planned?.fat,
+                value: nutrition.fat,
+                target: targets.macros?.fatG,
+                plannedValue: planned?.fat,
                 color: SCMacroPalette.fat,
                 animation: Self.animation
             )
             MacroMeter(
                 letter: "W",
                 title: "Węgle",
-                value: shown.nutrition.carbs,
-                target: shown.targets.macros?.carbsG,
-                plannedValue: shown.planned?.carbs,
+                value: nutrition.carbs,
+                target: targets.macros?.carbsG,
+                plannedValue: planned?.carbs,
                 color: SCMacroPalette.carbs,
                 animation: Self.animation
             )
@@ -250,8 +309,10 @@ struct PlanDayGoalBar: View {
     }
 }
 
-/// Liczby pigułki „Cel dnia” przekazywane między Planem a Kalendarzem
-/// (`SCTabBarChrome.goalSnapshot`).
+/// Liczby pigułki „Cel dnia” — dawniej przekazywane między Planem
+/// a Kalendarzem (`SCTabBarChrome.goalSnapshot`). Pigułka już ich nie czyta
+/// ani nie pisze (6.10.2026: to dwie różne liczby); typ zostaje tylko dla
+/// pola w `SCTabBarChrome` i schodzi razem z nim.
 struct PlanDayGoalSnapshot {
     var nutrition: PlanDayNutrition
     var targets: DailyNutritionTargets
