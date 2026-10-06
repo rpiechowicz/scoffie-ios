@@ -246,7 +246,7 @@ enum SCCook {
     }
 
     enum Height {
-        /// Wyspa ‹ Składniki N › na dole ekranu kroku — zawsze w tym samym miejscu (D34). Wysokość, boki i położenie jak dolne menu aplikacji (SCFloatingTabBar 60 pt, runda 2 testów). Kapsuła, padding spacing.cookIslandPadding.
+        /// Wyspa ‹ Składniki N › na dole ekranu kroku — zawsze w tym samym miejscu (D34). Wysokość, boki i położenie jak dawne dolne menu aplikacji (60 pt, runda 2 testów; od 6.10.2026 aplikacja ma systemowy pasek zakładek, wyspa zostaje przy swoich liczbach). Kapsuła, padding spacing.cookIslandPadding.
         static let island: CGFloat = 60
 
         /// Kapsuła timera nad wyspą; jedna = cała szerokość doku, dwie = obok siebie (D34).
@@ -279,10 +279,7 @@ enum SCCook {
         /// Najniższy wiersz arkusza Kroki (sam tytuł); etap nad tytułem i etykieta timera pod nim go wydłużają.
         static let stepRow: CGFloat = 56
 
-        /// Przyciski „+1 / +2 / +5 min” na ekranie końca timera (D35).
-        static let alarmExtend: CGFloat = 52
-
-        /// „✓ Gotowe — dalej” na ekranie końca timera.
+        /// Rząd akcji na dole ekranu końca timera: „…” (menu: +2 / +5 min, „Tylko wycisz”), „+1 min” i „✓ Gotowe” w pełnym kolorze timera — wszystkie tej wysokości (6.10.2026; dawny panel „Jeszcze chwilę?” i „Gotowe — dalej” odpadły).
         static let alarmDone: CGFloat = 60
 
         /// Kapsuła timera w przełączniku ekranu końca timera, gdy dzwoni kilka naraz (runda 8): kropka koloru timera, nazwa, czas po terminie.
@@ -334,7 +331,7 @@ enum SCCook {
         /// Etykieta nad tytułem (etap kroku, „GOTUJEMY · OBIAD”) zaczyna się tyle od góry ekranu — na każdym ekranie trybu w tym samym miejscu. Runda 6 testów: 290 → 322 („tytuł ciut niżej, żeby był pod zdjęciem”) — etykieta stoi na ostatnich punktach wygaszonego zdjęcia (size.cookHeaderPhoto 330), tytuł już pod nim.
         static let titleTop: CGFloat = 322
 
-        /// Dok pływa tyle od boków ekranu (D34) — jak dolne menu aplikacji (SCFloatingTabBar.sideMargin).
+        /// Dok pływa tyle od boków ekranu (D34) — jak marginesy treści aplikacji.
         static let dockSide: CGFloat = 20
 
         /// Odległość doku od dolnej krawędzi bezpiecznego obszaru — 0, czyli tam, gdzie stoi dolne menu aplikacji (nad paskiem domowym).
@@ -372,14 +369,17 @@ enum SCCook {
 
         /// Jak daleko rozchodzi się mocny puls „po czasie”.
         static let overdueSpread: CGFloat = 12
+
+        /// Odstęp między „…”, „+1 min” i „Gotowe” na dole ekranu końca timera.
+        static let alarmActionGap: CGFloat = 10
+
+        /// Boczne wcięcie napisu „+1 min” w jego kapsule (wysokość jak „Gotowe”, height.cookAlarmDone).
+        static let alarmExtendInset: CGFloat = 22
     }
 
     enum Radius {
         /// Kafle trybu: karta porcji, szuflady, „NA NASTĘPNY RAZ”, kafle wyjścia, pole uwag (§13: promień kafli 24).
         static let tile: CGFloat = 24
-
-        /// Panel „Jeszcze chwilę?” na dole ekranu końca timera.
-        static let alarmPanel: CGFloat = 28
 
         /// Karta rady (adnotacja kroku, „Na następny raz”) — zwarta, mniejszy promień niż kafle 24 (runda 8).
         static let note: CGFloat = 18
@@ -440,7 +440,7 @@ enum SCCook {
         /// Główne akcje w terakocie: „Zaczynamy”, „Wyślij”, „▶ Start”. 16 od 4.10.2026 (było 17).
         static let button = SCCookTextStyle(size: 16, weight: .heavy, tracking: 0, lineHeight: nil)
 
-        /// Akcje w szałwii i neutralne: „Zjedzone”, „Gotuj dalej”, „Gotowe — dalej”.
+        /// Akcje w szałwii i neutralne: „Zjedzone”, „Gotuj dalej”, a na ekranie końca timera „+1 min” i „Gotowe”.
         static let buttonQuiet = SCCookTextStyle(size: 17, weight: .bold, tracking: 0, lineHeight: nil)
     }
 }
