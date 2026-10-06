@@ -148,7 +148,7 @@ struct MealTimesOrderNotice: View {
     private func text(_ pair: (earlier: MealSlot, later: MealSlot)) -> String {
         let earlierTime = schedule.time(for: pair.earlier) ?? ""
         let laterTime = schedule.time(for: pair.later) ?? ""
-        let tail = "Plan i kalendarz i tak pokażą posiłki w stałej kolejności dnia."
+        let tail = "Plan i zakładka Dziś i tak pokażą posiłki w stałej kolejności dnia."
 
         if earlierTime == laterTime {
             return "\(pair.earlier.title) i \(pair.later.title.lowercased()) mają tę samą porę (\(earlierTime)). \(tail)"
