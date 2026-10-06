@@ -34,7 +34,9 @@ import SwiftUI
 ///   Obiad”, szklany „Dla kogo” (`PlanAudienceButton`, tylko w domu
 ///   wieloosobowym) i przycisk, którego tytuł też roluje.
 ///
-/// Sekcje wjeżdżają kaskadą jak w szczegółach posiłku (`scReveal`). Na
+/// Arkusz otwiera się w gotowym stanie — wjazd arkusza systemu wystarcza,
+/// bez kaskady sekcji (6.10.2026, „ruch ma mówić, że coś się zmieniło”);
+/// animują się zmiany wyboru: dzień, pora, porcje, „ZAMIENISZ”. Na
 /// ekranie, na którym wszystko się mieści, lista nie odbija
 /// (`scrollBounceBehavior(.basedOnSize)`), więc czyta się jak widok bez
 /// przewijania; na małym przewija się pod przypiętym nagłówkiem.
@@ -107,8 +109,6 @@ struct AddToPlanSheet: View {
     /// osób i porcje osób ruszone stepperem. Reguły w `AddToPlanPortions`.
     @State private var portions: AddToPlanPortions
     @State private var isSaving = false
-    /// Kaskada sekcji (`scReveal`) — przestawiana w `.task` po klatce oddechu.
-    @State private var hasAppeared = false
 
     // Gest tygodnia — te same liczby i ta sama logika, co w `EditorialWeekBar`.
     @State private var dragOffset: CGFloat = 0
@@ -241,10 +241,8 @@ struct AddToPlanSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
                         weekSection(plannedDays: overview.plannedDays)
-                            .scReveal(hasAppeared, order: 0)
 
                         slotSection(visibleSlots)
-                            .scReveal(hasAppeared, order: 1)
 
                         // „Dla kogo” nie stoi w przewijaniu — to szklany
                         // przycisk obok „Dodaj do planu” (`PlanAudienceButton`,
@@ -281,14 +279,6 @@ struct AddToPlanSheet: View {
             // chipów nigdy się dla niego nie odpala. W `init` nie ma jeszcze
             // środowiska, czyli domowników. Bez animacji — nie ma czego animować.
             applyAutoServings(for: selectedParticipants, animated: false)
-        }
-        // Klatka oddechu jak w szczegółach posiłku: arkusz zaczyna wjeżdżać,
-        // dopiero potem treść. W `onAppear` kaskada padałaby w klatce
-        // wstawienia i nie grała.
-        .task {
-            guard !hasAppeared else { return }
-            try? await Task.sleep(for: .milliseconds(80))
-            hasAppeared = true
         }
         // Zmiana dnia albo pory potrafi trafić na ten sam przepis stojący już
         // dla kogoś innego — porcje liczą się wtedy z połączonego audytorium.

@@ -4,7 +4,9 @@ import SwiftUI
 
 /// Sekcja wjeżdża z dołu i rozjaśnia się — kaskadą, w tych samych liczbach
 /// co treść arkusza wyboru posiłku u Asystenta (`AssistantOptionsStorySheet`).
-/// Wzór: szczegóły posiłku; tak samo wchodzi „Dodaj do planu” (runda 14).
+/// Dziś używa jej tryb Gotuj (`cookReveal`). Szczegóły posiłku i „Dodaj do
+/// planu” zrezygnowały z niej 6.10.2026 — otwierają się w gotowym stanie,
+/// ruch zostaje dla zmian.
 ///
 /// Użycie: `hasAppeared` przestawiane w `.task` po ~80 ms (klatka oddechu —
 /// w `onAppear` padało w klatce wstawienia i nic nie grało), a każda sekcja

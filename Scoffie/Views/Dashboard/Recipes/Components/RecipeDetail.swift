@@ -202,9 +202,6 @@ struct RecipeDetailView: View {
     /// Wysyłka brakujących na listę zakupów.
     @State private var shoppingSend: ShoppingSendState = .idle
 
-    /// Wjazd treści — sekcje wchodzą kolejno, donut rysuje się od góry.
-    @State private var hasAppeared = false
-
     @State private var scrollPosition = ScrollPosition(edge: .top)
 
     /// Zdjęcie zjechało z ekranu — treść przewija się teraz pod pływającymi
@@ -331,13 +328,16 @@ struct RecipeDetailView: View {
                 .ignoresSafeArea()
 
             ScrollView {
+                // Szczegóły otwierają się w GOTOWYM stanie (6.10.2026, „jak od
+                // Apple”): wjazd arkusza systemu wystarcza — bez osiadania
+                // zdjęcia, kaskady sekcji, rosnących pierścieni i liczb od
+                // zera. Animują się tylko ZMIANY: porcje, „mam w domu”, serce.
                 VStack(alignment: .leading, spacing: 0) {
-                    DetailHeroPhoto(url: recipe.imageURL, isRevealed: hasAppeared)
+                    DetailHeroPhoto(url: recipe.imageURL)
 
                     header
                         .padding(.horizontal, 20)
                         .padding(.top, 6)
-                        .detailReveal(hasAppeared, order: 0)
 
                     // „Kto ile je” nie jest już sekcją tutaj — to pigułka
                     // przyczepiona nad przyciskami (`portionsPill`), jak
@@ -345,18 +345,15 @@ struct RecipeDetailView: View {
 
                     nutritionSection
                         .padding(.top, 24)
-                        .detailReveal(hasAppeared, order: 1)
 
                     if !recipe.preparationSteps.isEmpty {
                         preparationSection
                             .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 2)
                     }
 
                     if !recipe.ingredients.isEmpty {
                         ingredientsSection
                             .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 3)
                     }
 
                     // Oddech nad dolnym paskiem. Sam pasek liczy system
@@ -416,7 +413,6 @@ struct RecipeDetailView: View {
             .disabled(onSetFavourite == nil)
             .padding(.leading, 20)
             .padding(.top, 16)
-            .detailChrome(hasAppeared)
         }
         .overlay(alignment: .topTrailing) {
             HStack(spacing: 10) {
@@ -429,17 +425,8 @@ struct RecipeDetailView: View {
             }
             .padding(.trailing, 20)
             .padding(.top, 16)
-            .detailChrome(hasAppeared)
         }
         .onAppear { applyDebugLaunchOptions() }
-        // Klatka oddechu jak w wyborze posiłku u Asystenta: arkusz zaczyna
-        // wjeżdżać, dopiero potem treść. Ustawione w `onAppear` padało w tej
-        // samej klatce co wstawienie widoku i wjazd sekcji w ogóle nie grał.
-        .task {
-            guard !hasAppeared else { return }
-            try? await Task.sleep(for: .milliseconds(80))
-            hasAppeared = true
-        }
         // Scenariusz Gotuj w pamięci telefonu — przycisk „Gotuj” pojawia się,
         // gdy paczka jest (§4.1), i działa potem bez sieci.
         .task(id: recipe.id) {
@@ -1872,9 +1859,6 @@ struct RecipeDetailPlaceholder: View {
 /// oba efekty to `visualEffect`, więc nie przeliczają układu co klatkę.
 private struct DetailHeroPhoto: View {
     let url: URL?
-    /// Wjazd arkusza: zdjęcie startuje lekko przybliżone i osiada — ten sam
-    /// ruch co zdjęcie w wyborze posiłku u Asystenta.
-    var isRevealed: Bool = true
 
     // `nonisolated`, bo czyta ją domknięcie `onScrollGeometryChange` ekranu.
     nonisolated static let height: CGFloat = 340
@@ -1950,8 +1934,6 @@ private struct DetailHeroPhoto: View {
                 EditorialShimmerBlock()
             }
         }
-        .scaleEffect(isRevealed || reduceMotion ? 1 : 1.12)
-        .animation(.easeOut(duration: 1.1), value: isRevealed)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
     }
@@ -2269,13 +2251,11 @@ private struct DetailNutritionCard: View {
     }
 }
 
-/// Jedna krzywa dla pierścieni, torów i liczników sekcji — ruch ma się
-/// czytać jako jeden. Wolniejszy i łagodniej hamujący niż w „Celu dnia”:
-/// tu wykres jest główną treścią karty, a nie podsumowaniem nad listą.
+/// Jedna krzywa dla pierścieni, torów i liczb sekcji przy ZMIANIE porcji —
+/// ruch ma się czytać jako jeden (ease-out quint, 0,8 s). Wjazdu nie ma:
+/// szczegóły otwierają się z wartościami docelowymi (6.10.2026 — dawniej
+/// pierścienie rosły 1,4 s, a liczby liczyły się od zera przy każdym otwarciu).
 private enum DetailNutritionMotion {
-    /// Wjazd: 1,4 s z długim, miękkim wyhamowaniem (ease-out quint).
-    static let reveal: Animation = .timingCurve(0.22, 1, 0.36, 1, duration: 1.4)
-    /// Zmiana porcji: ta sama krzywa, krócej.
     static let change: Animation = .timingCurve(0.22, 1, 0.36, 1, duration: 0.8)
 }
 
@@ -2286,13 +2266,11 @@ private struct DetailGoalRings: View {
     let progresses: [Double]
     let colors: [Color]
 
-    @State private var isRevealed = false
-
     var body: some View {
         ZStack {
             ForEach(Array(progresses.enumerated()), id: \.offset) { index, progress in
                 ActivityRing(
-                    progress: isRevealed ? CGFloat(progress) : 0,
+                    progress: CGFloat(progress),
                     lineWidth: PlanGoalRings.lineWidth,
                     startColor: colors[index],
                     endColor: colors[index],
@@ -2302,23 +2280,16 @@ private struct DetailGoalRings: View {
             }
         }
         .frame(width: PlanGoalRings.size, height: PlanGoalRings.size)
-        // Zmiana porcji — wjazd prowadzi `withAnimation` niżej, bo w jego
-        // trakcie ta wartość się nie zmienia.
         .animation(DetailNutritionMotion.change, value: progresses)
-        .onAppear {
-            guard !isRevealed else { return }
-            withAnimation(DetailNutritionMotion.reveal.delay(0.05)) { isRevealed = true }
-        }
     }
 }
 
-/// Wiersz legendy jak `PlanGoalLegendRow`, z liczbą liczącą się
-/// `CountingNumber` i torem na tej samej krzywej co pierścienie.
+/// Wiersz legendy jak `PlanGoalLegendRow`: liczba roluje się przy zmianie
+/// porcji, tor jedzie tą samą krzywą co pierścienie.
 private struct DetailGoalLegendRow: View {
     let row: PlanGoalLegendRow.Row
 
     @Environment(\.colorScheme) private var scheme
-    @State private var isRevealed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -2336,13 +2307,14 @@ private struct DetailGoalLegendRow: View {
                 Spacer(minLength: 6)
 
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    CountingNumber(
-                        target: row.value,
-                        loadAnimation: DetailNutritionMotion.reveal,
-                        changeAnimation: DetailNutritionMotion.change
-                    )
-                    .scFont(12.5, weight: .bold, relativeTo: .caption)
-                    .foregroundStyle(row.isOverTarget ? row.color : Color.scLabel(scheme))
+                    Text(verbatim: "\(row.value)")
+                        .scFont(12.5, weight: .bold, relativeTo: .caption)
+                        .monospacedDigit()
+                        .foregroundStyle(row.isOverTarget ? row.color : Color.scLabel(scheme))
+                        // Cyfry rolują w miejscu przy zmianie porcji — ta
+                        // sama animacja co każda liczba w aplikacji.
+                        .contentTransition(.numericText(value: Double(row.value)))
+                        .animation(SCMotion.textRoll, value: row.value)
 
                     Text(row.target.map { "/ \($0) \(row.unit)" } ?? row.unit)
                         .scFont(10.5, weight: .semibold, relativeTo: .caption2)
@@ -2355,14 +2327,13 @@ private struct DetailGoalLegendRow: View {
 
             if let progress = row.progress {
                 MacroProgressTrack(
-                    progress: isRevealed ? max(progress, 0) : 0,
+                    progress: max(progress, 0),
                     color: row.color,
                     height: 3,
-                    animation: isRevealed ? DetailNutritionMotion.change : DetailNutritionMotion.reveal
+                    animation: DetailNutritionMotion.change
                 )
             }
         }
-        .onAppear { isRevealed = true }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             row.target.map { "\(row.title): \(row.value) z \($0) \(row.unit)" }
@@ -2466,37 +2437,6 @@ private struct DetailIngredientRow: View {
         .padding(.vertical, 9)
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.2), value: have)
-    }
-}
-
-// MARK: - Wjazd sekcji
-
-// Kaskada sekcji to `scReveal(_:order:)` (`Components/SCReveal.swift`) —
-// wyniesiona w rundzie 14, bo „Dodaj do planu” wjeżdża tak samo.
-
-/// Przyciski na zdjęciu (serce, krzyżyk) pojawiają się razem z treścią,
-/// a nie wiszą nad pustym kadrem, zanim zdjęcie osiądzie.
-private struct DetailChrome: ViewModifier {
-    let isVisible: Bool
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(isVisible ? 1 : 0)
-            .scaleEffect(isVisible || reduceMotion ? 1 : 0.85)
-            .animation(.easeOut(duration: 0.35).delay(0.05), value: isVisible)
-    }
-}
-
-private extension View {
-    /// Sekcje wchodzą po kolei — góra pierwsza, składniki ostatnie.
-    func detailReveal(_ isVisible: Bool, order: Int) -> some View {
-        scReveal(isVisible, order: order)
-    }
-
-    func detailChrome(_ isVisible: Bool) -> some View {
-        modifier(DetailChrome(isVisible: isVisible))
     }
 }
 
