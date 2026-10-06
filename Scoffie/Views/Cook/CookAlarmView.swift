@@ -332,8 +332,7 @@ struct CookAlarmView: View {
     /// „Jeszcze chwilę?” (+1 / +2 / +5 min nad „Gotowe — dalej”) odpadł — jego
     /// przyciski stoją tu, a „było 10 min” w nagłówku menu, przy +2 / +5.
     private var actions: some View {
-        // TODO token: spacing.cookAlarmActionGap (10) — odstęp przycisków na dole.
-        HStack(spacing: 10) {
+        HStack(spacing: SCCook.Spacing.alarmActionGap) {
             moreMenu
             extendButton
             doneButton
@@ -373,10 +372,8 @@ struct CookAlarmView: View {
                 .lineLimit(1)
                 .fixedSize()
                 .foregroundStyle(Color.scLabel(scheme))
-                // TODO token: spacing.cookAlarmExtendInset (22). Wysokość jak
-                // „Gotowe” (`height.cookAlarmDone`), żeby rząd był równy —
-                // `height.cookAlarmExtend` (52) został bez użycia.
-                .padding(.horizontal, 22)
+                // Wysokość jak „Gotowe” (`height.cookAlarmDone`), żeby rząd był równy.
+                .padding(.horizontal, SCCook.Spacing.alarmExtendInset)
                 .frame(height: SCCook.Height.alarmDone)
                 .scChromeGlass(in: Capsule())
                 .contentShape(Capsule())

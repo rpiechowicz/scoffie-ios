@@ -136,9 +136,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   przy „do włączenia” w parze, pojedyncza ma pigułkę „▶ Start” tylko przy „do włączenia”. Plakietka: rysunek 28, dotyk
   44 (`CookTimerBadge.touchHeight`). Ekran końca timera: na dole [„…” = systemowe menu: +2 / +5 min z nagłówkiem
   „Jeszcze chwilę? Było N min”, „Tylko wycisz” (wszystkie)] [„+1 min”] [„✓ Gotowe” w pełnym kolorze timera] — bez
-  „Wycisz” w rogu i bez panelu „Jeszcze chwilę?”. Zrzut `gotuj-wyciszony`. Brakujące tokeny (stałe z `// TODO token`):
-  `spacing.cookAlarmActionGap` 10, `spacing.cookAlarmExtendInset` 22; `height.cookAlarmExtend` i `radius.cookAlarmPanel`
-  bez użycia.
+  „Wycisz” w rogu i bez panelu „Jeszcze chwilę?”. Zrzut `gotuj-wyciszony`. Odstępy rzędu = tokeny
+  `SCCook.Spacing.alarmActionGap` (10) i `alarmExtendInset` (22) — scoffie-design #25/#26 (6.10.2026); nieużywane
+  `height.cookAlarmExtend` i `radius.cookAlarmPanel` usunięte z tokenów.
 
 ## Build i praca
 - Tylko Mac. Build bez Xcode GUI:
