@@ -231,6 +231,22 @@ struct AssistantOptionsDebugScreen: View {
                 .padding(.top, 50)
             }
             .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
+        } else if mode == "podpowiedz" {
+            // Półarkusz po kciuku w dół („Co nie zagrało?”).
+            SCPageBackground(scheme: scheme).ignoresSafeArea()
+                .sheet(isPresented: .constant(true)) {
+                    AssistantSuggestionSheet(
+                        message: AgentChatMessage(
+                            id: "debug-answer",
+                            author: .assistant,
+                            text: Self.debugAnswer,
+                            createdAt: nil,
+                            feedback: .down
+                        ),
+                        onSubmit: { _, _ in nil }
+                    )
+                    .interactiveDismissDisabled()
+                }
         } else if mode == "asystent-jak" {
             SCPageBackground(scheme: scheme).ignoresSafeArea()
                 .sheet(isPresented: .constant(true)) {

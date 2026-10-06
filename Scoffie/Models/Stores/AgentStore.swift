@@ -44,10 +44,11 @@ struct AgentChatMessage: Identifiable, Equatable {
     /// Własne zgłoszenie tej odpowiedzi — jest, to „Zgłoś” staje się „Popraw
     /// zgłoszenie” (serwer trzyma jedno na osobę i odpowiedź).
     var report: AgentMessageReportDTO? = nil
-    /// Zegar „pisania”, gdy odpowiedź jeszcze się dopisuje na ekranie — TEN
-    /// SAM, którym pisał się szkic (`AgentStore.draftReveal`), zakotwiczony
-    /// tam, gdzie szkic stał. `nil` = cała od razu: historia z serwera
-    /// i odpowiedzi już odsłonięte. Zdejmuje `markRevealed`.
+    /// Odpowiedź przyszła W TEJ SESJI i jeszcze nie stoi „odsłonięta”: zegar
+    /// dopisywania dalej od szkicu (`AgentRevealClock.finishing` — tempo
+    /// szkicu płynie dalej, reszta w ≤ 0,6 s) albo `whole` — przyszła cała
+    /// i stoi od razu, razem z kartą. `nil` = historia z serwera i odpowiedzi
+    /// już odsłonięte. Zdejmuje `markRevealed`.
     var reveal: AgentRevealClock? = nil
     /// Klucz miejsca w slocie ostatniej tury („turn-…") — ten sam, pod którym
     /// rysował się szkic. Dzięki niemu szkic i gotowa odpowiedź to JEDEN
@@ -140,10 +141,6 @@ final class AgentStore {
     /// (`AgentChatMessage.liveKey`), wspólny dla szkicu i gotowej odpowiedzi.
     /// Zostaje po turze; zeruje go `resetTurnState()` razem z listą.
     private(set) var liveTurnId: String?
-    /// Gotowa odpowiedź ostatniej tury dopisuje się DALEJ od szkicu, który już
-    /// był na ekranie — wtedy ekran nie przewija się pod jej początek (stała
-    /// tam od pierwszego słowa i skok byłby jedynym ruchem w tej chwili).
-    private(set) var lastAnswerContinuedDraft = false
 
     /// Szkic jako wiadomość pozorna — rysowany tym samym widokiem i pod tym
     /// samym kluczem, co gotowa odpowiedź, która go zastąpi.
@@ -310,8 +307,8 @@ final class AgentStore {
         }
     }
 
-    /// Ocena z podpowiedzią (powody + zdanie; w dół „co nie zagrało”, w górę
-    /// „co było dobre”). Oddaje
+    /// Ocena z podpowiedzią (powody + zdanie — „Co nie zagrało?” po kciuku
+    /// w dół; kciuk w górę od 6.10.2026 podpowiedzi nie zbiera). Oddaje
     /// komunikat błędu albo `nil`. Ekran zmienia się dopiero po odpowiedzi
     /// serwera — arkusz czeka na wynik i sam pokazuje błąd.
     func suggest(
@@ -953,7 +950,6 @@ final class AgentStore {
         // Tu podmienia się cała lista, więc skok epoki jest niewidoczny.
         turnStartedAt = nil
         liveTurnId = nil
-        lastAnswerContinuedDraft = false
         hasLiveTurnSlot = false
         pendingTurnId = nil
         errorMessage = nil
@@ -989,7 +985,6 @@ final class AgentStore {
         // Klucz miejsca szkicu — nowa tura to nowe miejsce w slocie.
         if liveTurnId != turnId {
             liveTurnId = turnId
-            lastAnswerContinuedDraft = false
             draftReveal = AgentRevealClock()
         }
         // Powrót na zakładkę / relaunch: `send()` nie ustawiło epoki, a widok
@@ -1045,8 +1040,8 @@ final class AgentStore {
                 // Ostatniego kroku NIE przypisujemy — kroki trafią do „Myślałem"
                 // z `turn.progress`, a wskaźnik nie ma zmieniać koloru w klatce,
                 // w której gaśnie.
-                // Szkic, którego gotowa odpowiedź NIE kontynuuje, dopisuje się
-                // do końca i chwilę stoi — dopiero potem wchodzi odpowiedź.
+                // Szkic, którego gotowa odpowiedź NIE kontynuuje, szybko się
+                // domyka — dopiero potem w jego miejscu staje odpowiedź.
                 await letDraftFinish(before: turn)
                 guard activeTurnToken == token, !Task.isCancelled else { return }
                 pendingTurnId = nil
@@ -1092,30 +1087,36 @@ final class AgentStore {
     }
 
     /// Czy gotowa odpowiedź jest dalszym ciągiem tego, co szkic JUŻ pokazał.
-    /// Tak — pisze się dalej w tym samym widoku. Nie (np. zdanie serwera po
-    /// planowaniu zamiast wstępu modelu) — podmiana urwałaby pisanie w pół
-    /// słowa.
+    /// Tak — dopisuje się dalej w tym samym widoku. Nie (np. zdanie serwera po
+    /// planowaniu zamiast wstępu modelu) — szkic najpierw się domyka
+    /// (`letDraftFinish`), bo podmiana urwałaby pisanie w pół słowa.
     private func answerContinuesDraft(_ answer: String, at now: Date) -> Bool {
         guard !draftText.isEmpty else { return true }
         let shown = draftReveal.count(at: now, limit: draftText.count)
         return AgentRevealClock.commonPrefixCount(draftText, answer) >= shown
     }
 
-    /// 27.09.2026 (Rafał: „przerywa mu pisanie w połowie, bo już jest
-    /// odpowiedź z serwera — tak nie może być; niech dopisze, poczeka sekundę
-    /// i narysuje odpowiedź”): gdy odpowiedź NIE kontynuuje szkicu, szkic
-    /// dopisuje się do końca swoim tempem, stoi 0,8 s i dopiero wtedy
-    /// `apply(finished:)` wstawia odpowiedź — jako nowy tekst pisany od
-    /// początku. Najwyżej 5 s czekania.
+    /// Odpowiedź, która szkicu NIE kontynuuje. 27.09.2026 (Rafał: „przerywa
+    /// mu pisanie w połowie, bo już jest odpowiedź z serwera — tak nie może
+    /// być”) szkic dopisywał się swoim tempem, stał 0,8 s, a odpowiedź pisała
+    /// się potem od początku — do 5 s czekania na coś, co już było gotowe.
+    /// Od 6.10.2026 („ruch ma mówić, że coś się zmieniło”) szkic domyka się
+    /// SZYBKO — reszta w `AgentRevealClock.finishWithin` (≤ 0,6 s) — i zaraz
+    /// potem `apply(finished:)` stawia w jego miejscu całą odpowiedź jednym
+    /// przenikaniem. Nie urywa w pół słowa, ale też nie każe czekać.
     private func letDraftFinish(before turn: AgentTurnDTO) async {
         guard turn.status == "DONE", liveTurnId == turn.id, !draftText.isEmpty,
               let answer = turn.messages?.last(where: { $0.role == "ASSISTANT" })
         else { return }
         let now = Date()
         guard !answerContinuesDraft(answer.text, at: now) else { return }
-        let done = draftReveal.finishDate(total: draftText.count)
-        let wait = max(0, done.timeIntervalSince(now)) + 0.8
-        try? await Task.sleep(for: .seconds(min(wait, 5)))
+        let total = draftText.count
+        let shown = draftReveal.count(at: now, limit: total)
+        // Nic jeszcze nie widać — nie ma czego domykać; już domknięty — też.
+        guard shown > 0, shown < total else { return }
+        draftReveal = AgentRevealClock.finishing(after: draftReveal, at: now, from: shown, total: total)
+        let wait = draftReveal.finishDate(total: total).timeIntervalSince(now)
+        try? await Task.sleep(for: .seconds(min(max(0, wait), AgentRevealClock.finishWithin)))
     }
 
     /// Nowa porcja szkicu. Zegar zaczyna od tego, co już widać (i co nowy
@@ -1191,48 +1192,48 @@ final class AgentStore {
                     answers[answers.count - 1].thinking = Self.thinkingSummary(for: turn, localStart: turnStartedAt)
                 }
                 let now = Date()
-                let continues = liveTurnId == turn.id && !draftText.isEmpty
-                    && answerContinuesDraft(answers[answers.count - 1].text, at: now)
-                // Ostatnia odpowiedź zajmuje miejsce szkicu — ten sam klucz,
-                // więc to JEDEN widok: tekst pisze się dalej, zamiast
-                // przeniknąć w nowy widok, który zaczyna od siebie. Odpowiedź,
-                // która szkicu NIE kontynuuje (szkic dopisał się już do końca —
-                // `letDraftFinish`), wchodzi jako nowy widok i pisze się od
-                // początku, zamiast podmieniać litery w środku zdania.
-                if continues {
-                    answers[answers.count - 1].liveKey = Self.liveKey(turnId: turn.id)
+                let last = answers.count - 1
+                // Szkic tej tury stoi na ekranie — ostatnia odpowiedź zajmuje
+                // jego miejsce (ten sam klucz), więc to JEDEN widok: tekst
+                // zmienia się w miejscu, zamiast przenikać w nowy widok, który
+                // przez chwilę stałby pod gasnącym szkicem i potem podskoczył.
+                let draftOnScreen = liveTurnId == turn.id && !draftText.isEmpty
+                if draftOnScreen {
+                    answers[last].liveKey = Self.liveKey(turnId: turn.id)
                 }
-                // Odpowiedź ma się DOPISAĆ, nie wskoczyć: szkic w trakcie tury
-                // odsłaniał się znak po znaku, a gotowa odpowiedź podmieniała
-                // go całą naraz — najczęściej z pustego, bo szkic dochodzi
-                // dopiero w ostatniej porcji. Ciąg dalszy od miejsca, w którym
-                // stanął szkic, jeśli odpowiedź go kontynuuje.
+                // Dopisuje się TYLKO ciąg dalszy szkicu, który był na ekranie —
+                // od znaku, który JEST widoczny (nie od długości szkicu
+                // z serwera: szkic dogania serwer z opóźnieniem) i od
+                // wspólnego początku (nie `hasPrefix`: drobna różnica na końcu
+                // szkicu zerowała odsłanianie). Tym samym zegarem
+                // (`draftReveal` → `finishing`): tempo nie zmienia się skokowo,
+                // a reszta schodzi w ≤ 0,6 s. Zegar żyje w wiadomości, więc
+                // przebudowa wiersza nie zaczyna pisania od nowa.
                 //
-                // Od znaku, który JEST na ekranie — nie od długości szkicu
-                // z serwera. Szkic dogania serwer z opóźnieniem, więc gdy
-                // ostatnia porcja przyszła tuż przed końcem tury, na ekranie
-                // były pierwsze litery, a odpowiedź „kontynuowała” od prawie
-                // całego tekstu i wskakiwała naraz. I od wspólnego początku,
-                // nie `hasPrefix`: drobna różnica na końcu szkicu (spacja,
-                // formatowanie) zerowała odsłanianie od pierwszej litery.
-                //
-                // I tym samym zegarem (`draftReveal` → `finishing`): tempo
-                // szkicu płynie dalej, a nie zmienia się skokowo w chwili
-                // końca tury. Zegar żyje w wiadomości, więc przebudowa wiersza
-                // nie zaczyna pisania od nowa.
+                // Wszystko inne — odpowiedź bez szkicu, odpowiedź, która szkicu
+                // nie kontynuuje (szkic już się domknął w `letDraftFinish`),
+                // i wcześniejsze odpowiedzi tury — stoi od razu w CAŁOŚCI
+                // (`whole`), razem z kartą, jednym przenikaniem slotu
+                // (6.10.2026: dawniej pisała się od zera do 3,5 s, a karta
+                // czekała na koniec tego teatru). Szkic, z którego nic jeszcze
+                // nie widać (porcja przyszła tuż przed końcem tury), to jak
+                // brak szkicu — odpowiedź stoi cała.
                 let shown = draftReveal.count(at: now, limit: draftText.count)
-                lastAnswerContinuedDraft = continues && shown > 0
+                let continues = draftOnScreen && shown > 0
+                    && answerContinuesDraft(answers[last].text, at: now)
                 for index in answers.indices {
-                    let isLast = index == answers.count - 1
-                    let from = isLast && continues
-                        ? min(shown, AgentRevealClock.commonPrefixCount(draftText, answers[index].text))
-                        : 0
-                    answers[index].reveal = AgentRevealClock.finishing(
-                        after: isLast && continues ? draftReveal : nil,
-                        at: now,
-                        from: from,
-                        total: answers[index].text.count
-                    )
+                    let total = answers[index].text.count
+                    if index == last, continues {
+                        let from = min(shown, AgentRevealClock.commonPrefixCount(draftText, answers[index].text))
+                        answers[index].reveal = AgentRevealClock.finishing(
+                            after: draftReveal,
+                            at: now,
+                            from: from,
+                            total: total
+                        )
+                    } else {
+                        answers[index].reveal = AgentRevealClock.whole(total: total, at: now)
+                    }
                 }
             }
             if answers.isEmpty {
@@ -1547,25 +1548,45 @@ final class AgentStore {
 /// Zegar „pisania” odpowiedzi: od znaku `anchorCount` w chwili `anchorDate`
 /// przybywa `rate` znaków na sekundę. Czysta funkcja czasu — widok liczy
 /// z niej co klatkę, a sklep wie w każdej chwili, ile jest na ekranie.
+///
+/// Pisze się na żywo tylko SZKIC (to informacja „model pisze”). Gotowa
+/// odpowiedź najwyżej domyka szkic, który już widać (`finishing`, ≤ 0,6 s),
+/// a przyszła cała — stoi od razu (`whole`).
 struct AgentRevealClock: Equatable {
-    /// Najwolniej, jak dopisuje się GOTOWA odpowiedź (znaki/s).
+    /// Najwolniej, jak domyka się tekst (znaki/s) — krótka reszta nie wlecze się.
     static let minRate: Double = 90
     /// Najwolniej, jak pisze się szkic — nisko, żeby pierwsze słowo nie
     /// wskakiwało i nie stało do następnej porcji z serwera.
     static let draftMinRate: Double = 18
-    /// Najszybciej — powyżej tekst przestaje się pisać, a zaczyna wskakiwać.
+    /// Najszybciej pisze się SZKIC — powyżej tekst przestaje się pisać,
+    /// a zaczyna wskakiwać porcjami z serwera.
     static let maxRate: Double = 320
-    /// Gotowa odpowiedź schodzi najdłużej tyle — dłuższa pisze się szybciej.
-    static let finishWithin: TimeInterval = 3.5
+    /// Domknięcie trwa najwyżej tyle (6.10.2026; było 3,5 s): to koniec
+    /// tekstu, który już stoi na ekranie, a nie drugi teatr pisania.
+    static let finishWithin: TimeInterval = 0.6
 
-    /// Zegar gotowej odpowiedzi: od znaku `from`, bez szarpnięcia tempa
-    /// względem szkicu (`after`) — nie wolniej niż on, nie wolniej niż
-    /// `minRate` i tak, żeby reszta zeszła w `finishWithin`.
+    /// Zegar domknięcia: od znaku `from`, bez szarpnięcia tempa względem
+    /// szkicu (`after`) — nie wolniej niż on, nie wolniej niż `minRate`
+    /// i tak, żeby reszta zeszła w `finishWithin`. Bez sufitu `maxRate`:
+    /// przy długiej reszcie wydłużał domknięcie do kilku sekund, a tekst
+    /// stoi w układzie od pierwszej klatki, więc szybki koniec to przesuwająca
+    /// się rampa krycia, nie skaczące litery.
     static func finishing(after previous: AgentRevealClock?, at now: Date, from: Int, total: Int) -> AgentRevealClock {
         let remaining = Double(max(0, total - from))
-        let rate = min(maxRate, max(minRate, previous?.rate ?? 0, remaining / finishWithin))
+        let rate = max(minRate, previous?.rate ?? 0, remaining / finishWithin)
         return AgentRevealClock(anchorDate: now, anchorCount: from, rate: rate)
     }
+
+    /// Odpowiedź, która przyszła CAŁA: świeża (z tej sesji — karta może sama
+    /// otworzyć arkusz, znak raz podskoczy), ale nic się nie pisze — zegar
+    /// startuje od ostatniego znaku.
+    static func whole(total: Int, at now: Date) -> AgentRevealClock {
+        AgentRevealClock(anchorDate: now, anchorCount: total)
+    }
+
+    /// Nic do dopisania już na starcie (`whole`) — karta i pasek pod tekstem
+    /// nie czekają.
+    func startsComplete(total: Int) -> Bool { anchorCount >= total }
 
     /// Kiedy zegar dojdzie do `total` znaków.
     func finishDate(total: Int) -> Date {
