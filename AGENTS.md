@@ -108,7 +108,7 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   zamykają, toast „Dodano do planu · Jutro · Obiad” z „Cofnij” (6.10.2026: `SCToast.action` — JEDNA akcja po prawej
   kapsuły, toast z nią trwa ≥ 5,5 s, a każda akcja ma własne `id` — dwa toasty o tej samej treści się NIE łączą; tylko przy
   NOWEJ pozycji, cofnięcie = `removeWeekSlot` tego przepisu i toast „Usunięto z planu”, ale tylko gdy wpis jest w stanie
-  z chwili zapisu (`UndoStamp`: id + rewizja, bez rewizji — osoby, porcje, odhaczenie), inaczej „Nie cofam · Ktoś z domu
+  z chwili zapisu (`UndoStamp`: id, rewizja, osoby, porcje, odhaczenie — wszystko, bo odhaczenie nie podbija rewizji), inaczej „Nie cofam · Ktoś z domu
   zmienił już to danie”; serwer nie ma usuwania warunkowego (strict DTO — pole `expectedRevision` z develop iOS odbiłoby
   się od produkcji); dołączenie osób do dania i zamiana — bez „Cofnij”); reguły i zapis w `AddToPlanDraft` / `AddToPlanPortions`, wspólne
   z arkuszem — nie duplikować. „Zamiast: X” (cały dom) / „Jest już: X” (część domu) otwierają arkusz z `initialDate` /

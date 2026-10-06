@@ -300,16 +300,14 @@ struct AddToPlanDraft {
             portionUnits = meal.portionUnits
         }
 
-        /// Ta sama pozycja w tym samym stanie. Z rewizją po obu stronach
-        /// rozstrzyga sama rewizja (serwer podbija ją przy każdej zmianie
-        /// pozycji, a pola potrafią różnić się zapisem między odpowiedzią
-        /// zapisu i odczytem tygodnia); bez niej — wszystkie pola.
+        /// Ta sama pozycja w tym samym stanie — WSZYSTKIE pola, także przy
+        /// równej rewizji: odhaczenie „zjedzone” nie podbija rewizji pozycji,
+        /// a optymistyczna edycja porcji trzyma starą rewizję do potwierdzenia
+        /// (Codex, druga runda 6.10.2026). Gdyby pola różniły się samym
+        /// zapisem, kończy się na „Nie cofam” — nigdy na usunięciu cudzej
+        /// zmiany.
         func matches(_ other: UndoStamp) -> Bool {
-            guard id == other.id else { return false }
-            if let revision, let otherRevision = other.revision {
-                return revision == otherRevision
-            }
-            return self == other
+            self == other
         }
     }
 
