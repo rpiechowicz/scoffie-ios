@@ -205,8 +205,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   („PROPOZYCJA DNIA” / „PROPOZYCJA TYGODNIA”, dzień albo zakres tygodnia, akcent = `status.tint`), w domu z kilku osób
   `ProposalPersonFilter` („Wszyscy · Ty · Ania”, start „Wszyscy”), sekcje = dni (dzień = jedna sekcja bez etykiety),
   wiersz = pora z ikoną w kolorze pory · miniatura 44 · nazwa (2 linie) · kcal · „dla kogo” (`ProposalAudiencePill`,
-  gdy nie cały dom) · zmiana wobec planu W WIERSZU: „Zamiast: …” (przekreślone), usunięcie z powodem („Usunięte ·
-  powtórka”), „Nowe” TYLKO gdy propozycja coś zostawia/usuwa. Usunięcia z dni bez nowych dań = własna sekcja.
+  gdy nie cały dom) · zmiana wobec planu W WIERSZU: „Zamiast: …” (przekreślone; kilka nowych dań w jednej porze dzieli
+  usunięcia tej pory PO KOLEI — jedno na danie, nadmiar ostatniemu — zamiast powtarzać to samo „Zamiast: X”), usunięcie
+  z powodem („Usunięte · powtórka”), „Nowe” TYLKO gdy propozycja coś zostawia/usuwa. Filtr osób ŚWIADOMIE startuje od
+  „Wszyscy” (6.10.2026): zapis obejmuje cały dom, więc najpierw widać całą propozycję. Usunięcia z dni bez nowych dań = własna sekcja.
   „Zamień to danie” = „…” (`Menu`) w wierszu + to samo pod przytrzymaniem, akcja po 0,35 s (po zamknięciu menu), tylko
   PENDING; zdanie bez zmian („Zamień w tej propozycji …: X. Pokaż 3 inne dania na tę porę do wyboru.” → serwer oddaje
   OPTIONS → „Wybieram: …” → ta sama propozycja z nowym daniem). Stopka `.scSheetFooter`: zdanie stanu

@@ -174,7 +174,10 @@ extension ProposalReview {
 
     /// Wiersze jednego dnia: dania propozycji i usunięcia, po porze dnia.
     /// Usunięcie w porze, do której wchodzi nowe danie, to ZAMIANA — mówi ją
-    /// wiersz nowego dania („Zamiast: …”), a nie osobny wiersz.
+    /// wiersz nowego dania („Zamiast: …”), a nie osobny wiersz. Przy kilku
+    /// nowych daniach w jednej porze („Każdy je inaczej”) usunięcia idą do
+    /// nich PO KOLEI, jedno na danie, a nadmiar bierze ostatnie — dawniej
+    /// każde nowe danie pory mówiło to samo „Zamiast: X” (6.10.2026).
     private static func rows(
         dayKey: String,
         slots: [PlanWeekCardSlotDTO],
@@ -185,12 +188,22 @@ extension ProposalReview {
         var result: [(row: Row, offset: Int)] = []
         var paired = Set<Int>()
 
+        // Indeks nowego dania → usunięcia, które zastępuje.
+        let newIndexes = slots.indices.filter { slots[$0].isNew }
+        var replacedBy: [Int: [Int]] = [:]
+        for (offset, removal) in removals.enumerated() {
+            let candidates = newIndexes.filter { sameMeal(removal, slot: slots[$0]) }
+            guard let last = candidates.last else { continue }
+            let target = candidates.first { replacedBy[$0] == nil } ?? last
+            replacedBy[target, default: []].append(offset)
+            paired.insert(offset)
+        }
+
         for (index, slot) in slots.enumerated() {
             let change: Change
             if slot.isNew {
-                let replaced = removals.enumerated().filter { sameMeal($0.element, slot: slot) }
-                for entry in replaced { paired.insert(entry.offset) }
-                change = replaced.isEmpty ? .added : .replaces(replaced.map { $0.element.title })
+                let replaced = replacedBy[index] ?? []
+                change = replaced.isEmpty ? .added : .replaces(replaced.map { removals[$0].title })
             } else {
                 change = .kept
             }
