@@ -2143,8 +2143,7 @@ private struct MessageBubble: View {
                 onUndo: { onUndo(planWeek.proposalId) },
                 onOpenPlan: onOpenPlan,
                 onAsk: onAsk,
-                onCompose: onCompose,
-                autoPresentID: arrivedLive ? message.id : nil
+                onCompose: onCompose
             )
         case .planDay(let planDay):
             AssistantPlanDayCard(
@@ -2156,8 +2155,7 @@ private struct MessageBubble: View {
                 onUndo: { onUndo(planDay.proposalId) },
                 onOpenPlan: onOpenPlan,
                 onAsk: onAsk,
-                onCompose: onCompose,
-                autoPresentID: arrivedLive ? message.id : nil
+                onCompose: onCompose
             )
         case .options(let options):
             AssistantOptionsCard(

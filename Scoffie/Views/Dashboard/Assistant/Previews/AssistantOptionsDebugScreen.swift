@@ -185,7 +185,7 @@ struct AssistantOptionsDebugScreen: View {
             // kroki, `tour-6` przejście do kreatora.
             debugTour(phase: phase)
         } else if mode == "propozycja" {
-            ProposalEndDebugScreen()
+            ProposalReviewDebugScreen()
         } else if mode == "wynik" {
             // Karty porażki tury: nie dokończył, za długo, nie doszła.
             ScrollView {
