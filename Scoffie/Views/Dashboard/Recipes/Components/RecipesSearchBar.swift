@@ -11,6 +11,9 @@ import SwiftUI
 /// stoi na treści, nie w niej, więc ma wysokość krążków paska (50 pt).
 struct RecipesSearchBar: View {
     @Binding var text: String
+    /// Podpowiedź w polu — w kategorii „Szukaj w obiadach”
+    /// (`RecipesConstants.searchPrompt(for:)`), bo tam szuka się w niej.
+    var prompt: String = "Szukaj przepisów"
     /// Grupy filtrów z arkusza „Filtry” — plakietka i tint krążka.
     let activeFilterCount: Int
     var onSubmit: () -> Void = {}
@@ -74,7 +77,7 @@ struct RecipesSearchBar: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Color.scMuted(scheme))
 
-            TextField("Szukaj przepisów", text: $text)
+            TextField(prompt, text: $text)
                 .font(.system(size: 16.5))
                 .foregroundStyle(Color.scLabel(scheme))
                 .tint(SCPalette.terracotta)

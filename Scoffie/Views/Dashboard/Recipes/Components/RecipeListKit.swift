@@ -1,13 +1,14 @@
 import SwiftUI
 
-// Klocki arkuszy z listą przepisów: lista kategorii (chevron przy sekcji na
-// Przepisach) i wybór przepisu do planu („Wybierz przepis” w Planie).
+// Klocki list przepisów: ekran kategorii na Przepisach (`RecipeCategoryScreen`,
+// push nagłówkiem sekcji) i wybór przepisu do planu („Wybierz przepis” w Planie).
 //
-// Oba arkusze stoją na tym samym (runda 8, 23.09.2026 — Rafał: „żeby
-// wszystko trzymało się kupy, nie było nic, co jest odrębnie nowe”):
-// `EditorialSheetHeader` z kafelkiem i podtytułem, `SCSearchField`, karta
-// kontekstu, wiersze `EditorialRecipeRow`, pusty stan. Różni je tylko to, co
-// robi wiersz — otwiera przepis albo go zaznacza — i stopka wyboru.
+// Obie listy stoją na tym samym (runda 8, 23.09.2026 — Rafał: „żeby
+// wszystko trzymało się kupy, nie było nic, co jest odrębnie nowe”): karta
+// kontekstu, wiersze `EditorialRecipeRow`, pusty stan. Różni je to, co robi
+// wiersz — otwiera przepis albo go zaznacza — i góra: wybór do planu to
+// arkusz z `EditorialSheetHeader` i `SCSearchField`, kategoria — ekran
+// z systemowym paskiem i pływającym szukaniem Przepisów.
 //
 // Pigułek z opcjami filtrów pod szukaniem już nie ma (runda 10, Rafał:
 // „usuń to szybkie wybieranie z chips — od tego mamy filtry”): zawężanie
@@ -15,9 +16,8 @@ import SwiftUI
 
 // MARK: - Góra arkusza
 
-/// Przypięta góra arkusza z listą: nagłówek i szukanie. Jedne odstępy dla
-/// obu arkuszy — lista kategorii i wybór do planu mają się zaczynać w tym
-/// samym miejscu.
+/// Przypięta góra arkusza z listą: nagłówek i szukanie („Wybierz przepis”
+/// w Planie).
 struct RecipeListSheetTop<Header: View>: View {
     let searchPrompt: String
     @Binding var searchText: String
@@ -199,14 +199,15 @@ extension RecipeListContextCard.Row {
         )
     }
 
-    /// Filtry wszystkich przepisów (arkusz „Filtry”): co działa i „Wyczyść”.
+    /// Filtry z arkusza „Filtry” działające na tę listę (ekran kategorii na
+    /// Przepisach): co działa i „Wyczyść”.
     static func filters(_ labels: [String], onClear: @escaping () -> Void) -> Self? {
         guard !labels.isEmpty else { return nil }
         return Self(
             id: "filters",
             icon: "line.3.horizontal.decrease",
             accent: SCPalette.terracotta,
-            title: "Filtry z Przepisów",
+            title: "Filtry",
             detail: labels.joined(separator: " · "),
             onClear: onClear
         )

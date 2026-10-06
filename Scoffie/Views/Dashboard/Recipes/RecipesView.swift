@@ -33,7 +33,19 @@ struct RecipesView: View {
     @State private var debouncedSearchText = ""
     @State private var searchDebounceTask: Task<Void, Never>?
     @State private var selectedRecipe: Recipe?
-    @State private var categorySheetSelection: RecipesCategory?
+    /// Stos Przepisów: kategoria wpchnięta nagłówkiem sekcji (push zamiast
+    /// arkusza, 6.10.2026). Pusty = korzeń.
+    @State private var categoryPath: [RecipesCategory] = []
+    /// Fraza w kategorii — własna, nie ta z korzenia: wejście w kategorię
+    /// zaczyna od pustego pola, a wyjście ją czyści (patrz `openCategory`).
+    @State private var categorySearchText = ""
+    /// Kapsuła z tytułem „Przepisy” (`scReportsCompactTitle`) odłożona na czas
+    /// kategorii — tam tytuł jest w systemowym pasku nawigacji.
+    @State private var parkedCompactTitle: String?
+    /// Pierwsze przygotowanie korzenia (`.task`) już było — `.task` rusza
+    /// znowu po każdym powrocie z kategorii, a karuzela ma się wtedy nie
+    /// układać od nowa.
+    @State private var didPrepare = false
     @State private var featuredSelectionId: UUID?
     /// Kolejność kart karuzeli zamrożona od ostatniego ułożenia.
     ///
@@ -91,7 +103,7 @@ struct RecipesView: View {
     }
 
     /// Max liczba przepisów pokazywanych inline w każdej sekcji Tasting menu.
-    /// Reszta dostępna pod chevronem (→ `RecipeCategorySheetView`).
+    /// Reszta pod nagłówkiem sekcji (push → `RecipeCategoryScreen`).
     private static let sectionPreviewLimit = 5
 
     private var pageTopPadding: CGFloat { 78 }
@@ -103,11 +115,7 @@ struct RecipesView: View {
     /// Przepisy po samym wyszukiwaniu — baza dla filtrów i dla licznika
     /// podglądu w arkuszu „Filtry”.
     private var searchedRecipes: [Recipe] {
-        guard !debouncedSearchText.isEmpty else { return recipeCatalogStore.recipes }
-        return recipeCatalogStore.recipes.filter { recipe in
-            recipe.name.localizedCaseInsensitiveContains(debouncedSearchText) ||
-            recipe.description.localizedCaseInsensitiveContains(debouncedSearchText)
-        }
+        RecipeTextSearch.filter(recipeCatalogStore.recipes, query: debouncedSearchText)
     }
 
     /// Preferencje w formie, którą da się nałożyć na katalog.
@@ -204,23 +212,7 @@ struct RecipesView: View {
     /// nazw, na końcu trafienia w samym opisie; w obrębie grupy kolejność
     /// zostaje (dopasowanie do celu).
     private var unscopedResults: [Recipe] {
-        let visible = visibleRecipes
-        let query = debouncedSearchText.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return visible }
-        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
-        func rank(_ recipe: Recipe) -> Int {
-            let name = recipe.name
-            if name.range(of: query, options: options.union(.anchored)) != nil { return 0 }
-            if name.split(separator: " ").contains(where: {
-                String($0).range(of: query, options: options.union(.anchored)) != nil
-            }) { return 1 }
-            if name.range(of: query, options: options) != nil { return 2 }
-            return 3
-        }
-        return visible.enumerated()
-            .map { (rank: rank($0.element), index: $0.offset, recipe: $0.element) }
-            .sorted { ($0.rank, $0.index) < ($1.rank, $1.index) }
-            .map(\.recipe)
+        RecipeTextSearch.ranked(visibleRecipes, query: debouncedSearchText)
     }
 
     /// Wyjście ze stanu wyników — fraza i filtry z „Filtrów” (filtry
@@ -299,7 +291,7 @@ struct RecipesView: View {
     // MARK: - Body
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $categoryPath) {
             ZStack(alignment: .top) {
                 SCPageBackground(scheme: scheme)
                     .ignoresSafeArea()
@@ -309,14 +301,25 @@ struct RecipesView: View {
             // Miejsce pod własnym paskiem zakładek — musi być WEWNĄTRZ
             // `NavigationStack`, patrz `scReservesTabBarSpace`.
             .scReservesTabBarSpace()
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Color.clear.frame(width: 1, height: 1)
-                }
+            // Korzeń ma własny duży tytuł w treści — systemowy pasek jest
+            // SCHOWANY (nie pusty i przepuszczający dotyk, jak dawniej
+            // `NavBarHitTestPassthrough`). Pokazuje się dopiero w kategorii,
+            // z tytułem i systemowym „wstecz”. Tytuł tu służy tylko przyciskowi
+            // „wstecz”.
+            .navigationTitle("Przepisy")
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: RecipesCategory.self) { category in
+                RecipeCategoryScreen(
+                    category: category,
+                    filters: $filters,
+                    searchText: $categorySearchText,
+                    onOpenRecipe: { recipe in openDetail(for: recipe) },
+                    onOpenFilters: { isFilterSheetPresented = true }
+                )
             }
-            .background(NavBarHitTestPassthrough())
             .task {
+                guard !didPrepare else { return }
+                didPrepare = true
                 debouncedSearchText = searchText
                 await recipeCatalogStore.loadIfNeeded()
                 resyncFeaturedSelectionIfNeeded()
@@ -358,59 +361,73 @@ struct RecipesView: View {
                 refreshMealDayIfNeeded()
             }
             .onDisappear { searchDebounceTask?.cancel() }
-            .sheet(isPresented: $isFilterSheetPresented) {
-                // Pula PRZED dopasowaniem: przełącznik „Dopasowane do Ciebie”
-                // siedzi w arkuszu i liczby muszą się dać przeliczyć w obie
-                // strony.
-                RecipeFilterSheet(
-                    filters: $filters,
-                    isPersonalizationEnabled: $isPersonalizationEnabled,
-                    recipes: searchedRecipes,
-                    personalization: personalization
-                )
-                    .presentationDetents([.large])
-                    .dashboardLiquidSheet()
-            }
-            .sheet(item: $selectedRecipe) { selected in
-                RecipeDetailView(
-                    // Żywy przepis z katalogu, nie kopia z chwili otwarcia —
-                    // serce nadąża za zapisem z karuzeli, a zapis z arkusza
-                    // nie musi niczego podmieniać w `selectedRecipe`
-                    // (przypisanie otwierało zamknięty już arkusz).
-                    recipe: recipeCatalogStore.recipes.first(where: { $0.id == selected.id }) ?? selected,
-                    onSetFavourite: { value in
-                        Task { await recipeCatalogStore.setFavourite(recipeId: selected.id, to: value) }
-                    },
-                    onClose: { selectedRecipe = nil },
-                    // Katalog nie zna żadnego slotu, więc szczegół otwiera się
-                    // na jednej porcji i to stepper decyduje, ile ich będzie.
-                    onAddedToPlan: { _, _ in selectedRecipe = nil }
-                )
-                .recipeDetailSheet()
-            }
-            .sheet(item: $categorySheetSelection) { category in
-                let categoryRecipes = recipeCatalogStore.recipes.filter { $0.category == category }
-                let inCategory = personalization.apply(to: categoryRecipes)
-                RecipeCategorySheetView(
-                    category: category,
-                    // Filtry z arkusza „Filtry” obowiązują też tutaj — inaczej
-                    // chevron „zobacz wszystkie” cofałby zawężenie i pokazywał
-                    // przepisy, które użytkownik przed chwilą odsiał.
-                    // Wyszukiwarka zostaje poza tym celowo: ten arkusz ma
-                    // własną, do przeszukiwania kategorii.
-                    recipes: filters.apply(to: inCategory),
-                    // Pula dla filtrów kategorii: wszystko poza nimi samymi,
-                    // żeby kafelki liczyły „ile zostanie po zaznaczeniu”.
-                    pool: filters.withoutCategoryFilter(for: category).apply(to: inCategory),
-                    categoryFilter: categoryFilterBinding(for: category),
-                    filterLabels: filters.summaryLabels,
-                    personalization: personalization,
-                    hiddenByPersonalization: personalization.hiddenCount(in: categoryRecipes),
-                    onClearFilters: { withAnimation(.smooth(duration: 0.2)) { filters.resetGlobal() } }
-                )
+        }
+        // Wejście w kategorię i powrót z niej (także gestem „wstecz”).
+        .onChange(of: categoryPath.isEmpty) { _, atRoot in
+            categoryPathChanged(atRoot: atRoot)
+        }
+        // Arkusze wiszą na STOSIE, nie na korzeniu: w kategorii korzeń nie
+        // stoi w oknie, a szczegół przepisu i Filtry otwierają się także stamtąd.
+        .sheet(isPresented: $isFilterSheetPresented) {
+            // Pula PRZED dopasowaniem: przełącznik „Dopasowane do Ciebie”
+            // siedzi w arkuszu i liczby muszą się dać przeliczyć w obie
+            // strony.
+            RecipeFilterSheet(
+                filters: $filters,
+                isPersonalizationEnabled: $isPersonalizationEnabled,
+                recipes: searchedRecipes,
+                personalization: personalization
+            )
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
-            }
+        }
+        .sheet(item: $selectedRecipe) { selected in
+            RecipeDetailView(
+                // Żywy przepis z katalogu, nie kopia z chwili otwarcia —
+                // serce nadąża za zapisem z karuzeli, a zapis z arkusza
+                // nie musi niczego podmieniać w `selectedRecipe`
+                // (przypisanie otwierało zamknięty już arkusz).
+                recipe: recipeCatalogStore.recipes.first(where: { $0.id == selected.id }) ?? selected,
+                onSetFavourite: { value in
+                    Task { await recipeCatalogStore.setFavourite(recipeId: selected.id, to: value) }
+                },
+                onClose: { selectedRecipe = nil },
+                // Katalog nie zna żadnego slotu, więc szczegół otwiera się
+                // na jednej porcji i to stepper decyduje, ile ich będzie.
+                onAddedToPlan: { _, _ in selectedRecipe = nil }
+            )
+            .recipeDetailSheet()
+        }
+    }
+
+    // MARK: - Kategoria (push)
+
+    /// Nagłówek sekcji wpycha kategorię do stosu. Fraza z korzenia NIE
+    /// przechodzi do kategorii: korzeń stoi wtedy w zwykłym widoku (nagłówki
+    /// sekcji nie są widoczne w wynikach), więc czyścimy najwyżej frazę,
+    /// która nie zdążyła jeszcze wejść (debounce), a kategoria zaczyna od
+    /// pustego pola z podpowiedzią „Szukaj w obiadach”.
+    private func openCategory(_ category: RecipesCategory) {
+        searchDebounceTask?.cancel()
+        searchText = ""
+        debouncedSearchText = ""
+        categorySearchText = ""
+        categoryPath.append(category)
+    }
+
+    /// Kapsuła „Przepisy” pod paskiem stanu należy do przewinięcia korzenia:
+    /// w kategorii tytuł stoi w systemowym pasku, więc kapsuła odchodzi na
+    /// bok i wraca po powrocie. Pasek zakładek zaczyna rozwinięty, jak przy
+    /// zmianie zakładki. Fraza kategorii znika z wyjściem.
+    private func categoryPathChanged(atRoot: Bool) {
+        tabBarChrome.isCompact = false
+        if atRoot {
+            tabBarChrome.compactTitles[.recipes] = parkedCompactTitle
+            parkedCompactTitle = nil
+            categorySearchText = ""
+        } else {
+            parkedCompactTitle = tabBarChrome.compactTitles[.recipes]
+            tabBarChrome.compactTitles[.recipes] = nil
         }
     }
 
@@ -821,7 +838,7 @@ struct RecipesView: View {
                 // Sekcję wyzerowaną przez JEJ filtry dalej da się otworzyć —
                 // tam się je zdejmuje.
                 action: section.recipes.isEmpty && section.filterCount == 0 ? nil : {
-                    categorySheetSelection = section.category
+                    openCategory(section.category)
                 }
             )
             .padding(.horizontal, pageHorizontalPadding)
@@ -1047,19 +1064,6 @@ struct RecipesView: View {
         }
     }
 
-    /// Filtry jednej kategorii jako wiązanie do słownika w `filters` — pusty
-    /// wybór znika ze słownika, żeby `isActive` nie widziało pustych wpisów.
-    private func categoryFilterBinding(for category: RecipesCategory) -> Binding<RecipeCategoryFilter> {
-        Binding(
-            get: { filters.categoryFilters[category] ?? RecipeCategoryFilter() },
-            set: { newValue in
-                withAnimation(.smooth(duration: 0.25)) {
-                    filters.categoryFilters[category] = newValue.isActive ? newValue : nil
-                }
-            }
-        )
-    }
-
     /// Stable ordering for the featured carousel.
     private func isFeaturedRecipePreferred(_ lhs: Recipe, _ rhs: Recipe) -> Bool {
         if lhs.favourite != rhs.favourite {
@@ -1106,255 +1110,6 @@ struct EditorialRecipesPageDots: View {
                     .frame(width: isActive ? 22 : 6, height: 6)
                     .animation(.easeInOut(duration: 0.22), value: activeId)
             }
-        }
-    }
-}
-
-// MARK: - Category sheet
-
-// Arkusz z całą kategorią (chevron przy sekcji). Stoi na tych samych
-// klockach, co wybór przepisu do planu (`RecipeListKit.swift`): nagłówek
-// z kafelkiem kategorii i liczbą przepisów, szukanie, karta kontekstu,
-// wiersze `EditorialRecipeRow`; filtry kategorii pod przyciskiem w nagłówku. Wcześniej miał
-// własny nagłówek z kolorowym pionem i poświatą, niższe pole szukania bez
-// krzyżyka i podpowiedź „Szukaj w śniadania”.
-private struct RecipeCategorySheetView: View {
-    let category: RecipesCategory
-    /// Przepisy kategorii po dopasowaniu i WSZYSTKICH filtrach, także tej
-    /// kategorii — to, co pokazuje lista.
-    let recipes: [Recipe]
-    /// Przepisy kategorii przed jej własnymi filtrami — do arkusza filtrów
-    /// i do „24 z 132” w nagłówku.
-    let pool: [Recipe]
-    @Binding var categoryFilter: RecipeCategoryFilter
-    /// Co działa z arkusza „Filtry” (filtry WSZYSTKICH przepisów) — pusto,
-    /// gdy nic. Opis do karty nad listą (`RecipeFilterOptions.summaryLabels`).
-    let filterLabels: [String]
-    /// Dieta i alergeny z Ustawień — do karty nad listą.
-    let personalization: RecipePersonalization
-    /// Ile przepisów kategorii ukrywa dieta i alergeny (0 = nic albo
-    /// dopasowanie wyłączone). Zmienia tylko kartę — dopasowanie zdejmuje się
-    /// w Filtrach, nie tutaj.
-    let hiddenByPersonalization: Int
-    let onClearFilters: () -> Void
-
-    @Environment(\.recipeCatalogStore) private var recipeCatalogStore
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var scheme
-
-    @State private var searchText = ""
-    @State private var selectedRecipe: Recipe?
-    @State private var isFilterSheetPresented = false
-
-    private var accent: Color { RecipeAccent.accent(for: category) }
-    private var hasActiveFilters: Bool { !filterLabels.isEmpty }
-
-    private var trimmedSearch: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var filteredRecipes: [Recipe] {
-        let query = trimmedSearch
-        let source: [Recipe]
-        if query.isEmpty {
-            source = recipes
-        } else {
-            source = recipes.filter {
-                $0.name.localizedCaseInsensitiveContains(query) ||
-                $0.description.localizedCaseInsensitiveContains(query)
-            }
-        }
-        return source.sorted { lhs, rhs in
-            if lhs.favourite != rhs.favourite { return lhs.favourite && !rhs.favourite }
-            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-        }
-    }
-
-    var body: some View {
-        let rows = filteredRecipes
-
-        ZStack(alignment: .top) {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // Przypięta góra: nagłówek i szukanie. Uchwyt rysuje
-                // `presentationDragIndicator` z `dashboardLiquidSheet()`.
-                // Filtry kategorii tylko pod przyciskiem w nagłówku — pigułki
-                // pod szukaniem zniknęły w rundzie 10 („od tego mamy filtry”).
-                RecipeListSheetTop(
-                    searchPrompt: RecipesConstants.searchPrompt(for: category),
-                    searchText: $searchText
-                ) {
-                    EditorialSheetHeader(
-                        eyebrow: RecipeAccent.eyebrow(for: category),
-                        title: RecipesConstants.displayName(for: category),
-                        icon: RecipesConstants.icon(for: category),
-                        accent: accent,
-                        subtitle: countLine(shown: rows.count),
-                        onClose: { dismiss() }
-                    ) {
-                        RecipeListFilterButton(count: categoryFilter.activeCount, accent: accent) {
-                            isFilterSheetPresented = true
-                        }
-                    }
-                }
-
-                ScrollView {
-                    VStack(spacing: 0) {
-                        let context = contextRows
-                        if !context.isEmpty {
-                            RecipeListContextCard(rows: context)
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 8)
-                        }
-
-                        if rows.isEmpty {
-                            emptyState
-                                .padding(.horizontal, 20)
-                                .padding(.top, 4)
-                        } else {
-                            RecipeRowStack(recipes: rows, accent: accent) { recipe in
-                                openDetail(for: recipe)
-                            }
-                        }
-                    }
-                    .padding(.top, 8)
-                    .padding(.bottom, 32)
-                }
-                .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.interactively)
-                .scScrollEdgeFade()
-            }
-        }
-        .toolbar(.hidden, for: .navigationBar)
-        // Szczegół otwiera się NAD tym arkuszem — jak AddToPlanSheet nad
-        // szczegółem przepisu. Zamknięcie szczegółu wraca na listę kategorii,
-        // zamiast wyrzucać użytkownika na sam ekran Przepisów.
-        .sheet(item: $selectedRecipe) { selected in
-            RecipeDetailView(
-                // Jak na Przepisach: żywy przepis z katalogu i zapis wartości.
-                recipe: recipeCatalogStore.recipes.first(where: { $0.id == selected.id }) ?? selected,
-                onSetFavourite: { value in
-                    Task { await recipeCatalogStore.setFavourite(recipeId: selected.id, to: value) }
-                },
-                onClose: { selectedRecipe = nil },
-                onAddedToPlan: { _, _ in selectedRecipe = nil }
-            )
-            .recipeDetailSheet()
-        }
-        .sheet(isPresented: $isFilterSheetPresented) {
-            RecipeCategoryFilterSheet(category: category, recipes: pool, filter: $categoryFilter)
-                .presentationDetents([.large])
-                .dashboardLiquidSheet()
-        }
-    }
-
-    private func openDetail(for recipe: Recipe) {
-        Task { @MainActor in
-            selectedRecipe = await recipeCatalogStore.loadRecipeDetail(recipeId: recipe.id) ?? recipe
-        }
-    }
-
-    /// „132 przepisy”, a gdy filtry kategorii albo szukanie zawężają — „24 z 132
-    /// przepisów” (po „z” dopełniacz).
-    private func countLine(shown: Int) -> String {
-        let total = pool.count
-        let count = shown == total
-            ? PolishPlural.recipes(total)
-            : "\(shown) z \(total) \(total == 1 ? "przepisu" : "przepisów")"
-        guard let diet = dietNote else { return count }
-        return count + " · " + diet
-    }
-
-    /// Dieta z Ustawień jako dopisek w podtytule nagłówka („dieta
-    /// wegetariańska”), a nie osobna karta nad listą — runda 12, Rafał:
-    /// „usuń info o dieta, wrzuć to jakoś inaczej”. `nil`, gdy dopasowanie
-    /// niczego w tej kategorii nie ukrywa.
-    private var dietNote: String? {
-        guard personalization.isEnabled, personalization.restrictsCatalog,
-              hiddenByPersonalization > 0 else { return nil }
-        if personalization.diet != .none {
-            return "dieta " + personalization.diet.title.lowercased()
-        }
-        return "bez Twoich alergenów"
-    }
-
-    // MARK: - Karta kontekstu
-
-    /// Co zawęża tę listę spoza arkusza: dieta z Ustawień i filtry
-    /// z Przepisów. Bez tego znikające przepisy wyglądałyby na brakujące
-    /// dane, a nie na skutek ustawienia z innego ekranu.
-    private var contextRows: [RecipeListContextCard.Row] {
-        // Dieta mieszka w podtytule nagłówka (`dietNote`); karta mówi już
-        // tylko o filtrach z Przepisów, które da się stąd zdjąć.
-        let rows: [RecipeListContextCard.Row?] = [
-            .filters(filterLabels, onClear: onClearFilters)
-        ]
-        return rows.compactMap { $0 }
-    }
-
-    // MARK: - Pusty stan
-
-    /// Co opróżniło listę i jak to zdjąć — ten sam układ, co w wyborze
-    /// przepisu do planu (`RecipeListEmptyState`).
-    private var emptyState: some View {
-        var actions: [RecipeListEmptyState.Action] = []
-        if categoryFilter.isActive {
-            actions.append(.init(title: "Wyczyść filtry kategorii") {
-                withAnimation(.smooth(duration: 0.2)) { categoryFilter = RecipeCategoryFilter() }
-            })
-        }
-        if hasActiveFilters {
-            actions.append(.init(title: "Wyczyść filtry z Przepisów", run: onClearFilters))
-        }
-
-        if !trimmedSearch.isEmpty {
-            return RecipeListEmptyState(
-                icon: "magnifyingglass",
-                accent: accent,
-                title: "Brak wyników",
-                message: "Nic w tej kategorii nie pasuje do frazy. Spróbuj innej.",
-                actions: actions
-            )
-        }
-        return RecipeListEmptyState(
-            icon: "line.3.horizontal.decrease",
-            accent: accent,
-            title: "Nic nie pasuje",
-            message: "Żaden przepis w tej kategorii nie przechodzi przez filtry i Twoją dietę.",
-            actions: actions
-        )
-    }
-}
-
-// MARK: - Nav bar passthrough
-
-// Wyłącza interakcję `UINavigationBar` żeby tapy padały na content pod
-// nim — taki sam shim jak w Kalendarzu / Produktach / Ustawieniach (każdy
-// widok ma własną kopię, żeby uniknąć importu prywatnego pliku).
-private struct NavBarHitTestPassthrough: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView { BarUnlocker() }
-    func updateUIView(_ uiView: UIView, context: Context) {}
-
-    private final class BarUnlocker: UIView {
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            DispatchQueue.main.async { [weak self] in
-                self?.findNavigationBar()?.isUserInteractionEnabled = false
-            }
-        }
-
-        private func findNavigationBar() -> UINavigationBar? {
-            var responder: UIResponder? = self
-            while let r = responder {
-                if let vc = r as? UIViewController,
-                   let bar = vc.navigationController?.navigationBar {
-                    return bar
-                }
-                responder = r.next
-            }
-            return nil
         }
     }
 }
