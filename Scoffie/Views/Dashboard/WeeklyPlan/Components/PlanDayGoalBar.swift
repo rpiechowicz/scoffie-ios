@@ -62,13 +62,16 @@ import SwiftUI
 /// a kolumna kalorii schodzi z rzędu — te same liczby nie stoją dwa razy.
 ///
 /// **Przejście Plan ↔ Dziś** (Rafał 6.10.2026: „ładnie się animował, rozrastał
-/// z tego, co jest na planie, i z powrotem… liquid”). Przechodzi KSZTAŁT, nie
-/// liczby: pigułka zakładki, na którą się weszło, startuje w wysokości pigułki
-/// z poprzedniej zakładki (`SCTabBarChrome.goalBarHeights`) i sprężyną dochodzi
-/// do swojej — w Dziś szkło rośnie, a zdanie „Zjedzone …” wyłania się nad
-/// makrami; w Planie szkło się kurczy. Liczby stoją od pierwszej klatki swoje
-/// (to dwie różne liczby — dawne `goalSnapshot` z rosnącymi torami z 4.10
-/// mówiło, że to jedna, która się zmieniła; nie wracać).
+/// z tego, co jest na planie, i z powrotem… liquid”; pierwsza wersja — sama
+/// wysokość szkła — „słabo wygląda”). Pigułka zakładki, na którą się weszło,
+/// staje na pierwszej klatce DOKŁADNIE taka, jaka była na poprzedniej
+/// (`PlanDayGoalFace` z `SCTabBarChrome.goalBarFaces`: układ i liczby), więc
+/// systemowe cięcie zakładki jej nie dotyka — a potem jednym ruchem
+/// (`handoffMotion`) przechodzi w swoją: kolumna kalorii przelewa się
+/// w zdanie „Zjedzone …” nad makrami (`matchedGeometryEffect`) albo z niego
+/// wraca, makra przesuwają się na swoje miejsce, cyfry rolują (`numericText`,
+/// jak każda liczba w aplikacji), tory dojeżdżają, a szkło zmienia kształt
+/// razem z treścią.
 struct PlanDayGoalBar: View {
     let nutrition: PlanDayNutrition
     let targets: DailyNutritionTargets
@@ -85,7 +88,7 @@ struct PlanDayGoalBar: View {
     /// na zdanie „Zjedzone … · w planie …” — patrz komentarz typu.
     var planned: PlanDayNutrition?
     /// Zakładka, na której stoi pigułka (`.plan` / `.calendar`) — do przejścia
-    /// kształtu z pigułki drugiej z nich.
+    /// z pigułki drugiej z nich.
     let tab: DashboardTab
     let action: () -> Void
 
@@ -95,21 +98,10 @@ struct PlanDayGoalBar: View {
     @Environment(\.scTabBarChrome) private var tabBarChrome
     @Environment(\.sessionStore) private var sessionStore
 
-    /// Wysokość, którą szkło trzyma na początku przejścia — `nil` = własna.
-    @State private var handoffHeight: CGFloat?
-
-    /// Pigułka po drugiej stronie przejścia.
-    private var handoffPartner: DashboardTab? {
-        switch tab {
-        case .plan: .calendar
-        case .calendar: .plan
-        default: nil
-        }
-    }
-
-    /// Sprężyna przejścia — szkło dochodzi z lekkim dobiciem, jak systemowe
-    /// zwijanie paska zakładek.
-    private static let handoffMotion: Animation = .spring(response: 0.5, dampingFraction: 0.78)
+    /// Twarz pigułki z poprzedniej zakładki na czas przejścia — `nil` = własna.
+    @State private var handoff: PlanDayGoalFace?
+    /// Kolumna kalorii i zdanie „Zjedzone …” to jedno miejsce w przejściu.
+    @Namespace private var morph
 
     // Zdanie „Zjedzone … · w planie …” w stopniach `MacroMeter` (wartość 13,
     // reszta 11), skalowanych z Dynamic Type tak samo jak tamte podpisy.
@@ -120,26 +112,33 @@ struct PlanDayGoalBar: View {
     /// kształty nie mogły się rozjechać.
     private static let cornerRadius: CGFloat = 20
 
-    /// Ile kalorii zostaje do celu; ujemne znaczy „ponad cel". Na ekranie tej
-    /// liczby nie ma — idzie wyłącznie do opisu dla VoiceOver.
-    private var remaining: Int { targets.kcal - nutrition.kcal }
-
-    /// Wszystko, co ma przejść płynnie przy zmianie dnia, przy dołożeniu
-    /// posiłku i po przestawieniu celu w Ustawieniach — jedna wartość, jedna
-    /// sprężyna. Cele są w odcisku celowo: bez nich powrót z suwaka kalorii
-    /// podmieniał mianownik i przeskakiwał cztery tory bez ruchu.
-    private var fingerprint: String {
-        let macros = targets.macros
-        return "\(nutrition.kcal).\(nutrition.protein).\(nutrition.fat).\(nutrition.carbs)"
-            + "|\(targets.kcal).\(macros?.proteinG ?? 0).\(macros?.fatG ?? 0).\(macros?.carbsG ?? 0)"
-            + "|\(planned?.kcal ?? -1).\(planned?.protein ?? -1)"
-            + ".\(planned?.fat ?? -1).\(planned?.carbs ?? -1)"
-    }
-
     /// Jedna sprężyna dla cyfr i torów pod nimi. `MacroProgressTrack` ma
     /// własną domyślną (0,4 s) i przy 0,36 s na cyfrach kreska lądowała
     /// chwilę po liczbie — dwie sprężyny w jednej kolumnie widać jako dwie.
     static let animation: Animation = .spring(response: 0.36, dampingFraction: 0.9)
+
+    /// Ruch przejścia Plan ↔ Dziś — układ, szkło, cyfry i tory razem. Dłuższy
+    /// od zwykłej zmiany liczb (zmienia się cały kształt), z lekkim dobiciem
+    /// szkła na końcu.
+    private static let handoffMotion: Animation = .spring(response: 0.55, dampingFraction: 0.84)
+
+    /// Własne liczby pigułki.
+    private var ownFace: PlanDayGoalFace {
+        PlanDayGoalFace(nutrition: nutrition, targets: targets, planned: planned)
+    }
+
+    /// To, co pigułka rysuje: w trakcie przejścia twarz z poprzedniej
+    /// zakładki, potem własna.
+    private var face: PlanDayGoalFace { handoff ?? ownFace }
+
+    /// Pigułka po drugiej stronie przejścia.
+    private var handoffPartner: DashboardTab? {
+        switch tab {
+        case .plan: .calendar
+        case .calendar: .plan
+        default: nil
+        }
+    }
 
     var body: some View {
         bar
@@ -151,17 +150,6 @@ struct PlanDayGoalBar: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                // Własna wysokość — z niej startuje pigułka drugiej zakładki.
-                // W trakcie przejścia treść stoi w cudzej ramce — wtedy nie.
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                    guard handoffHeight == nil else { return }
-                    tabBarChrome.goalBarHeights[tab] = height
-                }
-                // Przejście: szkło w wysokości pigułki, z której się przyszło,
-                // treść przyklejona do dołu (makra stoją w obu w tym samym
-                // miejscu), nadmiar przycięty do kształtu szkła.
-                .frame(height: handoffHeight, alignment: .bottom)
-                .clipShape(.rect(cornerRadius: Self.cornerRadius, style: .continuous))
                 // `interactive()` daje szkłu reakcję na dotyk — tę samą, którą ma
                 // dolne menu. `PlanPressStyle` dokłada ściśnięcie treści, więc
                 // pigułka odpowiada dokładnie jak wiersz osi nad nią.
@@ -182,7 +170,7 @@ struct PlanDayGoalBar: View {
                 )
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))
-        .animation(Self.animation, value: fingerprint)
+        .animation(Self.animation, value: ownFace.fingerprint)
         // `.combine`, nie `.contain`: każdy miernik ma własne zdanie z celem
         // („Białko: 100 ze 150 gramów, cel przekroczony") i scalenie skleja te
         // cztery zdania w jeden element, który NADAL jest przyciskiem.
@@ -191,6 +179,10 @@ struct PlanDayGoalBar: View {
         // stuknąć — VoiceOver czytał liczby i nie miał czego aktywować.
         .accessibilityElement(children: .combine)
         .accessibilityHint("Otwiera cel dnia")
+        // Własna twarz dla pigułki drugiej zakładki — przy każdej zmianie liczb.
+        .onChange(of: ownFace.fingerprint, initial: true) { _, _ in
+            tabBarChrome.goalBarFaces[tab] = ownFace
+        }
         // Wejście na zakładkę z pigułki drugiej strony (Plan ↔ Dziś).
         // `initial`, bo `TabView` buduje zakładkę przy pierwszym wyborze
         // i wtedy flaga już jest `true`.
@@ -200,61 +192,60 @@ struct PlanDayGoalBar: View {
         }
     }
 
-    /// Szkło staje w wysokości pigułki, z której się przyszło, i w następnej
-    /// klatce sprężyną dochodzi do własnej.
+    /// Pierwsza klatka = pigułka z poprzedniej zakładki, potem jednym ruchem
+    /// własna.
     private func startHandoff() {
         guard !reduceMotion,
               let partner = handoffPartner,
               sessionStore.previousDashboardTab == partner,
-              let from = tabBarChrome.goalBarHeights[partner]
+              let from = tabBarChrome.goalBarFaces[partner],
+              from.fingerprint != ownFace.fingerprint
         else { return }
-        // Własnej wysokości nie ma przy pierwszym wejściu (zakładka dopiero się
-        // buduje) — wtedy przejście rusza i tak, bo pigułki się różnią układem.
-        if let own = tabBarChrome.goalBarHeights[tab], abs(from - own) <= 1 { return }
 
         var instant = Transaction()
         instant.disablesAnimations = true
-        withTransaction(instant) { handoffHeight = from }
+        withTransaction(instant) { handoff = from }
 
         Task { @MainActor in
-            // Klatka w wysokości startowej musi wejść na ekran, zanim ruszy
-            // sprężyna — inaczej SwiftUI zlepia oba zapisy w jeden.
-            try? await Task.sleep(for: .milliseconds(16))
-            withAnimation(Self.handoffMotion) { handoffHeight = nil }
+            // Klatka z twarzą poprzedniej zakładki musi wejść na ekran, zanim
+            // ruszy przejście — inaczej SwiftUI zlepia oba zapisy w jeden.
+            try? await Task.sleep(for: .milliseconds(32))
+            withAnimation(Self.handoffMotion) { handoff = nil }
         }
     }
 
     /// Treść pigułki: w Planie cztery kolumny w jednym wierszu, na „Dziś”
-    /// zdanie o zjedzonych i planie nad trzema makrami.
-    @ViewBuilder
+    /// zdanie o zjedzonych i planie nad trzema makrami. JEDNO drzewo dla obu
+    /// układów — makra mają w nim stałe miejsce, więc w przejściu jadą,
+    /// a nie budują się od nowa.
     private var content: some View {
-        if let planned {
-            VStack(alignment: .leading, spacing: 6) {
-                eatenSummary(planned: planned)
-                    // Przy przejściu z Planu zdanie wyłania się nad makrami
-                    // razem ze szkłem, które rośnie.
-                    .opacity(handoffHeight == nil ? 1 : 0)
-                HStack(alignment: .top, spacing: 8) {
-                    macroMeters
-                }
+        let face = self.face
+        return VStack(alignment: .leading, spacing: 6) {
+            if let planned = face.planned {
+                eatenSummary(face, planned: planned)
+                    .matchedGeometryEffect(id: "kcal", in: morph)
+                    .transition(.opacity)
             }
-        } else {
             HStack(alignment: .top, spacing: 8) {
-                MacroMeter(
-                    letter: "kcal",
-                    title: "Kalorie",
-                    value: nutrition.kcal,
-                    target: targets.kcal,
-                    color: SCMacroPalette.calories,
-                    unit: "kilokalorii",
-                    accessibilityDetail: remainingDetail,
-                    animation: Self.animation
-                )
-                // Szerokość z podpisu, nie z podziału na cztery — patrz
-                // komentarz typu. Tor pod spodem i tak wypełnia całą kolumnę.
-                .fixedSize(horizontal: true, vertical: false)
+                if face.planned == nil {
+                    MacroMeter(
+                        letter: "kcal",
+                        title: "Kalorie",
+                        value: face.nutrition.kcal,
+                        target: face.targets.kcal,
+                        color: SCMacroPalette.calories,
+                        unit: "kilokalorii",
+                        accessibilityDetail: remainingDetail(face),
+                        animation: Self.animation
+                    )
+                    // Szerokość z podpisu, nie z podziału na cztery — patrz
+                    // komentarz typu. Tor pod spodem i tak wypełnia całą kolumnę.
+                    .fixedSize(horizontal: true, vertical: false)
+                    .matchedGeometryEffect(id: "kcal", in: morph)
+                    .transition(.opacity)
+                }
 
-                macroMeters
+                macroMeters(face)
             }
         }
     }
@@ -262,16 +253,17 @@ struct PlanDayGoalBar: View {
     /// „Zjedzone 1200 z 2100 kcal” · „w planie 1800” i tor kalorii na całą
     /// szerokość pigułki — zjedzone pełnym kolorem, plan dnia blado pod nim
     /// (`MacroProgressTrack.plannedProgress`, ta sama warstwa co dotąd).
-    private func eatenSummary(planned: PlanDayNutrition) -> some View {
-        let target = targets.kcal
-        let progress = target > 0 ? Double(nutrition.kcal) / Double(target) : 0
-        let plannedProgress: Double? = target > 0 && planned.kcal > nutrition.kcal
+    private func eatenSummary(_ face: PlanDayGoalFace, planned: PlanDayNutrition) -> some View {
+        let eaten = face.nutrition.kcal
+        let target = face.targets.kcal
+        let progress = target > 0 ? Double(eaten) / Double(target) : 0
+        let plannedProgress: Double? = target > 0 && planned.kcal > eaten
             ? Double(planned.kcal) / Double(target)
             : nil
 
         return VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                eatenText
+                eatenText(face)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                     .layoutPriority(1)
@@ -294,21 +286,21 @@ struct PlanDayGoalBar: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "Zjedzone: \(nutrition.kcal) z \(target) kilokalorii, \(remainingDetail), "
+            "Zjedzone: \(eaten) z \(target) kilokalorii, \(remainingDetail(face)), "
                 + (planned.kcal > 0 ? "w planie \(planned.kcal) kilokalorii" : "nic w planie")
         )
     }
 
     /// „Zjedzone 1200 z 2100 kcal” — jeden `Text`, żeby całość skalowała się
     /// razem i nigdy nie ucinała liczby (ta sama zasada co `MacroMeter.label`).
-    private var eatenText: Text {
+    private func eatenText(_ face: PlanDayGoalFace) -> Text {
         let lead = Text("Zjedzone")
             .font(.sc(size: summaryTextSize, weight: .bold))
             .foregroundStyle(SCMacroPalette.calories)
-        let value = Text(verbatim: String(nutrition.kcal))
+        let value = Text(verbatim: String(face.nutrition.kcal))
             .font(.sc(size: summaryValueSize, weight: .bold).monospacedDigit())
-            .foregroundStyle(nutrition.kcal > targets.kcal ? SCMacroPalette.calories : Color.scLabel(scheme))
-        let goal = Text(verbatim: "z \(targets.kcal) kcal")
+            .foregroundStyle(face.nutrition.kcal > face.targets.kcal ? SCMacroPalette.calories : Color.scLabel(scheme))
+        let goal = Text(verbatim: "z \(face.targets.kcal) kcal")
             .font(.sc(size: summaryTextSize, weight: .semibold).monospacedDigit())
             .foregroundStyle(Color.scMuted(scheme))
         return Text("\(lead) \(value) \(goal)")
@@ -332,16 +324,18 @@ struct PlanDayGoalBar: View {
     }
 
     /// „zostało 965 kilokalorii" albo „230 kilokalorii ponad cel" — to, co
-    /// widać z paska, a czego nie słychać z dwóch liczb.
-    private var remainingDetail: String {
-        remaining >= 0
+    /// widać z paska, a czego nie słychać z dwóch liczb. Ile zostaje do celu,
+    /// na ekranie nie stoi — idzie wyłącznie do opisu dla VoiceOver.
+    private func remainingDetail(_ face: PlanDayGoalFace) -> String {
+        let remaining = face.targets.kcal - face.nutrition.kcal
+        return remaining >= 0
             ? "zostało \(remaining) kilokalorii"
             : "\(abs(remaining)) kilokalorii ponad cel"
     }
 
     /// Trzy kolumny makr — dopełnienie kolumny kalorii do czterech.
     ///
-    /// Osobna właściwość, a nie trzy wywołania wprost w `body`: rozbija to
+    /// Osobna funkcja, a nie trzy wywołania wprost w `body`: rozbija to
     /// jeden wielki `HStack` na dwa czytelne kawałki, a `Group` zachowuje
     /// płaską strukturę wiersza, więc kolumny nadal dzielą szerokość
     /// po równo — nie trzy czwarte na makra i jedna na kalorie.
@@ -350,35 +344,57 @@ struct PlanDayGoalBar: View {
     /// zostawia samą wartość i rezerwuje puste miejsce po torze — pusty pasek
     /// obiecywałby cel, którego nikt nie wyznaczył, a zwinięcie go rozjechałoby
     /// wysokość kolumn.
-    private var macroMeters: some View {
+    private func macroMeters(_ face: PlanDayGoalFace) -> some View {
         Group {
             MacroMeter(
                 letter: "B",
                 title: "Białko",
-                value: nutrition.protein,
-                target: targets.macros?.proteinG,
-                plannedValue: planned?.protein,
+                value: face.nutrition.protein,
+                target: face.targets.macros?.proteinG,
+                plannedValue: face.planned?.protein,
                 color: SCMacroPalette.protein,
                 animation: Self.animation
             )
             MacroMeter(
                 letter: "T",
                 title: "Tłuszcze",
-                value: nutrition.fat,
-                target: targets.macros?.fatG,
-                plannedValue: planned?.fat,
+                value: face.nutrition.fat,
+                target: face.targets.macros?.fatG,
+                plannedValue: face.planned?.fat,
                 color: SCMacroPalette.fat,
                 animation: Self.animation
             )
             MacroMeter(
                 letter: "W",
                 title: "Węgle",
-                value: nutrition.carbs,
-                target: targets.macros?.carbsG,
-                plannedValue: planned?.carbs,
+                value: face.nutrition.carbs,
+                target: face.targets.macros?.carbsG,
+                plannedValue: face.planned?.carbs,
                 color: SCMacroPalette.carbs,
                 animation: Self.animation
             )
         }
+    }
+}
+
+/// Wszystko, co pigułka kcal pokazuje — liczby i układ (z `planned` = układ
+/// „Dziś”). Pigułka zakładki, na którą się weszło, startuje z twarzy pigułki
+/// poprzedniej (`SCTabBarChrome.goalBarFaces`).
+struct PlanDayGoalFace {
+    let nutrition: PlanDayNutrition
+    let targets: DailyNutritionTargets
+    let planned: PlanDayNutrition?
+
+    /// Wszystko, co ma przejść płynnie przy zmianie dnia, przy dołożeniu
+    /// posiłku i po przestawieniu celu w Ustawieniach — jedna wartość, jedna
+    /// sprężyna. Cele są w odcisku celowo: bez nich powrót z suwaka kalorii
+    /// podmieniał mianownik i przeskakiwał cztery tory bez ruchu. Układ też
+    /// (`planned` albo -1), więc twarze Planu i Dziś nigdy nie są równe.
+    var fingerprint: String {
+        let macros = targets.macros
+        return "\(nutrition.kcal).\(nutrition.protein).\(nutrition.fat).\(nutrition.carbs)"
+            + "|\(targets.kcal).\(macros?.proteinG ?? 0).\(macros?.fatG ?? 0).\(macros?.carbsG ?? 0)"
+            + "|\(planned?.kcal ?? -1).\(planned?.protein ?? -1)"
+            + ".\(planned?.fat ?? -1).\(planned?.carbs ?? -1)"
     }
 }

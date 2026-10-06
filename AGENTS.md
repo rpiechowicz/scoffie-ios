@@ -46,11 +46,12 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   na zakładkę) = dziś. Własny dzień, bez `DatesViewModel` — osobny tydzień Kalendarza z 4.10 (`calendarDatesViewModel`)
   USUNIĘTY. Tygodnie trzech dni wczytywane raz na dobę (`loadDayWindow`: sąsiedni pierwszy, oglądany ostatni — nasłuch
   socketu idzie za tygodniem oglądanego dnia). Pigułka = `PlanDayGoalBar(planned:)` w układzie „Zjedzone X z Y kcal ·
-  w planie Z” + tor kcal + B/T/W. Między pigułkami Planu i Dziś przechodzi KSZTAŁT (6.10.2026 wieczór, Rafał: „liquid się
-  rozrasta z tego, co jest na planie, i z powrotem”): pigułka zakładki, na którą się weszło z drugiej, startuje w jej
-  wysokości (`SCTabBarChrome.goalBarHeights`, `SessionStore.previousDashboardTab`) i sprężyną dochodzi do swojej, treść
-  przyklejona do dołu, zdanie „Zjedzone …” wyłania się; liczby własne od pierwszej klatki (dawne `goalSnapshot` z rosnącymi
-  torami nie wraca). Zakres wczoraj · dziś · jutro jest CELOWY — dalsze dni ogląda się i planuje w Planie. Pusta pora / pusty dzień dziś i jutro = „Zaplanuj” (pierwsza pigułka w kolorze pory + pusty talerz jako
+  w planie Z” + tor kcal + B/T/W. Przejście Plan ↔ Dziś (6.10.2026 wieczór, Rafał: „liquid się
+  rozrasta”; wersja z samą wysokością szkła „słabo wygląda”): pigułka zakładki, na którą się weszło z drugiej, na
+  pierwszej klatce = twarz tamtej (`PlanDayGoalFace` z `SCTabBarChrome.goalBarFaces`: układ i liczby,
+  `SessionStore.previousDashboardTab`), potem jednym ruchem (`handoffMotion`) własna: kolumna kcal przelewa się w zdanie
+  „Zjedzone …” (`matchedGeometryEffect`), makra jadą na miejsce, cyfry rolują, tory dojeżdżają, szkło zmienia kształt.
+  JEDNO drzewo dla obu układów (makra na stałym miejscu) — nie wracać do dwóch gałęzi `if/else`. Zakres wczoraj · dziś · jutro jest CELOWY — dalsze dni ogląda się i planuje w Planie. Pusta pora / pusty dzień dziś i jutro = „Zaplanuj” (pierwsza pigułka w kolorze pory + pusty talerz jako
   przycisk) → `SessionStore.planSlotRequest` (`PlanSlotRequest`) + `dashboardTab = .plan`; Plan zdejmuje prośbę,
   `DatesViewModel.show(day:)`, otwiera „Wybierz przepis” na tę porę („dla kogo”: `[]` = cały dom, `[ja]`, gdy ktoś
   inny ma w porze swoje danie); wczoraj — tylko podpowiedź „Zaplanujesz w Planie”.
@@ -429,7 +430,7 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (`SessionStore.prepareUnbuiltTabs`: rozmowa i pula Asystenta). Wstawki nad paskiem = `safeAreaBar(edge: .bottom)` +
   `scrollEdgeEffectStyle(.soft, for: .bottom)` w treści zakładki (pasek szukania Przepisów — też na ekranie
   kategorii, pigułka Planu, pole Asystenta); pigułka Dziś (bez przewijania) = `safeAreaInset`. `SCTabBarChrome` niesie
-  już tylko `compactTitles`, `keyboardCurve` i `goalBarHeights` (przejście pigułek kcal); `SCStatusBarBlur` i `SCCompactTitle` to nakładka nad `TabView`.
+  już tylko `compactTitles`, `keyboardCurve` i `goalBarFaces` (przejście pigułek kcal); `SCStatusBarBlur` i `SCCompactTitle` to nakładka nad `TabView`.
   USUNIĘTE i nie wracać: własny `SCFloatingTabBar`, `ZStack` zamiast `TabView`, budowanie wszystkich zakładek pod
   loaderem, gest pigułki, przenikanie `tabSelection` / `leavingTab`, zwijanie „Revolut” (`scTracksTabBarCompaction`),
   rezerwa `scReservesTabBarSpace`, `ownBottomEdge`, `goalSnapshot`.
