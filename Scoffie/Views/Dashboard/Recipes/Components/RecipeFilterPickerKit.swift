@@ -32,14 +32,7 @@ struct RecipeFilterPickerRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(accent.opacity(scheme == .dark ? 0.16 : 0.12))
-                    .frame(width: 32, height: 32)
-                    .overlay(
-                        Image(systemName: icon)
-                            .font(.sc(size: 14, weight: .semibold))
-                            .foregroundStyle(accent)
-                    )
+                RecipeFilterRowIcon(icon: icon, accent: accent)
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title)
@@ -77,6 +70,171 @@ struct RecipeFilterPickerRow: View {
         .accessibilityLabel(title)
         .accessibilityValue(chips.isEmpty ? "dowolne" : chips.map(\.title).joined(separator: ", "))
         .accessibilityHint("Otwiera wybór")
+    }
+}
+
+/// Kafelek ikony na początku każdego wiersza filtrów — 32 pt w tincie akcentu.
+struct RecipeFilterRowIcon: View {
+    let icon: String
+    var accent: Color = SCPalette.terracotta
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(accent.opacity(scheme == .dark ? 0.16 : 0.12))
+            .frame(width: 32, height: 32)
+            .overlay(
+                Image(systemName: icon)
+                    .font(.sc(size: 14, weight: .semibold))
+                    .foregroundStyle(accent)
+            )
+    }
+}
+
+/// Jedna opcja wyboru „jedno z kilku” — czas, trudność, smak.
+struct RecipeFilterChoice<Value: Hashable> {
+    let value: Value
+    let title: String
+}
+
+/// Tytuł wiersza i — po prawej — bieżąca wartość. Pierwsza opcja wyboru to
+/// „dowolna”: wtedy wartość stoi szaro, wybrana — w kolorze akcentu.
+private struct RecipeFilterRowLabel: View {
+    let icon: String
+    let title: String
+    let value: String
+    let isActive: Bool
+    let accent: Color
+    let trailingIcon: String
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RecipeFilterRowIcon(icon: icon, accent: accent)
+
+            Text(title)
+                .font(.sc(size: 15, weight: .semibold))
+                .tracking(-0.3)
+                .foregroundStyle(Color.scLabel(scheme))
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            Text(value)
+                .font(.sc(size: 15, weight: isActive ? .semibold : .regular))
+                .foregroundStyle(isActive ? accent : Color.scMuted(scheme))
+                .lineLimit(1)
+                .contentTransition(.interpolate)
+
+            Image(systemName: trailingIcon)
+                .font(.sc(size: 11, weight: .bold))
+                .foregroundStyle(Color.scFaint(scheme))
+        }
+        .padding(12)
+        .contentShape(Rectangle())
+    }
+}
+
+/// Wiersz „jedno z kilku” (czas, trudność): stuknięcie = systemowe menu
+/// z opcjami, wartość po prawej jak w Ustawieniach iOS.
+struct RecipeFilterMenuRow<Value: Hashable>: View {
+    let icon: String
+    let title: String
+    let choices: [RecipeFilterChoice<Value>]
+    @Binding var selection: Value
+    var accent: Color = SCPalette.terracotta
+
+    private var isActive: Bool { selection != choices.first?.value }
+    private var currentTitle: String { choices.first { $0.value == selection }?.title ?? "" }
+
+    var body: some View {
+        Menu {
+            Picker(title, selection: $selection) {
+                ForEach(Array(choices.enumerated()), id: \.offset) { _, choice in
+                    Text(choice.title).tag(choice.value)
+                }
+            }
+        } label: {
+            RecipeFilterRowLabel(
+                icon: icon,
+                title: title,
+                value: currentTitle,
+                isActive: isActive,
+                accent: accent,
+                trailingIcon: "chevron.up.chevron.down"
+            )
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .animation(.smooth(duration: 0.22), value: selection)
+        .sensoryFeedback(.selection, trigger: selection)
+        .accessibilityLabel(title)
+        .accessibilityValue(currentTitle)
+    }
+}
+
+/// Wiersz z wartością, który WPYCHA podstronę (kalorie: wykres na podstronie).
+struct RecipeFilterValueRow: View {
+    let icon: String
+    let title: String
+    let value: String
+    let isActive: Bool
+    var accent: Color = SCPalette.terracotta
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            RecipeFilterRowLabel(
+                icon: icon,
+                title: title,
+                value: value,
+                isActive: isActive,
+                accent: accent,
+                trailingIcon: "chevron.right"
+            )
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.985))
+        .animation(.smooth(duration: 0.22), value: value)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
+        .accessibilityHint("Otwiera wybór")
+    }
+}
+
+/// Wiersz z systemowym przełącznikiem segmentów — krótki wybór, który
+/// mieści się w wierszu (smak: każdy · słodki · słony).
+struct RecipeFilterSegmentRow<Value: Hashable>: View {
+    let icon: String
+    let title: String
+    let choices: [RecipeFilterChoice<Value>]
+    @Binding var selection: Value
+    var accent: Color = SCPalette.terracotta
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RecipeFilterRowIcon(icon: icon, accent: accent)
+
+            Text(title)
+                .font(.sc(size: 15, weight: .semibold))
+                .tracking(-0.3)
+                .foregroundStyle(Color.scLabel(scheme))
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            Picker(title, selection: $selection) {
+                ForEach(Array(choices.enumerated()), id: \.offset) { _, choice in
+                    Text(choice.title).tag(choice.value)
+                }
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+        }
+        .padding(12)
+        .sensoryFeedback(.selection, trigger: selection)
     }
 }
 

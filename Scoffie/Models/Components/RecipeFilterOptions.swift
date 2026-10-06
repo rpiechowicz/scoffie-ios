@@ -507,6 +507,14 @@ struct RecipeFilterOptions: Equatable {
         categoryFilters[category] = filter.isActive ? filter : nil
     }
 
+    /// Jedna opcja aspektu kategorii albo żadna (`nil`) — przełącznik „Smak”
+    /// w Filtrach, gdzie „każdy” znaczy tyle co oba naraz.
+    mutating func select(_ option: String?, in kind: RecipeFacetKind, for category: RecipesCategory) {
+        var filter = categoryFilters[category] ?? RecipeCategoryFilter()
+        filter.picks[kind] = option.map { [$0] }
+        categoryFilters[category] = filter.isActive ? filter : nil
+    }
+
     mutating func toggle(diet: RecipeDietFilter) {
         if diets.contains(diet) { diets.remove(diet) } else { diets.insert(diet) }
     }
