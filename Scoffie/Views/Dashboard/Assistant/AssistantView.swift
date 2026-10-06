@@ -54,6 +54,11 @@ struct AssistantView: View {
     @State private var showConversations = false
     @State private var showMemory = false
     @State private var showUsage = false
+    /// Asystent właśnie wrócił z przerwy, gdy jej ekran był na wierzchu:
+    /// ekran zostaje jeszcze chwilę w stanie „wrócił” (klucz odpada, znak
+    /// podskakuje, tytuł się roluje), zanim przejdzie w powitanie. Bez tego
+    /// ekran przerwy po prostu znikał w pół klatki.
+    @State private var comebackHold = false
     /// „Wybierz plan" — z linijki nad polem po wyczerpaniu puli.
     @State private var showPaywall = false
     /// „Prywatność i zgoda" z menu — stan zgody i jej cofnięcie.
@@ -234,7 +239,7 @@ struct AssistantView: View {
                                 header
                                     .background(alignment: .top) {
                                         AssistantHeaderShade()
-                                            .opacity(isConversationEmpty || store.isUnavailable ? 0 : headerShade)
+                                            .opacity(isConversationEmpty || showsMaintenance ? 0 : headerShade)
                                     }
                             }
                     }
@@ -281,6 +286,7 @@ struct AssistantView: View {
             // Przerwa techniczna: każde wejście na zakładkę sprawdza po cichu,
             // czy asystent już wrócił — nikt nie musi pamiętać o przycisku.
             if active, store.isUnavailable { Task { await store.recheckAvailability() } }
+            if !active { comebackHold = false }
             // Pula znana, zanim ktoś stuknie w akcję powitania: pusta =
             // powitanie od razu w stanie limitu, bez wysyłki i skoku.
             if active { Task { await store.refreshUsageIfStale() } }
@@ -663,7 +669,9 @@ struct AssistantView: View {
     private var quotaPips: AnyView? {
         // Przy zerze kapsułki nie ma — zera nie trzeba pokazywać dwa razy
         // (briefing i karta zamiast pola już o tym mówią).
-        guard let usage = store.usage, usage.isTrial, usage.messages.remaining > 0 else { return nil }
+        // Na czas przerwy licznik nic nie znaczy — wraca razem z Asystentem.
+        guard !showsMaintenance,
+              let usage = store.usage, usage.isTrial, usage.messages.remaining > 0 else { return nil }
         return AnyView(
             Button { showUsage = true } label: {
                 AssistantQuotaPill(
@@ -858,22 +866,32 @@ struct AssistantView: View {
         reduceMotion ? nil : .smooth(duration: 0.3)
     }
 
+    /// Ekran przerwy na wierzchu: przerwa trwa albo właśnie minęła i trwa
+    /// chwila „wrócił” (`comebackHold`).
+    private var showsMaintenance: Bool {
+        store.isUnavailable || comebackHold
+    }
+
     private var conversation: some View {
         ZStack {
-            if store.isUnavailable {
+            if showsMaintenance {
                 // Asystent wyłączony na serwerze (`AI_DISABLED`): przerwa
                 // techniczna zamiast rozmowy i pola. Historia zostaje
                 // w menu („Historia rozmów”), a po powrocie wszystko wraca samo.
                 GeometryReader { geometry in
                     ScrollView {
+                        // Pusty stan na środku wolnego miejsca, optycznie
+                        // trochę wyżej (większy margines dolny) — jak
+                        // w aplikacjach Apple; pola wiadomości nie ma.
                         AssistantMaintenanceView(
                             isChecking: store.isCheckingAvailability,
+                            isBack: !store.isUnavailable,
                             onRecheck: { await store.recheckAvailability() }
                         )
                         .padding(.horizontal, SCPageMetrics.horizontal)
                         .padding(.top, 4)
-                        .padding(.bottom, 28)
-                        .frame(minHeight: geometry.size.height, alignment: .bottom)
+                        .padding(.bottom, 56)
+                        .frame(minHeight: geometry.size.height, alignment: .center)
                     }
                     .scrollBounceBehavior(.basedOnSize)
                 }
@@ -919,7 +937,18 @@ struct AssistantView: View {
             }
         }
         .animation(conversationSwitch, value: isConversationEmpty)
-        .animation(conversationSwitch, value: store.isUnavailable)
+        .animation(conversationSwitch, value: showsMaintenance)
+        // Powrót z przerwy na oczach: chwila „wrócił”, potem powitanie.
+        // Poza zakładką (`isActiveTab == false`) nikt tego nie widzi — wtedy
+        // od razu powitanie.
+        .onChange(of: store.isUnavailable) { wasUnavailable, isUnavailable in
+            guard wasUnavailable, !isUnavailable, isActiveTab else { return }
+            comebackHold = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(1300))
+                withAnimation(conversationSwitch) { comebackHold = false }
+            }
+        }
     }
 
     private var messageList: some View {
@@ -1283,9 +1312,10 @@ struct AssistantView: View {
                 // wyłącznie frustracją. W rozmowie stoi zamiast niego karta
                 // z jednym przyciskiem, który coś zmienia; na pustym ekranie
                 // to samo mówi briefing, więc composera nie ma wcale.
-                if store.isUnavailable {
+                if showsMaintenance {
                     // Przerwa techniczna: ekran mówi to sam i ma własne
                     // „Sprawdź ponownie” — wyszarzone pole byłoby tylko szumem.
+                    // Pole wjeżdża dopiero z powitaniem, po chwili „wrócił”.
                     EmptyView()
                 } else if store.isLockedByTrialQuota {
                     if !isConversationEmpty {
@@ -1304,7 +1334,7 @@ struct AssistantView: View {
         .animation(.easeInOut(duration: 0.2), value: editing != nil)
         .animation(.easeInOut(duration: 0.2), value: store.isLockedByTrialQuota)
         .animation(.easeInOut(duration: 0.2), value: isLockedByMonthlyQuota)
-        .animation(.easeInOut(duration: 0.2), value: store.isUnavailable)
+        .animation(.easeInOut(duration: 0.2), value: showsMaintenance)
         // Karta skrótu znika też bez `withAnimation` (krzyżyk, „Zapytaj mimo
         // to”, pisanie w polu) — wsiąkanie w pole ma grać zawsze.
         .animation(.smooth(duration: 0.32), value: appShortcut != nil)

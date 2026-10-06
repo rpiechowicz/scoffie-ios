@@ -162,8 +162,8 @@ extension EditorialSheetHeader where Accessory == EmptyView {
 }
 
 /// Kafelek z glifem w tincie akcentu — lewa strona nagłówka arkusza.
-/// Tint, a nie pełny kolor z gradientem: pełne kafle (`EditorialSettingsTileIcon`)
-/// zostają wierszom listy Ustawień, gdzie czytają się jak ikony systemowe.
+/// Tint, a nie pełny kolor: pełne kafle (`EditorialSettingsTileIcon`) zostają
+/// wierszom list (Ustawienia, Filtry), gdzie czytają się jak ikony systemowe.
 struct SCHeaderIconWell: View {
     let icon: String
     var accent: Color = SCPalette.terracotta

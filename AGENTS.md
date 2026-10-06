@@ -131,6 +131,14 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (≤ 0,6 s). Nie wracać do pisania gotowej odpowiedzi ani do karty czekającej na koniec pisania. Nagłówek zakładki
   w trakcie tury = `.attentive` — kręci się JEDEN łuk w wierszu „myślę”. Zdanie „Możesz wyjść — wrócę z odpowiedzią.”
   prosi raz o zgodę na powiadomienia.
+- **Wiersz listy = jeden klocek** (6.10.2026, artefakt „Ustawienia Scoffie”): `EditorialSettingsRow` i lista w Filtrach
+  (`RecipeFilterListRowLabel`) mają te same wymiary — płaski kafelek `EditorialSettingsTileIcon` 30 pt (bez gradientu
+  i poświaty, kolor w GŁĘBOKIM wariancie w obu motywach — `.environment(\.colorScheme, .light)` na wypełnieniu),
+  tytuł 15 semibold, wartość 15 szara, wiersz 52 pt, kreska od tytułu (54 pt), strzałka 11 bold `scFaint`. W Ustawieniach
+  każdy wiersz w SWOIM kolorze (Gospodarstwo indygo, Dieta szałwia, Posiłki masło, Asystent terakota, Powiadomienia
+  koral, Wygląd lawenda `circle.lefthalf.filled`, Pomoc morska `questionmark`, Oceń róż `star.fill`, Prywatność szary
+  `SettingsAccent.slate`), a arkusz bierze kolor wiersza; profil 56/17; wersja = podpis „Scoffie 1.0 (35)” pod
+  „Wyloguj się” (wiersz „Wersja” i `EditorialSettingsInfoTile` USUNIĘTE).
 - **Ustawienia**: zgoda na powiadomienia NIGDY przy starcie — `NotificationPermission.requestIfNotAsked()` w kontekście:
   Ustawienia → Powiadomienia („Włącz powiadomienia” / „Wyłączone w ustawieniach iOS” + „Otwórz ustawienia”), po wysłaniu
   zaproszenia domownika (`SCShareSheet(message:)`, `completed`), po dołączeniu z zaproszenia (pulpit odsłonięty,
@@ -546,9 +554,14 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   `AgentStore` wisi na `SessionStore`, a nie na arkuszu — rozmowa przeżywa zamknięcie asystenta.
   Kroki postępu (`turn.progress`) przychodzą z serwera jako gotowe zdania po polsku; nie tłumaczyć
   ich po stronie klienta. `AI_ENABLED=false` na serwerze = `503 AI_DISABLED` i ekran mówi to wprost.
-  Od 24.09.2026 to `AssistantMaintenanceView` („mały remont”: znak z kluczem, co działa dalej,
-  „Sprawdź ponownie” = `AgentStore.recheckAvailability`, ciche sprawdzenie przy każdym wejściu na zakładkę)
-  zamiast rozmowy; pole wiadomości znika. Pula wyczerpana to inny stan (`AssistantQuotaSpentCard`).
+  Od 24.09.2026 to `AssistantMaintenanceView` zamiast rozmowy; pole wiadomości znika. Od 6.10.2026 (wersja A
+  z artefaktu „Asystent na przerwie”) pusty stan NA ŚRODKU: krążek z żywym znakiem i kluczem (oddech, klucz kiwa się
+  co ~3 s), „Asystent ma przerwę”, jedno zdanie, szklany „Sprawdź ponownie” (= `AgentStore.recheckAvailability`,
+  kręciołek w miejscu strzałki; „jeszcze nie” = drgnięcie, haptyka, zdanie pod spodem); ciche sprawdzenie przy każdym
+  wejściu na zakładkę zostaje. Powrót na oczach = `AssistantView.comebackHold` (1,3 s): klucz odpada, znak podskakuje
+  (`cheer`), tytuł roluje się na „Asystent wrócił”, potem powitanie i pole. Licznik puli w nagłówku schowany na czas
+  przerwy (`showsMaintenance`). Bez kaskady wejścia; karta trzech kafli „Działa jak zawsze” USUNIĘTA (wyglądały na
+  przyciski, nic nie robiły). Pula wyczerpana to inny stan (`AssistantQuotaSpentCard`).
 - Czysta kartka po przerwie (`AgentStore.rotateIfStale`): 30 min ciszy w rozmowie ALBO 10 min nieobecności
   na zakładce/w tle (`staleAfterAway`, od `setVisible(false)` / `noteWentToBackground`) przy rozmowie bez
   propozycji PENDING; tura w biegu nigdy. Zamiana czyści `AssistantGreetingMemory.forget()`, więc powitanie

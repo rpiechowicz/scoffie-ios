@@ -67,10 +67,12 @@ struct MealSlotsSheet: View {
             VStack(spacing: 0) {
                 // Przypięty nad treścią — lista kart jest dłuższa niż ekran,
                 // a krzyżyk nie ma prawa odjeżdżać razem z nią.
+                // Masło — kolor wiersza „Posiłki w planie” w Ustawieniach.
                 EditorialSheetHeader(
                     eyebrow: "Gospodarstwo",
                     title: "Posiłki w planie",
                     icon: "fork.knife",
+                    accent: SCPalette.butter,
                     onClose: onClose
                 )
                 .padding(.horizontal, 20)

@@ -23,7 +23,7 @@ struct LegalDocumentsSheet: View {
                         eyebrow: "Informacje",
                         title: "Prywatność i regulamin",
                         icon: "hand.raised.fill",
-                        accent: SCPalette.indigo
+                        accent: SettingsAccent.slate
                     ) {
                         dismiss()
                     }

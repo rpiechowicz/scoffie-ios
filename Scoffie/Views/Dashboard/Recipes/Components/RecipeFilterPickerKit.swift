@@ -114,14 +114,8 @@ struct RecipeFilterListRowLabel: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(accent)
-                .frame(width: 30, height: 30)
-                .overlay(
-                    Image(systemName: icon)
-                        .font(.sc(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                )
+            // Ten sam kafelek co w Ustawieniach — głęboki kolor w obu motywach.
+            EditorialSettingsTileIcon(icon: icon, color: accent)
 
             Text(title)
                 .font(.sc(size: 15, weight: .semibold))

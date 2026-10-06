@@ -48,13 +48,16 @@ struct EditorialProfileCard: View {
             avatar
 
             VStack(alignment: .leading, spacing: 2) {
+                // Profil jest nagłówkiem konta (6.10.2026): imię 17 pt
+                // i awatar 56 — reszta listy stoi pod nim, nie obok.
                 Text(displayNameLabel)
-                    .font(.sc(size: 15.5, weight: .semibold))
+                    .font(.sc(size: 17, weight: .bold))
+                    .tracking(-0.3)
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
 
                 Text(emailLabel)
-                    .font(.sc(size: 12.5, weight: .regular))
+                    .font(.sc(size: 13.5, weight: .regular))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -62,13 +65,12 @@ struct EditorialProfileCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if showsChevron {
-                Image(systemName: "chevron.right")
-                    .font(.sc(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.scFaint(scheme))
+                EditorialSettingsChevron()
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.leading, 14)
+        .padding(.trailing, 12)
+        .padding(.vertical, 12)
         .contentShape(Rectangle())
     }
 
@@ -78,7 +80,7 @@ struct EditorialProfileCard: View {
         ProfileAvatar(
             avatarUrl: trimmedAvatarUrl,
             displayName: displayNameLabel,
-            size: 48,
+            size: 56,
             colorIndex: avatarColorIndex,
             seed: avatarSeed
         )
