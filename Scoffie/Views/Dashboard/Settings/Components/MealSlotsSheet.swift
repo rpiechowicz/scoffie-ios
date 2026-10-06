@@ -10,15 +10,16 @@ import SwiftUI
 /// się dołożyć i gdzie wypadnie. Dawne karty „Dodatkowe posiłki”, wiersz
 /// „Zawsze w planie” i akapity odpadły.
 ///
-/// Wyłączenie pory dodatkowej: „Wyłącz” obok krzyżyka w okienku godziny albo
-/// przesunięcie wiersza w lewo (jak usuwanie w Mailu). Dlatego oś to `List` —
-/// `swipeActions` działa tylko w liście; lista nie przewija się sama
-/// (`scrollDisabled`) i ma wysokość wszystkich wierszy, więc w karcie
-/// zachowuje się jak zwykły `VStack`.
+/// Wyłączenie pory dodatkowej: przesunięcie wiersza w lewo (jak usuwanie
+/// w Mailu) albo „Wyłącz” obok krzyżyka w okienku godziny. Dlatego treść to
+/// `List(.insetGrouped)` — `swipeActions` działa tylko w liście, i to tylko
+/// w PRZEWIJANEJ (`scrollDisabled` wyłącza też przesunięcie).
 ///
 /// Wyłączenie nie kasuje jedzenia: jeśli w porze coś stoi, pytamy
-/// o potwierdzenie, a Plan pokazuje ją dalej (`visibleSlots(planned:)`) —
-/// tu taka pora stoi jak włączona, tylko przygaszona.
+/// o potwierdzenie, a Plan pokazuje ją dalej (`visibleSlots(planned:)`).
+/// Tu taka pora stoi jak każda wyłączona — z „Dodaj” i dopiskiem
+/// „W tym tygodniu: 2 dania” (wcześniej stała jak włączona, tylko
+/// przygaszona, i wyglądało, jakby „Wyłącz” nie zadziałało).
 struct MealSlotsSheet: View {
     var onClose: () -> Void
 
@@ -37,9 +38,6 @@ struct MealSlotsSheet: View {
     @State private var lastFailedTimes: MealSlotSchedule?
     /// Pora, której godzinę zmienia teraz okienko z kołem (wiersz podświetlony).
     @State private var editing: MealSlot?
-    /// Pora do przełączenia, gdy okienko godziny ZEJDZIE — alert potwierdzenia
-    /// nie pokaże się, dopóki stoi nad nim inny arkusz.
-    @State private var toggleAfterEditor: MealSlot?
     /// Liczniki „pop” świeżo dodanych pór — wyzwalacz `keyframeAnimator`.
     @State private var popCounts: [MealSlot: Int] = [:]
 
@@ -62,7 +60,8 @@ struct MealSlotsSheet: View {
 
     var body: some View {
         let shown = timeSlots
-        let pair = schedule.outOfOrderPair(among: shown)
+        // Kolejność liczona po porach, które są w dniu (wiersze z godziną).
+        let pair = schedule.outOfOrderPair(among: shown.filter { configuration.isEnabled($0) })
         let count = configuration.enabled.count
 
         return ZStack {
@@ -83,44 +82,85 @@ struct MealSlotsSheet: View {
                 .padding(.top, 18)
                 .padding(.bottom, 12)
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        EditorialSheetSectionLabel(title: "Twój dzień")
-
-                        dayCard(shown: shown, pair: pair)
-
-                        Text("Wspólne dla całego domu. Śniadanie, obiad i kolacja są zawsze.")
-                            .font(.sc(size: 12.5, weight: .regular))
-                            .foregroundStyle(Color.scFaint(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 6)
-
-                        if !schedule.isDefault {
-                            Button("Przywróć domyślne godziny") {
-                                saveTimes(.default)
+                // Cała treść to `List`, bo tylko lista daje systemowe
+                // `swipeActions` („Wyłącz” przesunięciem). Lista MUSI się
+                // przewijać — `scrollDisabled` wyłącza też gest przesunięcia
+                // (tak nie działało „Wyłącz” w pierwszej wersji, 6.10.2026).
+                // `insetGrouped` rysuje kartę z zaokrąglonymi rogami sam.
+                List {
+                    Section {
+                        ForEach(Array(MealSlot.allCases.enumerated()), id: \.element) { index, slot in
+                            axisRow(
+                                slot,
+                                isFirst: index == 0,
+                                isLast: index == MealSlot.allCases.count - 1,
+                                isShown: configuration.isEnabled(slot),
+                                warning: pair?.later == slot ? pair?.earlier : nil
+                            )
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.scTileBg(scheme))
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                if configuration.isEnabled(slot), MealSlot.optionalSlots.contains(slot) {
+                                    Button(role: .destructive) {
+                                        toggle(slot, to: false)
+                                    } label: {
+                                        Label("Wyłącz", systemImage: "minus.circle")
+                                    }
+                                    .tint(.red)
+                                }
                             }
-                            .font(.sc(size: 12.5, weight: .semibold))
-                            .foregroundStyle(SCPalette.terracotta)
-                            .padding(.horizontal, 6)
-                            .padding(.top, 2)
                         }
 
-                        saveStatus
-                        timesStatus
+                        if pair != nil {
+                            orderNotice
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.scTileBg(scheme))
+                        }
+                    } header: {
+                        EditorialSheetSectionLabel(title: "Twój dzień")
+                            .textCase(nil)
+                    } footer: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Wspólne dla całego domu. Śniadanie, obiad i kolacja są zawsze. Dodatkową porę wyłączysz, przesuwając ją w lewo.")
+                                .font(.sc(size: 12.5, weight: .regular))
+                                .foregroundStyle(Color.scFaint(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            if !schedule.isDefault {
+                                Button("Przywróć domyślne godziny") {
+                                    saveTimes(.default)
+                                }
+                                .font(.sc(size: 12.5, weight: .semibold))
+                                .foregroundStyle(SCPalette.terracotta)
+                                .buttonStyle(.plain)
+                            }
+
+                            saveStatus
+                            timesStatus
+                        }
+                        .textCase(nil)
+                        .padding(.top, 4)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 6)
-                    .padding(.bottom, 40)
-                    .animation(.smooth(duration: 0.22), value: schedule.isDefault)
                 }
+                .listStyle(.insetGrouped)
+                .listRowSpacing(0)
+                .environment(\.defaultMinListRowHeight, 0)
+                .scrollContentBackground(.hidden)
+                .contentMargins(.horizontal, 20, for: .scrollContent)
+                .contentMargins(.top, 0, for: .scrollContent)
                 .scrollIndicators(.hidden)
                 .scScrollEdgeFade()
+                .animation(.smooth(duration: 0.22), value: configuration.enabled)
+                .animation(.smooth(duration: 0.22), value: pair == nil)
+                .animation(.smooth(duration: 0.22), value: schedule.isDefault)
             }
         }
         // Koło godzin we własnym arkuszu, nie w karcie: `DatePicker(.wheel)`
         // przejmuje pionowe przeciągnięcia i w przewijanej treści zjadał
         // przewijanie oraz gest zamknięcia arkusza.
-        .sheet(item: $editing, onDismiss: { runToggleAfterEditor() }) { slot in
+        .sheet(item: $editing) { slot in
             editorSheet(slot)
                 // Jedna trzecia ekranu — nad nią dalej widać oś dnia.
                 .presentationDetents([.fraction(1.0 / 3.0)])
@@ -155,77 +195,22 @@ struct MealSlotsSheet: View {
 
     // MARK: - Oś dnia
 
-    private func dayCard(
-        shown: [MealSlot],
-        pair: (earlier: MealSlot, later: MealSlot)?
-    ) -> some View {
-        let slots = MealSlot.allCases
+    /// Ostatni wiersz karty, gdy godziny nie idą po kolei.
+    private var orderNotice: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.sc(size: 11.5, weight: .semibold))
+                .foregroundStyle(SCPalette.terracotta)
 
-        return VStack(alignment: .leading, spacing: 0) {
-            // `List`, bo tylko w niej działa `swipeActions` („Wyłącz” gestem).
-            // Nie przewija się: stała wysokość = wszystkie wiersze.
-            List {
-                ForEach(Array(slots.enumerated()), id: \.element) { index, slot in
-                    axisRow(
-                        slot,
-                        isFirst: index == 0,
-                        isLast: index == slots.count - 1,
-                        isShown: shown.contains(slot),
-                        warning: pair?.later == slot ? pair?.earlier : nil
-                    )
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if configuration.isEnabled(slot), MealSlot.optionalSlots.contains(slot) {
-                            Button(role: .destructive) {
-                                toggle(slot, to: false)
-                            } label: {
-                                Label("Wyłącz", systemImage: "minus.circle")
-                            }
-                            .tint(.red)
-                        }
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .listRowSpacing(0)
-            .environment(\.defaultMinListRowHeight, 0)
-            .contentMargins(.vertical, 0, for: .scrollContent)
-            .scrollContentBackground(.hidden)
-            .scrollDisabled(true)
-            .frame(height: rowHeight * CGFloat(slots.count))
-            .animation(.smooth(duration: 0.22), value: configuration.enabled)
-
-            if pair != nil {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.sc(size: 11.5, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-
-                    Text("Plan i tak pokaże posiłki w stałej kolejności dnia.")
-                        .font(.sc(size: 12.5, weight: .regular))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.top, 4)
-                .padding(.bottom, 8)
-                .transition(.opacity)
-            }
+            Text("Plan i tak pokaże posiłki w stałej kolejności dnia.")
+                .font(.sc(size: 12.5, weight: .regular))
+                .foregroundStyle(Color.scMuted(scheme))
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .animation(.smooth(duration: 0.22), value: pair == nil)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 12)
     }
 
     /// Wiersz osi. `isShown` — pora jest w dniu Planu (włączona albo
@@ -251,7 +236,7 @@ struct MealSlotsSheet: View {
                     warning: warning
                 )
             } else {
-                offRow(slot, isFirst: isFirst, isLast: isLast)
+                offRow(slot, isFirst: isFirst, isLast: isLast, planned: plannedCount(for: slot))
             }
         }
         .keyframeAnimator(initialValue: 1.0, trigger: popCounts[slot] ?? 0) { row, scale in
@@ -347,7 +332,7 @@ struct MealSlotsSheet: View {
     }
 
     /// Pora, której dom nie je: na swoim miejscu, przygaszona, z „Dodaj”.
-    private func offRow(_ slot: MealSlot, isFirst: Bool, isLast: Bool) -> some View {
+    private func offRow(_ slot: MealSlot, isFirst: Bool, isLast: Bool, planned: Int) -> some View {
         HStack(spacing: 10) {
             Text(schedule.time(for: slot) ?? "—")
                 .font(.sc(size: 18, weight: .medium))
@@ -367,12 +352,23 @@ struct MealSlotsSheet: View {
                     .frame(width: 14, height: 14)
             }
 
-            Text(slot.title)
-                .font(.sc(size: 16, weight: .medium))
-                .tracking(-0.2)
-                .foregroundStyle(Color.scMuted(scheme))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(slot.title)
+                    .font(.sc(size: 16, weight: .medium))
+                    .tracking(-0.2)
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .lineLimit(1)
+
+                // Wyłączona, ale w tym tygodniu zostały w niej dania — Plan
+                // dalej ją pokazuje, więc mówimy, dlaczego.
+                if planned > 0 {
+                    Text("W tym tygodniu: \(planned) \(Self.dishesPlural(planned))")
+                        .font(.sc(size: 12.5, weight: .regular))
+                        .foregroundStyle(Color.scFaint(scheme))
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Button {
                 popCounts[slot, default: 0] += 1
@@ -466,16 +462,31 @@ struct MealSlotsSheet: View {
                 ? "Wyłącz \(slot.accusativeName)"
                 : "Dodaj \(slot.accusativeName)",
             run: {
-                toggleAfterEditor = slot
                 editing = nil
+                if isEnabled {
+                    disableFromEditor(slot)
+                } else {
+                    popCounts[slot, default: 0] += 1
+                    toggle(slot, to: true)
+                }
             }
         )
     }
 
-    private func runToggleAfterEditor() {
-        guard let slot = toggleAfterEditor else { return }
-        toggleAfterEditor = nil
-        toggle(slot, to: !configuration.isEnabled(slot))
+    /// „Wyłącz” z okienka godziny. Bez dań — od razu, oś zmienia się, gdy
+    /// okienko jeszcze schodzi. Z daniami — potwierdzenie, ale dopiero po
+    /// zejściu okienka: alert nie pokaże się nad schodzącym arkuszem (wcześniej
+    /// czekało to na `onDismiss`, który nie zawsze przychodził, i „Wyłącz”
+    /// nic nie robiło).
+    private func disableFromEditor(_ slot: MealSlot) {
+        guard plannedCount(for: slot) > 0 else {
+            apply(configuration.disabling(slot))
+            return
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            pendingDisable = slot
+        }
     }
 
     // MARK: - Zapis godzin
@@ -568,6 +579,13 @@ struct MealSlotsSheet: View {
 
     /// Polska liczba mnoga: 1 posiłek, 2–4 posiłki, 5–21 posiłków,
     /// 22 posiłki… Reguła idzie po ostatniej cyfrze z wyjątkiem nastek.
+    private static func dishesPlural(_ count: Int) -> String {
+        if count == 1 { return "danie" }
+        let lastTwo = count % 100
+        if (12...14).contains(lastTwo) { return "dań" }
+        return (2...4).contains(count % 10) ? "dania" : "dań"
+    }
+
     private static func mealsPlural(_ count: Int) -> String {
         if count == 1 { return "posiłek" }
         let lastTwo = count % 100
