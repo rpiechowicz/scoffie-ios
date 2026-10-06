@@ -83,18 +83,31 @@ struct CookDock: View {
     /// pilności (Rafał 4.10.2026: „timery 3 i 4 nie mogą się zamieniać
     /// miejscami”; `dockOverflow` układa po czasie do końca, więc przestawiał
     /// je start, pauza i każde odliczanie). Przy kilku rząd przewija się w bok.
+    ///
+    /// Plakietka ma 28 pt, a dotyk 44 pt (`CookTimerBadge.touchHeight`).
+    /// Przewijanie w bok nie oddaje stuknięć spoza swojej ramki, więc jest
+    /// o `reach` wyższe z obu stron, a w układzie zajmuje dalej 28 pt
+    /// (ujemny odstęp) — dok ma STAŁĄ wysokość. W dół zapas kończy się
+    /// równo na górnej krawędzi kapsuł (`spacing.cookOverflowGap` = 8),
+    /// w górę wchodzi na treść kroku. Pusty rząd nie łapie stuknięć —
+    /// przeciągnięcie w tym pasie przewija krok.
     private func badgeRow(_ items: [CookDockTimer]) -> some View {
-        ScrollView(.horizontal) {
+        let reach = CookTimerBadge.touchReach
+        return ScrollView(.horizontal) {
             HStack(spacing: 6) {
                 ForEach(items.sorted { $0.stepIndex < $1.stepIndex }) { item in
                     CookTimerBadge(item: item, onTimer: onTimer, onOpen: { onOpen(.timers) })
                         .transition(badgeTransition)
                 }
             }
+            .padding(.vertical, reach)
         }
         .scrollIndicators(.hidden)
         .scrollClipDisabled()
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        .frame(height: SCCook.Height.overflowTab + 2 * reach)
+        .padding(.vertical, -reach)
+        .allowsHitTesting(!items.isEmpty)
     }
 
     private var badgeTransition: AnyTransition {
@@ -543,6 +556,14 @@ struct CookTimerBadge: View {
     let onTimer: (CookTimerAction) -> Void
     let onOpen: () -> Void
 
+    /// Cel dotyku plakietki — rysunek ma `height.cookOverflowTab` (28 pt).
+    static let touchHeight: CGFloat = 44
+    /// Zapas dotyku nad i pod rysunkiem (8 pt = `spacing.cookOverflowGap`,
+    /// więc dolny zapas nie wchodzi na kapsuły).
+    static var touchReach: CGFloat {
+        max(0, (touchHeight - SCCook.Height.overflowTab) / 2)
+    }
+
     @Environment(\.colorScheme) private var scheme
 
     private var color: Color { item.accent.color }
@@ -580,6 +601,8 @@ struct CookTimerBadge: View {
             }
             .cookDockGlass(scheme)
             .contentShape(Capsule())
+            // Rysunek 28 pt, dotyk 44 pt — układ (i dok) bez zmian.
+            .scTapHeight(Self.touchHeight, drawn: SCCook.Height.overflowTab)
         }
         .buttonStyle(PlanPressStyle(scale: 0.94))
         .accessibilityLabel(CookDockLabels.accessibility(item))
