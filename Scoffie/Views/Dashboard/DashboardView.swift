@@ -31,6 +31,14 @@ struct DashboardView: View {
         .task(id: recipeLinkTaskKey) {
             await openPendingRecipeLink()
         }
+        // Zgoda na powiadomienia w kontekście: świeżo dołączony domownik,
+        // pulpit już widać (6.10.2026 — start aplikacji o nią nie pyta).
+        .task(id: isRevealed) {
+            guard isRevealed, sessionStore.asksNotificationsOnReveal else { return }
+            sessionStore.asksNotificationsOnReveal = false
+            try? await Task.sleep(for: .milliseconds(600))
+            await NotificationPermission.requestIfNotAsked()
+        }
     }
 
     /// Zmienia się z nowym linkiem i z odsłonięciem pulpitu — każda z tych

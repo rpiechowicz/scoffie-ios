@@ -198,7 +198,11 @@ private struct CookTimerRow: View {
                     .font(.sc(size: 12))
                     .foregroundStyle(isOverdue ? color : SCCook.Palette.caption(scheme))
                     .lineLimit(1)
-                    .cookRoll(captionText)
+                    // Krzywa podpisu = krzywa ZEGARA (`cookTicking`, 0,3 s),
+                    // bo „po czasie +1:20” zmienia się co sekundę; reszta
+                    // stanów zmienia się rzadko, ale tą samą drogą — jeden
+                    // modyfikator, bez podmiany widoku przy zmianie stanu.
+                    .cookTicking(captionText, countsDown: false)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 

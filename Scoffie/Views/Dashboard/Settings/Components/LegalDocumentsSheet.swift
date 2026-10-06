@@ -63,6 +63,9 @@ struct LegalDocumentsSheet: View {
                             isLast: true,
                             action: { showExport = true }
                         )
+                        // Bez klienta eksportu (sesja jeszcze nie wstała) push
+                        // pokazałby pusty ekran — wiersz czeka wyłączony.
+                        .disabled(dataExportClient == nil)
                     }
 
                     Text("Paczka z Twoim profilem, preferencjami, przepisami, posiłkami, krokami, zgodami i rozmowami z asystentem — prawo dostępu i przenoszenia danych (art. 15 i 20 RODO). Bez danych innych domowników.")

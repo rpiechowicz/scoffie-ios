@@ -103,6 +103,13 @@ final class CookAlarmScheduler {
         }
         guard manager.authorizationState == .authorized else {
             known = [:]
+            // Bez alarmu systemowego koniec timera w tle niesie zwykłe
+            // powiadomienie (`CookTimerNotifications`) — o zgodę na nie
+            // pytamy tu, przy pierwszym timerze, a nie przy starcie
+            // aplikacji (6.10.2026). Pyta raz; po decyzji nic się nie dzieje.
+            if !desired.isEmpty {
+                await NotificationPermission.requestIfNotAsked()
+            }
             return
         }
 

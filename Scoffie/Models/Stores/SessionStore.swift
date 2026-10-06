@@ -1707,6 +1707,10 @@ final class SessionStore {
         mealCalendarStore?.resetLocalPlanningState()
         await registerPushDeviceIfPossible()
         isAuthenticated = true
+        // Domownik z zaproszenia to ten, do kogo idą powiadomienia o zmianach
+        // planu — o zgodę pytamy, gdy zobaczy pulpit (`DashboardView`), nie
+        // przy starcie aplikacji (6.10.2026).
+        asksNotificationsOnReveal = true
         // Przyjęte zaproszenie znika ze skrzynki, a razem z nim wszystkie inne
         // do tego samego domu.
         await refreshPendingInvitations()
@@ -1845,6 +1849,9 @@ final class SessionStore {
     /// gdy loader startu zejdzie). W pamięci — do obserwowania przez widok;
     /// na dysku leży równolegle w `storedDeepLink`, dopóki się nie otworzy.
     private(set) var pendingRecipeLink: RecipeLinkTarget?
+    /// Po dołączeniu do domu z zaproszenia: prośba o zgodę na powiadomienia,
+    /// gdy pulpit się odsłoni. Zdejmuje ją `DashboardView`.
+    var asksNotificationsOnReveal = false
 
     /// Stuknięcie w Live Activity gotowania przed końcem startu — tryb Gotuj
     /// otwiera się nad gotowym pulpitem (`resumeCookingIfRequested`).

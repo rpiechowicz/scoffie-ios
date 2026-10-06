@@ -539,18 +539,30 @@ struct WeeklyPlanView: View {
             }
             // Skrót z karty asystenta: przełączenie zakładki to za mało,
             // bo lista zakupów jest arkuszem wewnątrz tego ekranu.
+            //
+            // Arkusz rusza chwilę PO przełączeniu: systemowy `TabView` buduje
+            // Plan przy pierwszym wyborze, a arkusz pokazany w tej samej
+            // aktualizacji co wstawienie zakładki do okna potrafi przepaść
+            // („not in the window hierarchy”).
             .onChange(of: sessionStore.opensShoppingList, initial: true) { _, wants in
                 guard wants else { return }
-                simpleSheet = .products
                 sessionStore.opensShoppingList = false
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    simpleSheet = .products
+                }
             }
             // „Zaplanuj” na pustej porze w „Dziś”: planowanie ma jedno miejsce,
             // więc tamta zakładka tylko tu prowadzi — ten dzień w Planie i od
             // razu wybór przepisu na tę porę, jak stuknięcie pustej pory na osi.
+            // Z tego samego powodu co lista zakupów — chwilę po przełączeniu.
             .onChange(of: sessionStore.planSlotRequest, initial: true) { _, request in
                 guard let request else { return }
                 sessionStore.planSlotRequest = nil
-                openPlanRequest(request)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    openPlanRequest(request)
+                }
             }
             .sheet(item: $pickerTarget) { target in
                 PlanSlotPickerSheet(
