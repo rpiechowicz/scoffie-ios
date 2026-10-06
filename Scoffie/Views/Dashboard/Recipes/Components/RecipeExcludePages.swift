@@ -367,7 +367,8 @@ struct RecipeExcludePage: View {
             undo = nil
             freshChip = nil
         }
-        .navigationTitle("Wyklucz składniki")
+        // Ta sama nazwa co wiersz, który tu prowadzi (lista „Filtrów”).
+        .navigationTitle("Bez składników")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         // „Wyczyść” zdejmuje wszystkie wykluczenia naraz (profil z kłódką
