@@ -1348,9 +1348,11 @@ final class SessionStore {
         }
     }
 
-    /// Granice nazwy gospodarstwa — parytet z `CreateHouseholdDto` (2…64) na
-    /// serwerze, który od Fazy 0 waliduje je również na WebSockecie.
-    static let householdNameLengthRange = 2...64
+    /// Granice nazwy gospodarstwa — WSZĘDZIE w aplikacji 2…50 (6.10.2026:
+    /// zakładanie w Ustawieniach miało 50, zmiana nazwy i kreator 64).
+    /// Serwer (`CreateHouseholdDto` / `UpdateHouseholdDto`, 2…64, także na
+    /// WebSockecie) jest luźniejszy, więc nic, co tu przejdzie, nie odbije się.
+    static let householdNameLengthRange = 2...50
 
     static func isValidHouseholdName(_ name: String) -> Bool {
         householdNameLengthRange.contains(
@@ -1387,7 +1389,7 @@ final class SessionStore {
             return
         }
         guard Self.isValidHouseholdName(trimmed) else {
-            authError = "Nazwa gospodarstwa musi mieć od 2 do 64 znaków."
+            authError = "Nazwa gospodarstwa musi mieć od 2 do 50 znaków."
             return
         }
 
@@ -1512,7 +1514,7 @@ final class SessionStore {
         guard let userId = currentUserId, !userId.isEmpty,
               let householdId = currentHouseholdId, !householdId.isEmpty else { return false }
         guard Self.isValidHouseholdName(name) else {
-            authError = "Nazwa gospodarstwa musi mieć od 2 do 64 znaków."
+            authError = "Nazwa gospodarstwa musi mieć od 2 do 50 znaków."
             return false
         }
         guard name != currentHouseholdName else { return true }

@@ -339,10 +339,7 @@ struct PlansSheet: View {
     /// zweryfikować transakcję. Inaczej Apple pobrałoby pieniądze za dostęp,
     /// którego nie mielibyśmy jak nadać.
     private var canPurchase: Bool {
-        SubscriptionCatalog.purchasesEnabled
-            && subscriptions.purchasesEnabled
-            && subscriptions.product(for: selected) != nil
-            && !subscriptions.isPurchasing
+        PlanPurchase.canStart(selected, in: subscriptions)
             && selected.id != currentPlan?.id
     }
 
@@ -354,37 +351,17 @@ struct PlansSheet: View {
     }
 
     private func buy() {
-        guard let product = subscriptions.product(for: selected) else { return }
         // Kolejka do stałej PRZED zadaniem: arkusz da się zsunąć palcem, gdy
         // zgłoszenie do serwera jeszcze trwa, a wtedy odczyt ze środowiska
         // trafiłby w domyślną kolejkę podglądu i potwierdzenie przepadłoby.
         let toasts = toasts
+        let plan = selected
         Task {
-            switch await subscriptions.purchase(product) {
+            switch await PlanPurchase.run(plan, in: subscriptions, toasts: toasts) {
             case .purchased:
-                // Serwer JUŻ potwierdził — inaczej nie byłoby `.purchased`.
-                //
-                // Potwierdzenie idzie do toastu, bo `notice` znikało razem
-                // z arkuszem, który sam je zamykał: użytkownik wracał właśnie
-                // z systemowego okna Apple, wodząc wzrokiem za tamtym oknem
-                // w dół, a jedyne „udało się" mieszkało w stopce, której
-                // zostało 1,2 s życia. Kapsuła przeżywa `dismiss()` i ląduje
-                // nad „Asystent i plan" już w nowym stanie. Własnej haptyki
-                // nie ma tu po co trzymać — `SCToastHost` bije swoją.
-                // „Plan" bez dopowiedzenia myliłoby się z zakładką Plan
-                // (tygodnia). Mówimy o tym, co się realnie odblokowało.
-                toasts.success("Asystent odblokowany", "Pytania są już dostępne dla całego domu.")
                 onPurchased?()
                 dismiss()
-            case .pending:
-                // „Poproś o zakup" (Chmura Rodzinna) albo zgłoszenie, którego
-                // serwer chwilowo nie przyjął. Pieniądze mogły już pójść, więc
-                // nie mówimy „nie udało się".
-                notice = subscriptions.lastError
-                    ?? "Zakup czeka na zatwierdzenie. Plan włączy się sam, gdy przejdzie."
-            case .cancelled:
-                notice = nil
-            case let .failed(message):
+            case let .notice(message):
                 notice = message
             }
         }
@@ -397,6 +374,65 @@ struct PlansSheet: View {
             await subscriptions.restore()
             notice = subscriptions.lastError ?? "Sprawdziliśmy zakupy w App Store."
             isRestoring = false
+        }
+    }
+}
+
+// MARK: - Zakup (wspólny z „Asystent i plan”)
+
+/// Jedna droga zakupu planu — z „Wybierz plan” i z kafli w „Asystent i plan”.
+/// Ekran zostawia sobie tylko to, co po zakupie robi SAM (zejść, przeładować
+/// stan); potwierdzenie, komunikaty i bramka są tutaj, żeby dwa przyciski
+/// zakupu nie rozjechały się w tym, kiedy wolno kupić i co mówią.
+enum PlanPurchase {
+    enum Outcome {
+        /// Serwer PRZYJĄŁ zakup — toast już poszedł.
+        case purchased
+        /// Komunikat przy przycisku (`nil` = zdjąć poprzedni, np. po anulowaniu).
+        case notice(String?)
+    }
+
+    /// Zakup wolno zacząć dopiero, gdy SERWER potwierdzi, że umie
+    /// zweryfikować transakcję. Inaczej Apple pobrałoby pieniądze za dostęp,
+    /// którego nie mielibyśmy jak nadać.
+    static func canStart(_ plan: SubscriptionPlan, in subscriptions: SubscriptionStore) -> Bool {
+        SubscriptionCatalog.purchasesEnabled
+            && subscriptions.purchasesEnabled
+            && subscriptions.product(for: plan) != nil
+            && !subscriptions.isPurchasing
+    }
+
+    static func run(
+        _ plan: SubscriptionPlan,
+        in subscriptions: SubscriptionStore,
+        toasts: SCToastCenter
+    ) async -> Outcome {
+        guard let product = subscriptions.product(for: plan) else { return .notice(nil) }
+        switch await subscriptions.purchase(product) {
+        case .purchased:
+            // Serwer JUŻ potwierdził — inaczej nie byłoby `.purchased`.
+            //
+            // Potwierdzenie idzie do toastu, bo komunikat przy przycisku
+            // znikał razem z arkuszem, który sam się zamykał: użytkownik
+            // wracał właśnie z systemowego okna Apple, a jedyne „udało się"
+            // mieszkało w stopce, której zostało 1,2 s życia. Kapsuła przeżywa
+            // `dismiss()`. Własnej haptyki nie ma po co trzymać — `SCToastHost`
+            // bije swoją. „Plan" bez dopowiedzenia myliłoby się z zakładką
+            // Plan (tygodnia), więc mówimy o tym, co się realnie odblokowało.
+            toasts.success("Asystent odblokowany", "Pytania są już dostępne dla całego domu.")
+            return .purchased
+        case .pending:
+            // „Poproś o zakup" (Chmura Rodzinna) albo zgłoszenie, którego
+            // serwer chwilowo nie przyjął. Pieniądze mogły już pójść, więc
+            // nie mówimy „nie udało się".
+            return .notice(
+                subscriptions.lastError
+                    ?? "Zakup czeka na zatwierdzenie. Plan włączy się sam, gdy przejdzie."
+            )
+        case .cancelled:
+            return .notice(nil)
+        case let .failed(message):
+            return .notice(message)
         }
     }
 }
