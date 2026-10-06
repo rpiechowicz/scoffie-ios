@@ -51,7 +51,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   socketu idzie za tygodniem oglądanego dnia). Pigułka = `PlanDayGoalBar(planned:)` w TYM SAMYM jednym wierszu co Plan (kcal + B/T/W, zjedzone; plan dnia
   bladą warstwą pod torami) — zdanie „Zjedzone X z Y kcal · w planie Z” USUNIĘTE 6.10.2026 wieczorem (Rafał: „kompaktowe,
   czytelne, w 1 wierszu”; dwa układy psuły przejście). Przejście Plan ↔ Pulpit = jeden komponent, który zmienia stan (Rafał 6.10.2026): menu, ZANIM
-  przełączy zakładkę (wiązanie `selection` w `NavigationMenu` + `onChange` dla przełączeń z kodu), wkłada twarz wychodzącej
+  przełączy zakładkę (wiązanie `selection` w `NavigationMenu`; „Zaplanuj” na Pulpicie woła `SCTabBarChrome.prepareGoalBarHandoff`
+  sam przed `dashboardTab = .plan` — przygotowanie po fakcie w `onChange` USUNIĘTE: twarz dochodziła klatkę za późno
+  i potrafiła utknąć do następnej wizyty), wkłada twarz wychodzącej
   pigułki (`PlanDayGoalFace` z `SCTabBarChrome.goalBarFaces`) do `goalBarHandoff[docelowa]`; pierwsza klatka nowej zakładki
   rysuje ją, potem pigułka zdejmuje ją JEDNĄ sprężyną (`PlanDayGoalBar.animation`, ta sama przy każdej zmianie liczb;
   sprężyna zmienia cel w locie, gdy zakładka dociąga dzień) — liczba i pasek każdej kolumny razem, BEZ opóźnień między
