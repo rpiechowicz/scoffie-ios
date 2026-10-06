@@ -97,8 +97,13 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   Wyłączone dopasowanie (dieta + alergeny) trzyma TYLKO do końca uruchomienia
   (`RecipePersonalization.restoreForThisLaunch` w `RecipeCatalogStore.init`); dopóki trwa — żeton `RecipeFitOffChip`
   „Bez dopasowania · Włącz” na Przepisach i wiersz karty w „Wybierz przepis”. Nigdy trwałe i niewidoczne.
+- **Szczegóły posiłku mają WŁASNY `NavigationStack`** (`RecipeDetailView.body`, 6.10.2026 wieczór): „Kto ile je”
+  (`portionsPage`, `.scPushedPage("Kto ile je")`, „Cofnij” w pasku, „Zapisz porcje” w stopce; pigułka ze strzałką ›)
+  i pełne „Dodaj do planu” (`AddToPlanSheet(isPushed: true)`: tytuł i „wstecz” w pasku, nad treścią samo danie bez
+  krzyżyka) to PUSH w arkuszu szczegółów — arkusza na arkuszu tu już nie ma. `onAppear`, `task` i okno „Gotujesz już
+  inne danie” stoją na stosie, nie na pierwszym ekranie (`page`).
 - **„Dodaj do planu”** w szczegółach z katalogu = systemowe `Menu`: „Dziś · pora” (tylko gdy pora jeszcze przed nami),
-  „Jutro · pora”, „Inny dzień…” → `AddToPlanSheet`. Szybki zapis dla całego domu z porcjami ze steppera, szczegóły się
+  „Jutro · pora”, „Inny dzień…” → `AddToPlanSheet` (push). Szybki zapis dla całego domu z porcjami ze steppera, szczegóły się
   zamykają, toast „Dodano do planu · Jutro · Obiad”; reguły i zapis w `AddToPlanDraft` / `AddToPlanPortions`, wspólne
   z arkuszem — nie duplikować. „Zamiast: X” (cały dom) / „Jest już: X” (część domu) otwierają arkusz z `initialDate` /
   `initialSlot`; to samo danie = wyłączone „Już w planie”. Porcje w arkuszu stoją W TREŚCI pod „Posiłek”
@@ -729,13 +734,14 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   z katalogu, bo posiłek z planu ma składniki na liście od początku. Dopisane pozycje listy
   mają `addedFrom` i menu „Usuń dopisane z przepisu” pod przytrzymaniem.
   „Kto ile je” (posiłek z planu z porcjami osób) to od 4.10.2026 NIE sekcja w przewijaniu, tylko szklana pigułka
-  przyczepiona nad przyciskami (`portionsPill`, jak „Cel dnia”): awatary, „Do ugotowania · 3,5 porcji”, ⌃ →
-  półarkusz `.medium/.large` (`portionsSheet`: nagłówek „Kto ile je · Porcje” z nazwą dania; od 4.10.2026 wieczorem
+  przyczepiona nad przyciskami (`portionsPill`, jak „Cel dnia”): awatary, „Do ugotowania · 3,5 porcji”, › →
+  od 6.10.2026 PUSH w stosie arkusza szczegółów (`portionsPage`, tytuł „Kto ile je” w pasku; do tego dnia półarkusz
+  `.medium/.large` z nagłówkiem „Kto ile je · Porcje” — arkusz na arkuszu, nie wracać; od 4.10.2026 wieczorem
   „w stylu iOS” — linia `SCPortionSummary` „Razem · 3,5 porcji · kcal” nad listą, BEZ karty i paska podziału; grupa
   `SCPortionList`/`SCPortionRow` jak w Ustawieniach iOS — awatar 34, imię + „· Ty”, kcal pod spodem, z prawej liczba
   i SYSTEMOWY `Stepper` (strony wyłączane przez `nil`); zmieniona niezapisana porcja = liczba w terakocie). Ten sam
   zestaw (`Components/SCPortionKit.swift`) w „Dodaj do planu”. Duży pierścień z kaflami po dwa (wcześniej tego dnia)
-  odpadł — „bardziej czytelne”. Po zmianie w stopce arkusza „Zapisz porcje” i obok krzyżyka „Cofnij zmiany”; ten sam zapis
+  odpadł — „bardziej czytelne”. Po zmianie w stopce ekranu „Zapisz porcje”, a w pasku „Cofnij”; ten sam zapis
   też pod pigułką.
   Zrzuty: `SCOFFIE_DEBUG_OPTIONS=detail|detail-planned` (+ `SCOFFIE_DEBUG_DETAIL_SCROLL=<pt>`,
   `SCOFFIE_DEBUG_DETAIL_HAVE=<n>`).
@@ -958,9 +964,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (`fits(slot)`) — „Wszystkie pory” usunięte w rundzie 10 („nie chcę jeść obiadu na śniadanie”).
   „Dla kogo” (`PlanAudienceChips`, w domu jednoosobowym jedno zdanie) stoi w STOPCE nad przyciskiem —
   tam, gdzie zapada decyzja. Filtry wyboru do planu są własne (nie z Przepisów).
-- „Dodaj do planu” ze szczegółów (`AddToPlanSheet`, od nowa w rundzie 14 — „paskudny, zrób porządnie”):
-  TYLKO znane klocki. Nagłówek = zdjęcie dania (`EditorialRecipeCover` 58 pt) + „DODAJ DO PLANU” + nazwa
-  + fakty z ikonami (czas, kcal) + krzyżyk. „Kiedy” = tydzień w karcie dokładnie jak `EditorialWeekBar`
+- „Dodaj do planu” ze szczegółów (`AddToPlanSheet`, od nowa w rundzie 14 — „paskudny, zrób porządnie”; od 6.10.2026
+  ekran stosu szczegółów, `isPushed`): TYLKO znane klocki. Nagłówek = zdjęcie dania (`EditorialRecipeCover` 52 pt)
+  + nazwa + fakty (czas, kcal); „Dodaj do planu” i „wstecz” w pasku systemu (w samodzielnym arkuszu — tylko podgląd —
+  eyebrow i krzyżyk). „Kiedy” = tydzień w karcie dokładnie jak `EditorialWeekBar`
   (podpis „TEN TYDZIEŃ · …”, „Wróć do dziś”, strzałki 26 pt, przejeżdżające podkreślenie, przeciąganie
   w bok, miniony dzień przekreślony i nieklikalny, liczby rolują). „Posiłek” = od 24.09 kafle pór, układ wg liczby pór
   (`SlotTileLayout`: 1–2 poziome w rzędzie, 3 pionowe obok siebie, 4 = 2 × 2 poziome, 5–6 = 3 kolumny pionowe;
