@@ -1,7 +1,16 @@
 struct MenuConstans {
+    /// Zakładka „Dziś” (6.10.2026, dawniej „Kalendarz”) — „mój dzień”: to,
+    /// co JA jem wczoraj, dziś i jutro. Typ zostaje `Calendar`, bo tak zakładkę
+    /// nazywa `DashboardTab.calendar`.
+    ///
+    /// Talerz ze sztućcami, nie słońce ani kartka kalendarza: sercem ekranu
+    /// jest talerz dnia, a obok w pasku stoją `receipt` (Plan) i `sparkles`
+    /// (Asystent). Słońce (`sun.max`) przy 24 pt to krążek z promieniami — tuż
+    /// obok iskierek Asystenta dwie „błyszczące” ikony zlewały się w jedną;
+    /// kartka kalendarza zderzała się sylwetką z paragonem i książką.
     struct Calendar: MenuModel {
-        static let name: String = "Kalendarz"
-        static let icon: String = "calendar"
+        static let name: String = "Dziś"
+        static let icon: String = "fork.knife.circle"
     }
     
     struct Recipes: MenuModel {
@@ -13,8 +22,8 @@ struct MenuConstans {
         static let name: String = "Plan"
         /// Paragon — sylwetka spoza rodziny „kartka z liniami".
         ///
-        /// Pasek ma trzy sąsiadujące zakładki o treści prostokąta:
-        /// `book.pages` (Przepisy) i `calendar` (Kalendarz). Przy 24 pt
+        /// Pasek miał trzy sąsiadujące zakładki o treści prostokąta:
+        /// `book.pages` (Przepisy) i `calendar` (dawny Kalendarz). Przy 24 pt
         /// zostaje z nich sama sylwetka, więc kolejna kartka tylko przesuwa
         /// kolizję o jedną zakładkę dalej. Paragon ma postrzępiony dół —
         /// to jedyny szczegół, który przy tym rozmiarze przeżywa i od razu

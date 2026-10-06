@@ -465,6 +465,10 @@ struct CalendarPlate: View {
     /// „Play” w prawym rogu — gotowanie (start albo powrót). Rysowany tylko,
     /// gdy danie ma `cooking`.
     var onCook: (() -> Void)? = nil
+    /// Pusta pora albo pusty dzień, który da się jeszcze zaplanować (dziś,
+    /// jutro): stuknięcie w pusty talerz prowadzi do Planu („Zaplanuj”).
+    /// Przy daniu nieużywane — wtedy zdjęcie otwiera szczegóły.
+    var onPlan: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -566,20 +570,24 @@ struct CalendarPlate: View {
     /// jeden obszar dotyku i o tym, który zadziała, decyduje kolejność
     /// w drzewie, nie miejsce stuknięcia. Obok siebie każdy ma swój obszar.
     private var stage: some View {
-        // Na pustej porze zdjęcie jest obrazkiem — nie ma być czytane jako
-        // „przyciemniony przycisk”. Jawny typ, bo `[]` i `.isButton` w jednym
-        // wyrażeniu warunkowym nie mają skąd wziąć typu bez podpowiedzi.
-        let hiddenTraits: AccessibilityTraits = onOpenDetail == nil ? .isButton : []
+        // Danie otwiera szczegóły; pusta pora, którą da się zaplanować, prowadzi
+        // do Planu. Jedno i drugie naraz nie występuje — pusta pora nie ma
+        // szczegółów, a danie nie ma czego planować.
+        let action = onOpenDetail ?? onPlan
+        // Na pustej porze bez planowania zdjęcie jest obrazkiem — nie ma być
+        // czytane jako „przyciemniony przycisk”. Jawny typ, bo `[]` i `.isButton`
+        // w jednym wyrażeniu warunkowym nie mają skąd wziąć typu bez podpowiedzi.
+        let hiddenTraits: AccessibilityTraits = action == nil ? .isButton : []
 
         return Button {
-            pagerGate.ifNotSwiping { onOpenDetail?() }
+            pagerGate.ifNotSwiping { action?() }
         } label: {
             plate
         }
         .buttonStyle(PlatePressStyle())
-        .disabled(onOpenDetail == nil)
+        .disabled(action == nil)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint(onOpenDetail == nil ? "" : "Otwiera szczegóły posiłku")
+        .accessibilityHint(accessibilityHint)
         .accessibilityRemoveTraits(hiddenTraits)
         .frame(width: size, height: size)
         // Pieczątka — lewy dół (środek 15 pt do wewnątrz od narożnika
@@ -696,6 +704,12 @@ struct CalendarPlate: View {
                     .strokeBorder(Color.scLabel(scheme).opacity(scheme == .dark ? 0.10 : 0.14), lineWidth: 1)
                     .padding(-rimInset)
             }
+    }
+
+    private var accessibilityHint: String {
+        if onOpenDetail != nil { return "Otwiera szczegóły posiłku" }
+        if onPlan != nil { return "Przechodzi do Planu, żeby zaplanować" }
+        return ""
     }
 
     private var accessibilityLabel: String {
@@ -1045,6 +1059,10 @@ struct CalendarPlateCaption: View {
     /// Otwiera szczegóły posiłku. `nil` dla pustej pory — nie ma czego
     /// otwierać.
     let onOpenDetail: (() -> Void)?
+    /// Pusta pora albo pusty dzień, który da się jeszcze zaplanować: pierwsza
+    /// pigułka mówi „Zaplanuj” i prowadzi do Planu. `nil` = pigułka tylko
+    /// podpowiada, gdzie się planuje (wczoraj, ekrany podglądu).
+    var onPlan: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dayPagerGate) private var pagerGate
@@ -1118,11 +1136,23 @@ struct CalendarPlateCaption: View {
     private var chipRow: some View {
         HStack(spacing: 6) {
             ForEach(chips) { chip in
-                CalendarPlateChip(text: chip.text, icon: chip.icon, tint: chip.tint)
-                    // Krycie, nie skala: pigułka rosnąca w rzędzie
-                    // rozpychała sąsiadki w trakcie przejścia i cały
-                    // rząd falował.
-                    .transition(.opacity)
+                // Przycisk ZAWSZE, także przy pigułce bez akcji (wtedy nie
+                // łapie dotyku): pierwsza pigułka ma tę samą tożsamość na
+                // pustej porze i przy daniu, więc „Zaplanuj” ↔ „12 min ·
+                // 510 kcal” roluje literami jak dotąd, zamiast podmieniać widok.
+                Button {
+                    pagerGate.ifNotSwiping { chip.action?() }
+                } label: {
+                    CalendarPlateChip(text: chip.text, icon: chip.icon, tint: chip.tint)
+                }
+                .buttonStyle(PlanPressStyle(scale: 0.94))
+                .allowsHitTesting(chip.action != nil)
+                .accessibilityRemoveTraits(chip.hiddenTraits)
+                .accessibilityHint(chip.action == nil ? "" : "Przechodzi do Planu, żeby zaplanować")
+                // Krycie, nie skala: pigułka rosnąca w rzędzie
+                // rozpychała sąsiadki w trakcie przejścia i cały
+                // rząd falował.
+                .transition(.opacity)
             }
         }
     }
@@ -1263,6 +1293,11 @@ struct CalendarPlateCaption: View {
         let text: String
         var icon: String?
         var tint: Color?
+        /// Stuknięcie — tylko „Zaplanuj” na pustej porze; reszta pigułek mówi.
+        var action: (() -> Void)?
+
+        /// Pigułka bez akcji nie jest dla VoiceOver przyciskiem.
+        var hiddenTraits: AccessibilityTraits { action == nil ? .isButton : [] }
     }
 
     /// Pigułki mówią wyłącznie to, czego nie ma nigdzie wyżej na talerzu.
@@ -1274,10 +1309,28 @@ struct CalendarPlateCaption: View {
         // wzrokiem po tym samym znaku, który widzi w pasku pod spodem.
         guard let item, !item.isEmptySlot else {
             // Pierwsza pigułka ma tę samą tożsamość (`lead`) na pustej porze
-            // i przy daniu: „Zaplanujesz w Planie” ↔ „12 min · 510 kcal” roluje
+            // i przy daniu: „Zaplanuj” ↔ „12 min · 510 kcal” roluje
             // literami w miejscu, jak wielki wiersz nad nią, a ikona
             // przechodzi w nową (24.09.2026 — dawniej osobne pigułki
             // przenikały się kryciem i wyglądały na inny ruch).
+            //
+            // Dzień, który da się jeszcze zaplanować (dziś, jutro), dostaje
+            // AKCJĘ w kolorze pory: „Zaplanuj” przełącza na Plan na ten dzień
+            // i otwiera wybór przepisu (6.10.2026 — planowanie ma jedno
+            // miejsce, „Dziś” tylko tam prowadzi). Wczoraj zostaje podpowiedź.
+            if let onPlan {
+                return [
+                    Chip(
+                        id: "lead",
+                        text: "Zaplanuj",
+                        icon: MenuConstans.Plan.icon,
+                        // `self.`: w gałęzi `else` strażnika nazwa `item` ma
+                        // jednoznacznie wskazać właściwość, nie wiązanie wyżej.
+                        tint: self.item?.slot.cozyAccent ?? SCPalette.terracotta,
+                        action: onPlan
+                    )
+                ]
+            }
             let text = voice(["Zaplanujesz w Planie", "Ułożysz w Planie", "Dodasz w Planie"], "plan-chip")
             return [Chip(id: "lead", text: text, icon: MenuConstans.Plan.icon)]
         }

@@ -38,8 +38,6 @@ extension EnvironmentValues {
 /// treścią i ruch z klawiaturą robi system. Zostało:
 /// - `compactTitles` — kapsuła z tytułem pod paskiem stanu (`SCCompactTitle`),
 ///   którą rysuje `NavigationMenu` nad wszystkimi zakładkami;
-/// - `goalSnapshot` — liczby pigułki „Cel dnia” z zakładki, z której się
-///   wyszło (`PlanDayGoalBar`);
 /// - `keyboardCurve` — krzywa klawiatury dla wszystkiego, co jedzie z polem
 ///   nad klawiaturą (powitanie Asystenta).
 @Observable
@@ -47,9 +45,6 @@ final class SCTabBarChrome {
     /// Tytuł do kapsuły pod paskiem stanu (`SCCompactTitle`) dla zakładek,
     /// których duży tytuł zjechał już pod górną krawędź.
     var compactTitles: [DashboardTab: String] = [:]
-    /// Ostatnie liczby pigułki „Cel dnia” z aktywnej zakładki — pigułka
-    /// wchodzącej zakładki rośnie od nich do swoich (`PlanDayGoalBar`).
-    var goalSnapshot: PlanDayGoalSnapshot?
 
     /// Krzywa klawiatury iOS — krzywa 7 z `UIKeyboardAnimationCurveUserInfoKey`
     /// nie ma publicznego odpowiednika; to jej znane przybliżenie Béziera.
@@ -159,10 +154,9 @@ struct NavigationMenu: View {
         case .plan:
             WeeklyPlanView()
         case .calendar:
-            // Własny tydzień i dzień — przewijanie Kalendarza nie przestawia
-            // Planu i odwrotnie. Arkusze otwarte z Kalendarza dziedziczą ten.
+            // Zakładka „Dziś” (6.10.2026): sama trzyma wczoraj · dziś · jutro,
+            // bez tygodnia — `datesViewModel` z korzenia należy do Planu.
             CalendarView()
-                .environment(\.datesViewModel, sessionStore.calendarDatesViewModel)
         case .assistant:
             // Asystent zajął miejsce „Produktów": to do niego wraca się
             // wiele razy w tygodniu, a lista zakupów powstaje przy Planie

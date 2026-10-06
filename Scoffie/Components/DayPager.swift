@@ -147,8 +147,17 @@ extension EnvironmentValues {
 /// i rysują z argumentu; różnią się tym, czy strona się przewija
 /// (`scrolls`) i jak pokazuje zmianę dnia (`motion`).
 struct DayPager<Content: View>: View {
-    let datesViewModel: DatesViewModel
+    /// Tydzień, który pasek dni przesuwa razem z dniem (Plan). `nil` = pager
+    /// bez paska tygodnia (zakładka „Dziś”): dzień liczy się sam kalendarzem.
+    let datesViewModel: DatesViewModel?
     @Binding var selectedDate: Date
+    /// Dni, na które wolno przejść palcem — `nil` = bez granic (Plan).
+    ///
+    /// „Dziś” ogląda tylko wczoraj, dziś i jutro; dalsze dni to rola Planu.
+    /// Gest za krawędź zakresu wraca sprężyną, jak niedociągnięty — strona
+    /// nie zjeżdża w dzień, którego ten ekran nie pokazuje. Granice to
+    /// północ pierwszego i ostatniego dnia (`PlanWeek.calendar`).
+    let range: ClosedRange<Date>?
     /// Dolny odstęp treści — ostatni kafel nie może kończyć się na krawędzi.
     let bottomPadding: CGFloat
     /// Czy zmiany `selectedDate` spoza gestu też mają zjazd i wjazd strony.
@@ -185,8 +194,9 @@ struct DayPager<Content: View>: View {
     let content: (Date) -> Content
 
     init(
-        datesViewModel: DatesViewModel,
+        datesViewModel: DatesViewModel?,
         selectedDate: Binding<Date>,
+        range: ClosedRange<Date>? = nil,
         bottomPadding: CGFloat = SCPageMetrics.bottom,
         animatesSelectionChanges: Bool = false,
         scrolls: Bool = true,
@@ -197,6 +207,7 @@ struct DayPager<Content: View>: View {
     ) {
         self.datesViewModel = datesViewModel
         self._selectedDate = selectedDate
+        self.range = range
         self.bottomPadding = bottomPadding
         self.animatesSelectionChanges = animatesSelectionChanges
         self.scrolls = scrolls
@@ -379,15 +390,18 @@ struct DayPager<Content: View>: View {
 
                 guard !isPaging, wasHorizontal else { return }
                 let travel = value.predictedEndTranslation.width - baseline
+                let days = travel < 0 ? 1 : -1
 
-                guard abs(travel) >= Self.commitThreshold else {
+                // Za krawędzią zakresu („Dziś”: wczoraj · dziś · jutro) gest
+                // wraca tak samo jak niedociągnięty — nie ma dokąd przejść.
+                guard abs(travel) >= Self.commitThreshold, canStep(by: days) else {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
                         dragOffset = 0
                     }
                     return
                 }
 
-                step(by: travel < 0 ? 1 : -1)
+                step(by: days)
             }
     }
 
@@ -433,10 +447,27 @@ struct DayPager<Content: View>: View {
     private func step(by days: Int) {
         daySteps += 1
         transition(
-            to: datesViewModel.stepDay(from: selectedDate, by: days),
+            to: steppedDay(by: days),
             forward: days > 0,
             movesSelection: true
         )
+    }
+
+    /// Sąsiedni dzień. Z paskiem tygodnia przez `DatesViewModel`, bo
+    /// przekroczenie niedzieli przesuwa też pasek; bez paska — sam kalendarz.
+    private func steppedDay(by days: Int) -> Date {
+        if let datesViewModel {
+            return datesViewModel.stepDay(from: selectedDate, by: days)
+        }
+        return PlanWeek.calendar.date(byAdding: .day, value: days, to: selectedDate) ?? selectedDate
+    }
+
+    /// Czy dzień obok mieści się w zakresie pagera.
+    private func canStep(by days: Int) -> Bool {
+        guard let range else { return true }
+        let calendar = PlanWeek.calendar
+        guard let next = calendar.date(byAdding: .day, value: days, to: selectedDate) else { return false }
+        return range.contains(calendar.startOfDay(for: next))
     }
 
     /// Zjazd i wjazd — wspólne dla gestu i dla zmiany z zewnątrz.
