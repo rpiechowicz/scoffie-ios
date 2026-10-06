@@ -1,10 +1,8 @@
-import StoreKit
 import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.requestReview) private var requestReview
     /// Katalog — tylko do liczby „ukrywa N przepisów” przy alergenach.
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.scenePhase) private var scenePhase
@@ -839,11 +837,15 @@ struct SettingsView: View {
                     action: { showHelpSheet = true }
                 )
 
+                // Strona recenzji w App Store, nie `requestReview()`: systemowa
+                // prośba o ocenę ma limit (najwyżej 3 razy w roku) i po jego
+                // wyczerpaniu stuknięcie nie robiło NIC. Wiersz to jawna prośba
+                // użytkownika, więc dostaje pewną drogę.
                 EditorialSettingsRow(
                     icon: "heart.fill",
                     iconColor: SettingsAccent.coral,
                     title: "Oceń aplikację",
-                    action: { requestReview() }
+                    action: openWriteReview
                 )
 
                 // Jedno wejście do dokumentów i eksportu danych — polityka
@@ -2954,6 +2956,15 @@ struct SettingsView: View {
         if result == .allowed, previous != .allowed {
             sessionStore.rescheduleMealReminders()
         }
+    }
+
+    /// Formularz recenzji Scoffie w App Store. Id aplikacji z jednego miejsca
+    /// (`SCAppUpdateGate.defaultStoreURL`), z `?action=write-review`.
+    private func openWriteReview() {
+        var components = URLComponents(url: SCAppUpdateGate.defaultStoreURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "action", value: "write-review")]
+        guard let url = components?.url else { return }
+        openURL(url)
     }
 
     /// Po odmowie system nie zapyta drugi raz — zostają Ustawienia iOS,
