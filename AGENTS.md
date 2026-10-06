@@ -183,12 +183,17 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   znaków wszędzie (`SessionStore.householdNameLengthRange`). Dieta — KALORIE NA GÓRZE (Rafał), potem makro, cel, dieta,
   alergeny; listy celu i diety z kółkiem (dawny układ wygrał z menu), podpisy w jednej linii (kopie lokalne, `UserGoal`/
   `DietPreference` bez zmian — kreator); podpowiedź „Dla celu „…” wychodzi N kcal · Ustaw” w karcie kalorii.
-  Powiadomienia — główny przełącznik jako wiersz (bez zgody „Włącz powiadomienia” / „Wyłączone w ustawieniach iOS ·
+  Powiadomienia — na górze PODGLĄD powiadomienia (`NotificationPreviewCard`: znak, „SCOFFIE · teraz”, przykład kanału
+  w tonie `MealReminderService`; stuknięcie/włączenie kanału podmienia przykład i roluje tekst, wyciszone = szary podgląd
+  „Wyciszone”), główny przełącznik jako wiersz (bez zgody „Włącz powiadomienia” / „Wyłączone w ustawieniach iOS ·
   Otwórz”), kanały „Dla Ciebie” / „Od domowników”. Wygląd — dawne trzy karty z podglądem, po polsku (Automatycznie,
   Jasny, Ciemny; `AppTheme.system.title` = „Automatycznie”). Posiłki w planie — JEDNA karta: pionowa oś dnia (godzina
   18 pt, kółko pory na linii, pełna nazwa), wyłączone pory na swoim miejscu z „+ Dodaj”; godzina = `MealTimeEditorSheet`
-  na 1/3 z akcją „Wyłącz”/„Dodaj” obok krzyżyka; „Wyłącz” też przesunięciem (oś to `List` w karcie dla `swipeActions`);
-  pozioma oś (`MealDayTimesCard`) została TYLKO w kreatorze — w Ustawieniach była nieczytelna. Asystent i plan — karta
+  na 1/3 z akcją „Wyłącz”/„Dodaj” obok krzyżyka (bez `onDismiss` — „Wyłącz” bez dań działa od razu, z daniami alert po
+  0,45 s); „Wyłącz” też przesunięciem — cała treść to `List(.insetGrouped)`, która MUSI się przewijać (`scrollDisabled`
+  wyłącza też `swipeActions`; tak „Wyłącz” nie działało w #342); wyłączona pora z daniami stoi z „+ Dodaj” i dopiskiem
+  „W tym tygodniu: N dania”, nie jak włączona;
+  pozioma oś (`MealDayTimesCard`) została TYLKO w kreatorze — w Ustawieniach była nieczytelna. Asystent i plan — teksty rolują WYŁĄCZNIE `SCMotion.textRoll` (sprężyna z odbiciem przy wyborze planu odpadła); karta
   stanu na górze (`PlanStatusHero`: duża liczba pozostałych wiadomości, kropki w próbie, pasek po domownikach w planie),
   w próbie plany od razu w arkuszu (trzy kafle + „Wybierz X · cena”, zakup przez wspólne `PlanPurchase` z `PlansSheet`),
   płacący: „Zmień” → `PlansSheet` + „Zarządzaj subskrypcją ↗”; domownik: „Kto opłaca”. Prywatność — przypięty nagłówek,

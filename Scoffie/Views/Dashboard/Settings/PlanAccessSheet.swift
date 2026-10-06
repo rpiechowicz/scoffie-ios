@@ -75,7 +75,7 @@ struct PlanAccessSheet: View {
                 content
                     // Wczytany stan zastępuje spinner przenikaniem; potem
                     // animują się już tylko zmiany (liczby rolują).
-                    .animation(.smooth(duration: 0.3), value: usage)
+                    .animation(SCMotion.textRoll, value: usage)
             }
             .toolbar(.hidden, for: .navigationBar)
             // Plany i dokumenty to kolejne ekrany TEGO arkusza (push), nie
@@ -281,7 +281,9 @@ struct PlanAccessSheet: View {
 
     private func select(_ plan: SubscriptionPlan) {
         guard plan.id != selectedPlan.id else { return }
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+        // Ta sama krzywa co każdy rolujący tekst w aplikacji (`SCMotion.textRoll`)
+        // — sprężyna z odbiciem rozjeżdżała cyfry kafla, konkretów i przycisku.
+        withAnimation(SCMotion.textRoll) {
             pickedPlan = plan
             notice = nil
         }
@@ -686,8 +688,9 @@ struct PlanStatusHero: View {
         .background { heroSurface }
         .clipShape(Self.shape)
         .overlay(Self.shape.strokeBorder(accent.opacity(scheme == .dark ? 0.32 : 0.26), lineWidth: 1))
-        .animation(.smooth(duration: 0.4), value: messages)
-        .animation(.smooth(duration: 0.4), value: plans)
+        .animation(SCMotion.textRoll, value: messages)
+        .animation(SCMotion.textRoll, value: plans)
+        .animation(SCMotion.textRoll, value: note)
     }
 
     /// Strój kafla z delikatnym tintem stanu i poświatą z prawego górnego rogu.
@@ -718,13 +721,17 @@ struct PlanStatusHero: View {
                 .foregroundStyle(accent)
                 .contentTransition(.numericText(value: Double(left)))
                 .lineLimit(1)
+            // Każde słowo roluje się samo — przy „1 ↔ 2” zmienia się tylko
+            // końcówka, a nie cały blok naraz.
             VStack(alignment: .leading, spacing: 1) {
                 Text(Self.messagesNoun(left))
+                    .contentTransition(.numericText(value: Double(left)))
                 Text(Self.leftVerb(left))
+                    .contentTransition(.numericText(value: Double(left)))
             }
             .font(.sc(size: 15, weight: .bold))
             .foregroundStyle(Color.scLabel(scheme))
-            .contentTransition(.numericText())
+            .fixedSize()
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(left) \(Self.messagesNoun(left)) \(Self.leftVerb(left))")
@@ -1055,7 +1062,7 @@ struct PlanOfferFacts: View {
                 }
                 fact("person.2.fill") {
                     Text(Self.audience(plan))
-                        .contentTransition(.opacity)
+                        .contentTransition(.numericText())
                 }
                 fact("clock.arrow.circlepath") {
                     Text("Rozmowy i plany zostają, gdy pula się skończy")
@@ -1064,6 +1071,7 @@ struct PlanOfferFacts: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
         }
+        .animation(SCMotion.textRoll, value: plan.id)
     }
 
     private func fact<Content: View>(_ icon: String, @ViewBuilder label: () -> Content) -> some View {
@@ -1127,6 +1135,10 @@ struct PlanSolidButton: View {
                     .minimumScaleFactor(0.8)
                     .contentTransition(.numericText())
             }
+            // Tytuł roluje się także wtedy, gdy zmianę przyniosła nie
+            // animowana transakcja (ceny z App Store dochodzą po otwarciu).
+            .animation(SCMotion.textRoll, value: title)
+            .animation(SCMotion.textRoll, value: isBusy)
             .foregroundStyle(Color.scPageBase(scheme))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 15)

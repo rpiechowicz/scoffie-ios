@@ -57,6 +57,8 @@ struct SettingsView: View {
     /// arkusza (ktoś mógł ją zmienić w Ustawieniach iOS).
     @State private var notificationPermission: NotificationPermission?
     @State private var isRequestingNotifications = false
+    /// Kanał, którego przykład stoi na górze arkusza powiadomień.
+    @State private var notificationPreview: NotificationPreviewCard.Kind = .meals
     @State private var showAppearanceSheet = false
     @State private var showDietSheet = false
     /// Ekrany wpychane w arkusz „Dieta i alergeny” — wybór alergenów i „Twoje
@@ -857,6 +859,13 @@ struct SettingsView: View {
             }
         } content: {
             VStack(alignment: .leading, spacing: 18) {
+                // Podgląd zamiast opisu: tak przyjdzie wybrany kanał.
+                // Stuknięcie albo włączenie kanału niżej podmienia przykład.
+                NotificationPreviewCard(
+                    kind: notificationPreview,
+                    isActive: notificationChannelsActive && isPreviewChannelOn
+                )
+
                 EditorialSettingsCardGroup {
                     notificationsMasterRow
                 }
@@ -866,6 +875,7 @@ struct SettingsView: View {
                         channelToggleRow(
                             icon: "sun.horizon.fill",
                             accent: SCPalette.butter,
+                            kind: .morning,
                             title: "Poranny przegląd",
                             subtitle: "Posiłki i kalorie na dziś",
                             isOn: $morningBriefingEnabled,
@@ -875,6 +885,7 @@ struct SettingsView: View {
                         channelToggleRow(
                             icon: "clock.fill",
                             accent: SCPalette.sage,
+                            kind: .meals,
                             title: "Pory posiłków",
                             subtitle: "Kiedy zacząć gotować",
                             isOn: $mealRemindersEnabled,
@@ -884,6 +895,7 @@ struct SettingsView: View {
                         channelToggleRow(
                             icon: "moon.stars.fill",
                             accent: SCPalette.indigo,
+                            kind: .dayWrapUp,
                             title: "Podsumowanie dnia",
                             subtitle: "Wieczorem, przed jutrem",
                             isOn: $dayWrapUpEnabled,
@@ -895,6 +907,7 @@ struct SettingsView: View {
                         channelToggleRow(
                             icon: "calendar.badge.clock",
                             accent: SCPalette.terracotta,
+                            kind: .plan,
                             title: "Zmiany planu",
                             subtitle: "Gdy ktoś skończy zmieniać plan",
                             isOn: $planRemindersEnabled,
@@ -904,6 +917,7 @@ struct SettingsView: View {
                         channelToggleRow(
                             icon: "cart.fill",
                             accent: SCPalette.teal,
+                            kind: .shopping,
                             title: "Lista zakupów",
                             subtitle: "Gdy ktoś odhaczy zakupy",
                             isOn: $shoppingRemindersEnabled,
@@ -1030,6 +1044,7 @@ struct SettingsView: View {
     private func channelToggleRow(
         icon: String,
         accent: Color,
+        kind: NotificationPreviewCard.Kind,
         title: String,
         subtitle: String,
         isOn: Binding<Bool>,
@@ -1060,6 +1075,15 @@ struct SettingsView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(minHeight: 52)
+        // Stuknięcie w wiersz (poza przełącznikiem) pokazuje jego przykład
+        // na górze; włączenie kanału — też.
+        .contentShape(Rectangle())
+        .onTapGesture { notificationPreview = kind }
+        .onChange(of: isOn.wrappedValue) { _, isNowOn in
+            if isNowOn { notificationPreview = kind }
+        }
+        .background(accent.opacity(notificationPreview == kind ? (scheme == .dark ? 0.10 : 0.06) : 0))
+        .animation(.smooth(duration: 0.2), value: notificationPreview == kind)
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
@@ -1067,6 +1091,17 @@ struct SettingsView: View {
                     .frame(height: 1)
                     .padding(.leading, 12 + 30 + 12)
             }
+        }
+    }
+
+    /// Czy kanał z podglądu jest włączony — wyłączony pokazuje się wygaszony.
+    private var isPreviewChannelOn: Bool {
+        switch notificationPreview {
+        case .morning:   return morningBriefingEnabled
+        case .meals:     return mealRemindersEnabled
+        case .dayWrapUp: return dayWrapUpEnabled
+        case .plan:      return planRemindersEnabled
+        case .shopping:  return shoppingRemindersEnabled
         }
     }
 
