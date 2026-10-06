@@ -1292,7 +1292,7 @@ struct AssistantProposalFooter: View {
         switch status {
         case .pending where state.canApply:
             // Zapis w szałwii — kolorze „zapisane”, tym samym co zgoda
-            // na stronie „Wszystko pasuje?” (`ProposalAcceptButton`).
+            // w stopce przeglądu propozycji (`ProposalAcceptButton`).
             AssistantCardActions(
                 primary: AssistantCardAction(title: applyLabel, icon: applyIcon) { onApply(false) },
                 secondary: AssistantCardAction(title: reviseLabel, icon: reviseIcon, action: onRevise),

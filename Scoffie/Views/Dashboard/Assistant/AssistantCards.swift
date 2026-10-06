@@ -201,8 +201,7 @@ struct AssistantPlanWeekCard: View {
     @Environment(\.recipeCatalogStore) private var recipeCatalog
     @Environment(\.sessionStore) private var sessionStore
     @State private var selectedDayId: String?
-    @State private var presented: OptionsSheetPage?
-    @State private var showsChanges = false
+    @State private var reviewing: ProposalReviewFocus?
 
     private var members: [HouseholdMemberSnapshot] { sessionStore.householdMembers }
 
@@ -212,25 +211,10 @@ struct AssistantPlanWeekCard: View {
         return ProposalAudience.label(slot.participantIds, members: members, me: sessionStore.currentUserId)
     }
 
-    private var changes: ProposalChanges {
-        ProposalChanges(
-            days: card.days.map { (key: $0.id, label: Optional($0.dayLabel), slots: $0.slots) },
-            removed: card.removed,
-            image: { raw in
-                guard let raw, let id = UUID(uuidString: raw) else { return nil }
-                return recipeCatalog.recipes.first { $0.id == id }?.imageURL
-            }
-        )
-    }
-
-    /// Wszystkie dania tygodnia po kolei — strony arkusza przeglądu.
-    private var storyEntries: [(day: PlanWeekCardDayDTO, slot: PlanWeekCardSlotDTO)] {
-        card.days.flatMap { day in day.slots.map { (day: day, slot: $0) } }
-    }
-
+    /// Dotknięte danie otwiera przegląd od siebie.
     private func open(_ slot: PlanWeekCardSlotDTO, in day: PlanWeekCardDayDTO) {
-        let index = storyEntries.firstIndex { $0.day.id == day.id && $0.slot.id == slot.id } ?? 0
-        presented = OptionsSheetPage(id: index)
+        let index = day.slots.firstIndex(of: slot) ?? 0
+        reviewing = ProposalReviewFocus(focus: ProposalReview.rowID(dayKey: day.id, index: index, slot: slot))
     }
 
     private var status: AssistantCardStatus { AssistantCardStatus(card.state) }
@@ -288,21 +272,11 @@ struct AssistantPlanWeekCard: View {
                 }
             }
 
-            if !storyEntries.isEmpty {
-                OptionsBrowseRow(title: "Przeglądaj dania", subtitle: browseSubtitle) {
-                    presented = OptionsSheetPage(id: 0)
-                }
-            }
-
-            // „Zniknie z planu” jako lista pod spodem było nieczytelne
-            // (27.09.2026) — wiersz otwiera półarkusz „co na co”.
-            if !changes.days.isEmpty {
-                OptionsBrowseRow(
-                    title: "Co się zmieni",
-                    subtitle: changes.summary,
-                    icon: "arrow.left.arrow.right"
-                ) {
-                    showsChanges = true
+            // Lista dań z tym, co się zmieni w planie, w samych wierszach —
+            // dawny wiersz „Co się zmieni” i jego półarkusz odpadły (6.10.2026).
+            if !card.days.allSatisfy({ $0.slots.isEmpty }) || !card.removed.isEmpty {
+                OptionsBrowseRow(title: "Przeglądaj dania", subtitle: ProposalBrowseCopy.subtitle(card.state)) {
+                    reviewing = ProposalReviewFocus(focus: nil)
                 }
             }
 
@@ -319,45 +293,61 @@ struct AssistantPlanWeekCard: View {
                 onOpenPlan: onOpenPlan
             )
         }
-        .sheet(item: $presented) { page in
-            AssistantOptionsStorySheet(
-                slotDetail: card.eyebrowDetail,
-                options: storyEntries.map { ProposalStory.item($0.slot, day: $0.day) },
-                initialPage: page.id,
-                mode: ProposalStory.mode(state: card.state, applyLabel: applyLabel, canSwap: onAsk != nil),
-                catalog: recipeCatalog,
-                onChoose: { option in
-                    presented = nil
-                    onAsk?(option.prompt)
-                },
-                onCompose: {
-                    presented = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onCompose() }
-                },
-                // Arkusz zostaje otwarty: strona końcowa przechodzi
-                // w „Zapisuję…”, a potem w „Jest w planie”.
-                onApply: { onApply(false) },
-                contexts: storyEntries.map { ProposalStory.context($0.slot, date: $0.day.date) },
-                isBusy: isBusy,
-                onOpenPlan: onOpenPlan == nil ? nil : {
-                    presented = nil
-                    onOpenPlan?()
-                },
-                onRegenerate: onAsk == nil ? nil : {
-                    presented = nil
-                    onAsk?("Zaproponuj inny plan tego tygodnia — z innymi daniami.")
-                },
-                members: members,
-                me: sessionStore.currentUserId
-            )
-        }
-        .sheet(isPresented: $showsChanges) {
-            AssistantPlanChangesSheet(changes: changes, members: members, me: sessionStore.currentUserId)
+        .sheet(item: $reviewing) { target in
+            reviewSheet(focus: target.focus)
         }
     }
 
-    private var browseSubtitle: String {
-        card.state.isPending ? "Zdjęcia, opis i zamiana jednego dania" : "Zdjęcia, opis i wartości odżywcze"
+    /// Przegląd całego tygodnia — jedna lista, a nie strony dań.
+    private func reviewSheet(focus: String?) -> AssistantProposalReviewSheet {
+        var swap: ((String) -> Void)? = nil
+        if card.state.isPending, let onAsk {
+            swap = { prompt in
+                reviewing = nil
+                onAsk(prompt)
+            }
+        }
+        var openPlan: (() -> Void)? = nil
+        if let onOpenPlan {
+            openPlan = {
+                reviewing = nil
+                onOpenPlan()
+            }
+        }
+        var regenerate: (() -> Void)? = nil
+        if let onAsk {
+            regenerate = {
+                reviewing = nil
+                onAsk("Zaproponuj inny plan tego tygodnia — z innymi daniami.")
+            }
+        }
+        return AssistantProposalReviewSheet(
+            review: ProposalReview(week: card, image: { catalogImage($0) }),
+            status: status,
+            applyTitle: card.state.canApply && status != .applied ? applyLabel : nil,
+            isBusy: isBusy,
+            members: members,
+            me: sessionStore.currentUserId,
+            focus: focus,
+            onSwap: swap,
+            // Arkusz zostaje otwarty: stopka przechodzi w „Wstawiam do
+            // planu…”, a potem w „Jest w planie”.
+            onApply: { onApply(false) },
+            onOpenPlan: openPlan,
+            onRegenerate: regenerate,
+            onCompose: {
+                reviewing = nil
+                // Fokus dopiero po zjeździe arkusza — w trakcie przejścia
+                // klawiatura nie ma gdzie się pokazać.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onCompose() }
+            }
+        )
+    }
+
+    /// Zdjęcie usuwanego dania — z katalogu, po `recipeId`.
+    private func catalogImage(_ raw: String?) -> URL? {
+        guard let raw, let id = UUID(uuidString: raw) else { return nil }
+        return recipeCatalog.recipes.first { $0.id == id }?.imageURL
     }
 
     private var applyLabel: String {
@@ -383,8 +373,7 @@ struct AssistantPlanDayCard: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.recipeCatalogStore) private var recipeCatalog
     @Environment(\.sessionStore) private var sessionStore
-    @State private var presented: OptionsSheetPage?
-    @State private var showsChanges = false
+    @State private var reviewing: ProposalReviewFocus?
 
     private var status: AssistantCardStatus { AssistantCardStatus(card.state) }
     private var muted: Bool { status.tone == .muted }
@@ -398,17 +387,6 @@ struct AssistantPlanDayCard: View {
     private func audience(_ slot: PlanWeekCardSlotDTO) -> String? {
         guard !ProposalAudience.isShared(slot.participantIds, members: members) else { return nil }
         return ProposalAudience.label(slot.participantIds, members: members, me: sessionStore.currentUserId)
-    }
-
-    private var changes: ProposalChanges {
-        ProposalChanges(
-            days: [(key: card.date, label: String?.none, slots: card.slots)],
-            removed: card.removed,
-            image: { raw in
-                guard let raw, let id = UUID(uuidString: raw) else { return nil }
-                return recipeCatalog.recipes.first { $0.id == id }?.imageURL
-            }
-        )
     }
 
     var body: some View {
@@ -425,7 +403,9 @@ struct AssistantPlanDayCard: View {
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(Array(card.slots.enumerated()), id: \.element.id) { index, slot in
                     ProposalMealButton(slot: slot, muted: muted, audience: audience(slot)) { _ in
-                        presented = OptionsSheetPage(id: index)
+                        reviewing = ProposalReviewFocus(
+                            focus: ProposalReview.rowID(dayKey: card.date, index: index, slot: slot)
+                        )
                     }
                 }
             }
@@ -433,22 +413,11 @@ struct AssistantPlanDayCard: View {
             .padding(.top, 16)
             .padding(.bottom, 18)
 
-            if !card.slots.isEmpty {
-                OptionsBrowseRow(
-                    title: "Przeglądaj dania",
-                    subtitle: card.state.isPending ? "Zdjęcia, opis i zamiana jednego dania" : "Zdjęcia, opis i wartości odżywcze"
-                ) {
-                    presented = OptionsSheetPage(id: 0)
-                }
-            }
-
-            if !changes.days.isEmpty {
-                OptionsBrowseRow(
-                    title: "Co się zmieni",
-                    subtitle: changes.summary,
-                    icon: "arrow.left.arrow.right"
-                ) {
-                    showsChanges = true
+            // Lista dań z tym, co się zmieni w planie, w samych wierszach —
+            // dawny wiersz „Co się zmieni” i jego półarkusz odpadły (6.10.2026).
+            if !card.slots.isEmpty || !card.removed.isEmpty {
+                OptionsBrowseRow(title: "Przeglądaj dania", subtitle: ProposalBrowseCopy.subtitle(card.state)) {
+                    reviewing = ProposalReviewFocus(focus: nil)
                 }
             }
 
@@ -465,43 +434,64 @@ struct AssistantPlanDayCard: View {
                 onOpenPlan: onOpenPlan
             )
         }
-        .sheet(item: $presented) { page in
-            AssistantOptionsStorySheet(
-                slotDetail: card.eyebrowDetail,
-                options: card.slots.map { ProposalStory.item($0, day: nil) },
-                initialPage: page.id,
-                mode: ProposalStory.mode(state: card.state, applyLabel: applyLabel, canSwap: onAsk != nil),
-                catalog: recipeCatalog,
-                onChoose: { option in
-                    presented = nil
-                    onAsk?(option.prompt)
-                },
-                onCompose: {
-                    presented = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onCompose() }
-                },
-                // Arkusz zostaje otwarty: strona końcowa przechodzi
-                // w „Zapisuję…”, a potem w „Jest w planie”.
-                onApply: { onApply(false) },
-                contexts: card.slots.map { ProposalStory.context($0, date: card.date) },
-                isBusy: isBusy,
-                onOpenPlan: onOpenPlan == nil ? nil : {
-                    presented = nil
-                    onOpenPlan?()
-                },
-                onRegenerate: onAsk == nil ? nil : {
-                    presented = nil
-                    onAsk?(card.slots.count == 1
-                        ? "Zaproponuj inne danie zamiast tego."
-                        : "Zaproponuj inny zestaw dań na ten dzień.")
-                },
-                members: members,
-                me: sessionStore.currentUserId
-            )
+        .sheet(item: $reviewing) { target in
+            reviewSheet(focus: target.focus)
         }
-        .sheet(isPresented: $showsChanges) {
-            AssistantPlanChangesSheet(changes: changes, members: members, me: sessionStore.currentUserId)
+    }
+
+    /// Przegląd dnia — jedna lista, a nie strony dań.
+    private func reviewSheet(focus: String?) -> AssistantProposalReviewSheet {
+        var swap: ((String) -> Void)? = nil
+        if card.state.isPending, let onAsk {
+            swap = { prompt in
+                reviewing = nil
+                onAsk(prompt)
+            }
         }
+        var openPlan: (() -> Void)? = nil
+        if let onOpenPlan {
+            openPlan = {
+                reviewing = nil
+                onOpenPlan()
+            }
+        }
+        var regenerate: (() -> Void)? = nil
+        if let onAsk {
+            let prompt = card.slots.count == 1
+                ? "Zaproponuj inne danie zamiast tego."
+                : "Zaproponuj inny zestaw dań na ten dzień."
+            regenerate = {
+                reviewing = nil
+                onAsk(prompt)
+            }
+        }
+        return AssistantProposalReviewSheet(
+            review: ProposalReview(day: card, image: { catalogImage($0) }),
+            status: status,
+            applyTitle: card.state.canApply && status != .applied ? applyLabel : nil,
+            isBusy: isBusy,
+            members: members,
+            me: sessionStore.currentUserId,
+            focus: focus,
+            onSwap: swap,
+            // Arkusz zostaje otwarty: stopka przechodzi w „Wstawiam do
+            // planu…”, a potem w „Jest w planie”.
+            onApply: { onApply(false) },
+            onOpenPlan: openPlan,
+            onRegenerate: regenerate,
+            onCompose: {
+                reviewing = nil
+                // Fokus dopiero po zjeździe arkusza — w trakcie przejścia
+                // klawiatura nie ma gdzie się pokazać.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onCompose() }
+            }
+        )
+    }
+
+    /// Zdjęcie usuwanego dania — z katalogu, po `recipeId`.
+    private func catalogImage(_ raw: String?) -> URL? {
+        guard let raw, let id = UUID(uuidString: raw) else { return nil }
+        return recipeCatalog.recipes.first { $0.id == id }?.imageURL
     }
 }
 
@@ -513,9 +503,8 @@ struct AssistantPlanDayCard: View {
 
 // MARK: - Przegląd dań propozycji
 
-/// Danie propozycji jako przycisk: dotknięcie otwiera je w arkuszu wyboru
-/// posiłku — tym samym, w którym wybiera się kolację z kilku (zdjęcie,
-/// opis, makro), tylko w trybie przeglądu.
+/// Danie propozycji jako przycisk: dotknięcie otwiera przegląd propozycji
+/// (`AssistantProposalReviewSheet`) od tego dania.
 private struct ProposalMealButton: View {
     let slot: PlanWeekCardSlotDTO
     var muted: Bool = false
@@ -537,110 +526,18 @@ private struct ProposalMealButton: View {
                 row.contentShape(Rectangle())
             }
             .buttonStyle(PlanPressStyle(scale: 0.985))
-            .accessibilityHint("Otwiera zdjęcie, opis i wartości odżywcze")
+            .accessibilityHint("Otwiera listę dań propozycji")
         } else {
             row
         }
     }
 }
 
-/// Dania propozycji dnia albo tygodnia jako strony arkusza wyboru posiłku.
-private enum ProposalStory {
-    /// Tag przy nazwie mówi porę (i dzień w tygodniu), a zdanie pod
-    /// przyciskiem „Zamień to danie” prosi o dania DO WYBORU — serwer
-    /// odpowiada kartą OPTIONS, więc zamiana też dzieje się w arkuszu.
-    static func item(_ slot: PlanWeekCardSlotDTO, day: PlanWeekCardDayDTO?) -> OptionsCardItemDTO {
-        let when = day.map { "\(slot.mealLabel.lowercased()), \($0.dayLabel.lowercased())" } ?? slot.mealLabel.lowercased()
-        return OptionsCardItemDTO(
-            recipeId: slot.recipeId,
-            title: slot.title,
-            kcalPerServing: slot.kcalPerServing,
-            prepTimeMinutes: slot.prepTimeMinutes,
-            imageUrl: slot.imageUrl,
-            description: nil,
-            proteinGrams: nil,
-            carbsGrams: nil,
-            fatGrams: nil,
-            ingredientCount: nil,
-            tag: day.map { "\(slot.mealLabel) · \($0.shortName)" } ?? slot.mealLabel,
-            prompt: "Zamień w tej propozycji \(when): \(slot.title). Pokaż 3 inne dania na tę porę do wyboru."
-        )
-    }
-
-    /// Zamiana tylko, dopóki propozycja czeka; zapis — dopóki serwer mówi,
-    /// że się da (także po cofnięciu). Stan jedzie razem z trybem, więc
-    /// otwarty arkusz przechodzi w „Zapisane” w chwili, gdy zapis się uda.
-    static func mode(state: AgentCardStateDTO, applyLabel: String, canSwap: Bool) -> OptionsStoryMode {
-        let status = AssistantCardStatus(state)
-        return .review(
-            swapTitle: state.isPending && canSwap ? "Zamień to danie" : nil,
-            applyTitle: state.canApply && status != .applied ? applyLabel : nil,
-            status: status
-        )
-    }
-
-    /// Kiedy i na jaką porę — nad nazwą dania w arkuszu przeglądu.
-    static func context(_ slot: PlanWeekCardSlotDTO, date: String) -> ProposalStoryContext {
-        ProposalStoryContext(
-            slot: MealSlot(backendMealType: slot.mealType),
-            mealLabel: slot.mealLabel,
-            day: ProposalStoryContext.dayLabel(date),
-            participantIds: slot.participantIds
-        )
-    }
-}
-
-/// Pora i dzień jednego dania propozycji: „Śniadanie” + „Dziś, 23 września”.
-/// Wcześniej arkusz mówił to małym drukiem w eyebrow („PROPOZYCJA ·
-/// WTOREK, 1 WRZEŚNIA”) — nie było widać, że to dzisiejsze śniadanie.
-struct ProposalStoryContext: Equatable {
-    let slot: MealSlot?
-    let mealLabel: String
-    /// „Dziś, 23 września”, „Jutro, 24 września”, „Piątek, 26 września”;
-    /// `nil`, gdy daty nie dało się odczytać.
-    let day: String?
-    /// Kto je to danie — puste = cały dom (`ProposalAudience`).
-    var participantIds: [String] = []
-
-    private static let isoDay: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-
-    private static let dayMonth: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "pl_PL")
-        formatter.dateFormat = "d MMMM"
-        return formatter
-    }()
-
-    private static let weekday: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "pl_PL")
-        formatter.dateFormat = "EEEE"
-        return formatter
-    }()
-
-    /// Dzień względem DZISIAJ na telefonie — serwer stoi w UTC i „dziś”
-    /// wie tylko telefon.
-    static func dayLabel(_ iso: String, now: Date = Date(), calendar: Calendar = .current) -> String? {
-        guard let date = isoDay.date(from: String(iso.prefix(10))) else { return nil }
-        let lead: String
-        if calendar.isDate(date, inSameDayAs: now) {
-            lead = "Dziś"
-        } else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(date, inSameDayAs: tomorrow) {
-            lead = "Jutro"
-        } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) {
-            lead = "Wczoraj"
-        } else {
-            let name = weekday.string(from: date)
-            lead = name.prefix(1).uppercased() + name.dropFirst()
-        }
-        return "\(lead), \(dayMonth.string(from: date))"
+/// Podtytuł wiersza „Przeglądaj dania” w kartach propozycji — mówi, co jest
+/// w liście: dania, zmiany w planie i (póki propozycja czeka) zamiana dania.
+private enum ProposalBrowseCopy {
+    static func subtitle(_ state: AgentCardStateDTO) -> String {
+        state.isPending ? "Zmiany w planie i zamiana dania" : "Wszystkie dania i zmiany w planie"
     }
 }
 
@@ -1133,7 +1030,8 @@ struct AssistantOptionsCard: View {
                 slotDetail: slotDetail,
                 options: card.options,
                 initialPage: page.id,
-                mode: .choose(insertTitle: OptionsCopy.insertTitle(card.eyebrow), morePrompt: morePrompt),
+                insertTitle: OptionsCopy.insertTitle(card.eyebrow),
+                morePrompt: morePrompt,
                 // Jawnie, nie przez środowisko: arkusz ma czytać TEN katalog,
                 // który ma ekran, a nie pusty domyślny.
                 catalog: recipeCatalog,
@@ -1204,24 +1102,12 @@ private struct OptionsSheetPage: Identifiable {
     let id: Int
 }
 
-/// Co arkusz robi z daniem.
-private enum OptionsStoryMode {
-    /// Wybór jednego z kilku dań (karta OPTIONS): „Wstaw na środę”,
-    /// na końcu „Pokaż 3 kolejne”.
-    case choose(insertTitle: String, morePrompt: String?)
-    /// Przegląd dań propozycji dnia albo tygodnia: „Zamień to danie”,
-    /// na końcu „Zapisz w planie”. `nil` = tej akcji nie ma. `status` =
-    /// stan propozycji z serwera — mówi, co pokazuje strona końcowa.
-    case review(swapTitle: String?, applyTitle: String?, status: AssistantCardStatus)
-}
-
 /// `LRow` na tle `wash`: kafelek 36 ze znakiem, tytuł w terakocie, chevron —
-/// wejście do arkusza wyboru posiłku z karty dań do wyboru i z propozycji.
+/// wejście do arkusza wyboru posiłku z karty dań do wyboru i do przeglądu
+/// propozycji dnia albo tygodnia.
 private struct OptionsBrowseRow: View {
     let title: String
     let subtitle: String
-    /// Glif zamiast znaku Asystenta w kafelku („Co się zmieni”).
-    var icon: String? = nil
     let action: () -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -1232,13 +1118,7 @@ private struct OptionsBrowseRow: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
                         .fill(AssistantLook.terraTint(scheme))
-                    if let icon {
-                        Image(systemName: icon)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AssistantLook.terra(scheme))
-                    } else {
-                        OptionsKesMark(size: 17, color: AssistantLook.terraFill(scheme))
-                    }
+                    OptionsKesMark(size: 17, color: AssistantLook.terraFill(scheme))
                 }
                 .frame(width: 36, height: 36)
                 .accessibilityHidden(true)
@@ -1405,26 +1285,14 @@ private struct OptionsDishFacts: Equatable {
 private struct AssistantOptionsStorySheet: View {
     let slotDetail: String?
     let options: [OptionsCardItemDTO]
-    let mode: OptionsStoryMode
+    /// Przycisk pod daniem: „Wstaw na środę”.
+    let insertTitle: String
+    /// „Pokaż 3 kolejne” na stronie końcowej; `nil` = tej akcji nie ma.
+    let morePrompt: String?
     let catalog: RecipeCatalogStore
     let onChoose: (OptionsCardItemDTO) -> Void
     let onMore: (String) -> Void
     let onCompose: () -> Void
-    /// „Zapisz w planie” ze strony końcowej przeglądu propozycji.
-    var onApply: (() -> Void)? = nil
-    /// Pora i dzień każdego dania — tylko w przeglądzie propozycji.
-    var contexts: [ProposalStoryContext] = []
-    /// Zapis w toku — arkusz zostaje otwarty i sam przechodzi w „Zapisane”.
-    var isBusy: Bool = false
-    /// „Otwórz plan” po zapisie.
-    var onOpenPlan: (() -> Void)? = nil
-    /// „Zaproponuj inne dania” pod listą strony końcowej przeglądu — nowy
-    /// zestaw zamiast tego; `nil` = odnośnika nie ma.
-    var onRegenerate: (() -> Void)? = nil
-    /// Domownicy i „ja” — „dla kogo” przy daniach i filtr osób na stronie
-    /// końcowej. Jawnie, nie przez środowisko (jak `catalog`).
-    var members: [HouseholdMemberSnapshot] = []
-    var me: String? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -1448,46 +1316,26 @@ private struct AssistantOptionsStorySheet: View {
     /// Zwykły stan, nie `@GestureState`: gest przewracania stron jest
     /// UIKit-owy (`OptionsPagePan`), więc powrót do zera robimy sami.
     @State private var dragX: CGFloat = 0
-    /// Przegląd propozycji dla kilku osób: czyje dania przeglądamy (`nil` =
-    /// wszyscy) — przełącznik nad „Zamień to danie” (runda 11, Rafał: „tab
-    /// switcher nad albo obok buttonu, żeby można było przełączać między
-    /// osobami”). Zawęża strony, kreski i przewijanie.
-    @State private var person: String?
-    /// Filtr pory i dnia z nagłówka (runda 12) — `nil` = wszystkie.
-    @State private var mealFilter: MealSlot?
-    @State private var dayFilter: String?
 
     init(
         slotDetail: String?,
         options: [OptionsCardItemDTO],
         initialPage: Int,
-        mode: OptionsStoryMode,
+        insertTitle: String,
+        morePrompt: String?,
         catalog: RecipeCatalogStore,
         onChoose: @escaping (OptionsCardItemDTO) -> Void,
         onMore: @escaping (String) -> Void = { _ in },
-        onCompose: @escaping () -> Void,
-        onApply: (() -> Void)? = nil,
-        contexts: [ProposalStoryContext] = [],
-        isBusy: Bool = false,
-        onOpenPlan: (() -> Void)? = nil,
-        onRegenerate: (() -> Void)? = nil,
-        members: [HouseholdMemberSnapshot] = [],
-        me: String? = nil
+        onCompose: @escaping () -> Void
     ) {
         self.slotDetail = slotDetail
         self.options = options
-        self.mode = mode
+        self.insertTitle = insertTitle
+        self.morePrompt = morePrompt
         self.catalog = catalog
         self.onChoose = onChoose
         self.onMore = onMore
         self.onCompose = onCompose
-        self.onApply = onApply
-        self.contexts = contexts
-        self.isBusy = isBusy
-        self.onOpenPlan = onOpenPlan
-        self.onRegenerate = onRegenerate
-        self.members = members
-        self.me = me
         let start = min(max(initialPage, 0), options.count)
         let startDish = min(start, max(options.count - 1, 0))
         _page = State(initialValue: start)
@@ -1497,136 +1345,6 @@ private struct AssistantOptionsStorySheet: View {
 
     private var endPage: Int { options.count }
     private var isEnd: Bool { page == endPage }
-
-    /// Dania osoby z przełącznika (albo wszystkie) — tylko po nich chodzą
-    /// strony i kreski. Strona końcowa zostaje zawsze.
-    private var visibleDishes: [Int] {
-        // Filtr zapisany przed zmianą danych może już nic nie łapać — wtedy
-        // wszystkie dania, zamiast ślepego zaułka na stronie końcowej.
-        let filtered = dishes(person: person, meal: mealFilter, day: dayFilter)
-        return filtered.isEmpty ? Array(options.indices) : filtered
-    }
-
-    /// Dania pasujące do osoby, pory i dnia (`nil` = bez tego filtra). Dania
-    /// „całego domu” (także z id byłych domowników) są każdej osoby.
-    private func dishes(person: String?, meal: MealSlot?, day: String?) -> [Int] {
-        options.indices.filter { index in
-            let ctx = context(index)
-            let ids = ctx?.participantIds ?? []
-            if person != nil,
-               !ProposalAudience.isShared(ids, members: members),
-               !ProposalAudience.eats(ids, person: person) { return false }
-            if let meal, ctx?.slot != meal { return false }
-            if let day, Self.dayName(ctx) != day { return false }
-            return true
-        }
-    }
-
-    private func count(person: String?, meal: MealSlot?, day: String?) -> Int {
-        dishes(person: person, meal: meal, day: day).count
-    }
-
-    /// „Środa” z „Środa, 30 września” — klucz filtra dnia.
-    private static func dayName(_ ctx: ProposalStoryContext?) -> String? {
-        ctx?.day?.components(separatedBy: ",").first
-    }
-
-    /// Pory propozycji w porządku dnia.
-    private var availableMeals: [MealSlot] {
-        Array(Set(contexts.compactMap(\.slot))).sorted()
-    }
-
-    /// Dni propozycji w kolejności stron.
-    private var availableDays: [String] {
-        var seen: [String] = []
-        for ctx in contexts {
-            if let day = Self.dayName(ctx), !seen.contains(day) { seen.append(day) }
-        }
-        return seen
-    }
-
-    private var hasFilters: Bool { !isEnd && (availableMeals.count > 1 || availableDays.count > 1) }
-    private var isFiltered: Bool { mealFilter != nil || dayFilter != nil }
-
-    /// Przełącznik osób — przegląd propozycji w domu z kilku osób (także
-    /// gdy dania są wspólne: widać, że każdy je to samo).
-    private var showsPersonSwitcher: Bool {
-        isReview && members.count > 1
-    }
-
-    /// Jedna droga zmiany filtrów (osoba z dołu, pora i dzień z nagłówka).
-    /// Wybór, po którym nie zostałoby żadne danie, nie przechodzi. Gdy
-    /// bieżące danie wypada z filtra — skok na pierwsze pasujące, płynnie.
-    private func applyFilters(
-        person newPerson: String?? = nil,
-        meal newMeal: MealSlot?? = nil,
-        day newDay: String?? = nil
-    ) {
-        let nextPerson = newPerson ?? person
-        let nextMeal = newMeal ?? mealFilter
-        let nextDay = newDay ?? dayFilter
-        let visible = dishes(person: nextPerson, meal: nextMeal, day: nextDay)
-        guard let first = visible.first else { return }
-        withAnimation(motion(.smooth(duration: 0.35))) {
-            person = nextPerson
-            mealFilter = nextMeal
-            dayFilter = nextDay
-        }
-        guard !isEnd, !visible.contains(page) else { return }
-        go(to: visible.first { $0 > page } ?? visible.last ?? first)
-    }
-
-    /// Sąsiednia strona w kolejności widocznych dań (+ strona końcowa).
-    private func neighbor(_ delta: Int) -> Int {
-        let order = visibleDishes + [endPage]
-        guard let at = order.firstIndex(of: page) else {
-            return delta > 0 ? (order.first { $0 > page } ?? endPage) : (order.last { $0 < page } ?? page)
-        }
-        return order[min(max(at + delta, 0), order.count - 1)]
-    }
-
-
-    /// Przycisk pod daniem: „Wstaw na środę” przy wyborze, „Zamień to danie”
-    /// przy przeglądzie propozycji; `nil` = sam podgląd (propozycja już
-    /// zapisana albo nieaktualna).
-    private var dishActionTitle: String? {
-        switch mode {
-        case let .choose(insertTitle, _): return insertTitle
-        case let .review(swapTitle, _, _): return swapTitle
-        }
-    }
-
-    private var dishActionIcon: String {
-        switch mode {
-        case .choose: return "arrow.right"
-        case .review: return "arrow.triangle.2.circlepath"
-        }
-    }
-
-    private var morePrompt: String? {
-        if case let .choose(_, morePrompt) = mode { return morePrompt }
-        return nil
-    }
-
-    private var isReview: Bool {
-        if case .review = mode { return true }
-        return false
-    }
-
-    private var applyTitle: String? {
-        if case let .review(_, applyTitle, _) = mode { return applyTitle }
-        return nil
-    }
-
-    /// Stan propozycji w przeglądzie; `nil` przy wyborze z kilku dań.
-    private var reviewStatus: AssistantCardStatus? {
-        if case let .review(_, _, status) = mode { return status }
-        return nil
-    }
-
-    private func context(_ index: Int) -> ProposalStoryContext? {
-        contexts.indices.contains(index) ? contexts[index] : nil
-    }
 
     /// Chrom (uchwyt, nagłówek, segmenty) jest biały tylko na zdjęciu.
     private var chromeOnPhoto: Bool {
@@ -1768,12 +1486,7 @@ private struct AssistantOptionsStorySheet: View {
     // MARK: Chrom
 
     /// Uchwyt `top: 8`, nagłówek `top: 20; height: 40`, segmenty `top: 70`.
-    ///
-    /// Przegląd propozycji (runda 12, Rafał): BEZ „Asystent” — z lewej
-    /// „Obiad · Środa” pełnymi słowami (ikona i kolor pory), stuknięcie
-    /// otwiera wybór pory i dnia; obok krzyżyka przycisk filtra z tym samym
-    /// wyborem (podświetlony, gdy filtr działa). Wybór z kilku dań zostaje
-    /// z wyśrodkowanym „Asystent”.
+    /// Wyśrodkowane „Asystent” ze znakiem, krzyżyk z prawej.
     private var chrome: some View {
         let light = chromeOnPhoto
         return VStack(spacing: 0) {
@@ -1783,37 +1496,21 @@ private struct AssistantOptionsStorySheet: View {
                 .padding(.top, 8)
                 .accessibilityHidden(true)
 
-            Group {
-                if isReview {
-                    HStack(spacing: 8) {
-                        reviewTitle(light: light)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        if hasFilters {
-                            filterMenu {
-                                filterButtonLabel(light: light)
-                            }
-                            .accessibilityLabel(isFiltered ? "Filtr dań, włączony" : "Filtr dań")
-                        }
-                        closeButton(light: light)
-                    }
-                } else {
-                    ZStack {
-                        HStack(spacing: 7) {
-                            OptionsKesMark(size: 15, color: light ? Color.white : AssistantLook.terraFill(scheme))
-                                .accessibilityHidden(true)
-                            Text("Asystent")
-                                .font(.system(size: 17, weight: .semibold))
-                                .tracking(-0.4)
-                                .foregroundStyle(light ? Color.white : AssistantLook.ink(scheme))
-                        }
-                        .shadow(color: .black.opacity(light ? 0.35 : 0), radius: 1, y: 1)
-                        .accessibilityAddTraits(.isHeader)
+            ZStack {
+                HStack(spacing: 7) {
+                    OptionsKesMark(size: 15, color: light ? Color.white : AssistantLook.terraFill(scheme))
+                        .accessibilityHidden(true)
+                    Text("Asystent")
+                        .font(.system(size: 17, weight: .semibold))
+                        .tracking(-0.4)
+                        .foregroundStyle(light ? Color.white : AssistantLook.ink(scheme))
+                }
+                .shadow(color: .black.opacity(light ? 0.35 : 0), radius: 1, y: 1)
+                .accessibilityAddTraits(.isHeader)
 
-                        HStack {
-                            Spacer()
-                            closeButton(light: light)
-                        }
-                    }
+                HStack {
+                    Spacer()
+                    closeButton(light: light)
                 }
             }
             .frame(height: 40)
@@ -1844,117 +1541,6 @@ private struct AssistantOptionsStorySheet: View {
         .accessibilityLabel("Zamknij")
     }
 
-    /// „Obiad · Środa” bieżącego dania, z lewej, pełnymi słowami; na stronie
-    /// końcowej „Cały zestaw”. Z filtrami — stuknięcie otwiera wybór.
-    @ViewBuilder
-    private func reviewTitle(light: Bool) -> some View {
-        let when = isEnd ? nil : context(dish)
-        let text = when.map { ctx in
-            let meal = ctx.slot?.title ?? ctx.mealLabel
-            guard let day = ctx.day?.components(separatedBy: ",").first else { return meal }
-            return "\(meal) · \(day)"
-        } ?? "Cały zestaw"
-        let label = HStack(spacing: 7) {
-            if let slot = when?.slot {
-                Image(systemName: slot.icon)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(light ? Color.white : slot.cozyAccent)
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            Text(text)
-                .font(.system(size: 17, weight: .semibold))
-                .tracking(-0.4)
-                .foregroundStyle(light ? Color.white : AssistantLook.ink(scheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                // Zmiana dania roluje słowa, jak nazwy dań w arkuszu.
-                .contentTransition(.numericText())
-            if hasFilters {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(light ? Color.white.opacity(0.85) : AssistantLook.faint(scheme))
-            }
-        }
-        .shadow(color: .black.opacity(light ? 0.35 : 0), radius: 1, y: 1)
-        .animation(motion(SCMotion.textRoll), value: text)
-        .accessibilityAddTraits(.isHeader)
-
-        if hasFilters {
-            filterMenu { label.contentShape(Rectangle()) }
-                .accessibilityHint("Wybierz porę albo dzień")
-        } else {
-            label
-        }
-    }
-
-    private func filterButtonLabel(light: Bool) -> some View {
-        let on = isFiltered
-        return Image(systemName: "line.3.horizontal.decrease")
-            .font(.system(size: 13, weight: .bold))
-            .foregroundStyle(on ? AssistantLook.terra(scheme) : (light ? AssistantLook.ink(.light) : AssistantLook.ink(scheme)))
-            .frame(width: 34, height: 34)
-            // Szkło jak krzyżyk obok; filtr działa = szkło w tincie terakoty.
-            .scChromeGlass(
-                in: Circle(),
-                tint: on ? AssistantLook.terra(scheme).opacity(scheme == .dark ? 0.3 : 0.22) : nil
-            )
-            .contentShape(Circle().inset(by: -5))
-            .animation(motion(.smooth(duration: 0.25)), value: on)
-    }
-
-    /// Wybór pory i dnia — systemowe menu z sekcjami; opcje, które przy
-    /// pozostałych filtrach nic by nie pokazały, są wyłączone.
-    private func filterMenu<MenuLabel: View>(@ViewBuilder label: () -> MenuLabel) -> some View {
-        Menu {
-            if availableMeals.count > 1 {
-                Section("Pora") {
-                    filterItem("Wszystkie pory", isOn: mealFilter == nil, enabled: true) {
-                        applyFilters(meal: .some(nil))
-                    }
-                    ForEach(availableMeals, id: \.self) { slot in
-                        filterItem(
-                            slot.title,
-                            isOn: mealFilter == slot,
-                            enabled: count(person: person, meal: slot, day: dayFilter) > 0
-                        ) {
-                            applyFilters(meal: .some(slot))
-                        }
-                    }
-                }
-            }
-            if availableDays.count > 1 {
-                Section("Dzień") {
-                    filterItem("Wszystkie dni", isOn: dayFilter == nil, enabled: true) {
-                        applyFilters(day: .some(nil))
-                    }
-                    ForEach(availableDays, id: \.self) { day in
-                        filterItem(
-                            day,
-                            isOn: dayFilter == day,
-                            enabled: count(person: person, meal: mealFilter, day: day) > 0
-                        ) {
-                            applyFilters(day: .some(day))
-                        }
-                    }
-                }
-            }
-        } label: {
-            label()
-        }
-        .menuOrder(.fixed)
-    }
-
-    private func filterItem(_ title: String, isOn: Bool, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            if isOn {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
-        }
-        .disabled(!enabled)
-    }
-
     /// `gap: 5; height: 3; radius: 2`. Na zdjęciu biel (aktywny 1, reszta
     /// 0,45, kreski 0,6); na stronie końcowej szarość 0,16 i pełna terakota.
     /// Aktywny segment to JEDEN kształt, który przesuwa się między slotami.
@@ -1962,42 +1548,23 @@ private struct AssistantOptionsStorySheet: View {
         let light = chromeOnPhoto
         let on = light ? Color.white : AssistantLook.terra(scheme)
         let off = light ? Color.white.opacity(0.45) : AssistantLook.ink(scheme).opacity(0.16)
-        let visible = visibleDishes
-        return HStack(spacing: 0) {
-            ForEach(visible, id: \.self) { index in
-                segmentButton(index, label: "Danie \((visible.firstIndex(of: index) ?? 0) + 1) z \(visible.count)") {
+        return HStack(spacing: 5) {
+            ForEach(options.indices, id: \.self) { index in
+                segmentButton(index, label: "Danie \(index + 1) z \(options.count)") {
                     RoundedRectangle(cornerRadius: 2, style: .continuous).fill(off)
                 } active: {
                     RoundedRectangle(cornerRadius: 2, style: .continuous).fill(on)
                 }
-                // Tydzień: kreski dań jednego dnia blisko siebie, większa
-                // przerwa między dniami — widać, gdzie kończy się dzień.
-                .padding(.leading, index == visible.first ? 0 : (startsNewDay(index) ? 9 : (groupsByDay ? 3 : 5)))
             }
             // „Coś innego” to nie kolejne danie, tylko wyjście — krótka pełna
             // pigułka zamiast kolejnego pełnego segmentu (i zamiast dawnych
             // kresek). Aktywny wskaźnik zwęża się do niej tym samym ruchem.
-            // W przeglądzie koniec to zgoda na całość — szałwia, kolor zapisu.
-            segmentButton(endPage, label: isReview ? "Cały zestaw" : "Coś innego", width: Self.endSegmentWidth) {
+            segmentButton(endPage, label: "Coś innego", width: Self.endSegmentWidth) {
                 Capsule(style: .continuous).fill(off)
             } active: {
-                Capsule(style: .continuous).fill(isReview ? AssistantLook.sage(scheme) : AssistantLook.terra(scheme))
+                Capsule(style: .continuous).fill(AssistantLook.terra(scheme))
             }
-            .padding(.leading, visible.isEmpty ? 0 : 5)
         }
-        .animation(motion(.smooth(duration: 0.3)), value: visibleDishes)
-    }
-
-    /// Przegląd kilku dni — kreski grupują się po dniu.
-    private var groupsByDay: Bool {
-        isReview && Set(visibleDishes.compactMap { context($0)?.day }).count > 1
-    }
-
-    /// Nowy dzień względem POPRZEDNIEGO WIDOCZNEGO dania.
-    private func startsNewDay(_ index: Int) -> Bool {
-        let visible = visibleDishes
-        guard groupsByDay, let at = visible.firstIndex(of: index), at > 0 else { return false }
-        return context(index)?.day != context(visible[at - 1])?.day
     }
 
     /// Segment jest też skokiem na stronę — pole dotyku wyższe niż sama kreska,
@@ -2042,38 +1609,17 @@ private struct AssistantOptionsStorySheet: View {
 
             VStack(spacing: 0) {
                 info(allFacts)
-                if dishActionTitle != nil || showsPersonSwitcher {
-                    // Osoba i akcja w JEDNEJ linii (runda 12): krążki osób
-                    // z lewej, „Zamień to danie” na resztę szerokości.
-                    entrance(
-                        5,
-                        HStack(spacing: 10) {
-                            if showsPersonSwitcher {
-                                ProposalPersonSwitcher(
-                                    members: members,
-                                    me: me,
-                                    selection: person,
-                                    isAvailable: { count(person: $0, meal: mealFilter, day: dayFilter) > 0 },
-                                    onSelect: { applyFilters(person: .some($0)) }
-                                )
-                            }
-                            if let dishActionTitle {
-                                AssistantPrimaryButton(
-                                    action: AssistantCardAction(title: dishActionTitle, icon: dishActionIcon) {
-                                        if options.indices.contains(dish) { onChoose(options[dish]) }
-                                    }
-                                )
-                            } else {
-                                Spacer(minLength: 0)
-                            }
+                entrance(
+                    5,
+                    AssistantPrimaryButton(
+                        action: AssistantCardAction(title: insertTitle, icon: "arrow.right") {
+                            if options.indices.contains(dish) { onChoose(options[dish]) }
                         }
                     )
-                    .padding(.horizontal, 16)
-                    .padding(.top, 24)
-                    .padding(.bottom, 6)
-                } else {
-                    Color.clear.frame(height: 30)
-                }
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 24)
+                .padding(.bottom, 6)
             }
         }
         .ignoresSafeArea(.container, edges: .top)
@@ -2200,13 +1746,9 @@ private struct AssistantOptionsStorySheet: View {
     /// Wysokość rzędu nad nazwą.
     private var eyebrowHeight: CGFloat { 21 }
 
-    /// Nad nazwą sam eyebrow z tagiem — w przeglądzie bez pigułek „dla kogo”
-    /// i „W planie” (runda 13): osoba jest w przełączniku obok „Zamień to
-    /// danie”, pora i dzień w nagłówku.
-    private var eyebrowRow: some View { choiceEyebrowRow }
-
-    /// Eyebrow stoi w miejscu; zmienia się tylko tag obok niego.
-    private var choiceEyebrowRow: some View {
+    /// Nad nazwą sam eyebrow z tagiem. Eyebrow stoi w miejscu; zmienia się
+    /// tylko tag obok niego.
+    private var eyebrowRow: some View {
         HStack(spacing: 8) {
             Text(eyebrowText)
                 .font(.system(size: 11, weight: .bold))
@@ -2264,197 +1806,17 @@ private struct AssistantOptionsStorySheet: View {
     }
 
     private var eyebrowText: String {
-        let lead = isReview ? "Propozycja" : "Do wyboru"
+        let lead = "Do wyboru"
         guard let slotDetail else { return lead }
         return "\(lead) · \(slotDetail)"
     }
 
     // MARK: Strona końcowa
 
-    @ViewBuilder
-    private var endLayer: some View {
-        if let reviewStatus {
-            reviewEndLayer(reviewStatus)
-        } else {
-            choiceEndLayer
-        }
-    }
-
-    /// Strona końcowa PRZEGLĄDU propozycji — mówi, w jakim stanie JEST
-    /// propozycja, a nie zawsze „Wszystko pasuje?”. Stan przychodzi
-    /// z serwera przy każdym odświeżeniu karty, więc otwarty arkusz sam
-    /// przechodzi z „Wszystko pasuje?” przez „Zapisuję…” w „Jest w planie”.
-    /// Zgoda na całość jest w szałwii — to kolor zapisu w całej aplikacji.
-    private func reviewEndLayer(_ status: AssistantCardStatus) -> some View {
-        let copy = ProposalEndCopy(status: status, isBusy: isBusy)
-        let text = reduceMotion ? 0 : dragX * 0.16
-        return VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Wachlarz dań zestawu zamiast pustego kółka z ptaszkiem
-                    // (27.09.2026 — ptaszek PRZED zapisem mówił „już
-                    // zapisane”). Stan pokazuje odznaka na zdjęciu.
-                    endStep(0) {
-                        ProposalHero(
-                            images: heroImages,
-                            extra: max(0, options.count - heroImages.count),
-                            status: status,
-                            isBusy: isBusy,
-                            shown: isEnd
-                        )
-                    }
-
-                    endStep(1, rise: 14) {
-                        VStack(spacing: 0) {
-                            // Zmiana stanu (zapisuję → w planie) ROLUJE słowa,
-                            // jak dania w arkuszu i Kalendarz (`SCMotion.textRoll`).
-                            Text(copy.eyebrow)
-                                .font(.system(size: 11, weight: .bold))
-                                .tracking(0.9)
-                                .textCase(.uppercase)
-                                .foregroundStyle(copy.accent(scheme))
-                                .lineHeight(.exact(points: 14))
-                                .contentTransition(.numericText())
-                            Text(copy.title)
-                                .font(.system(size: 30, weight: .bold))
-                                .tracking(-0.9)
-                                .foregroundStyle(AssistantLook.ink(scheme))
-                                .lineHeight(.exact(points: 34))
-                                .contentTransition(.numericText())
-                                .padding(.top, 10)
-                            Text(copy.body)
-                                .font(.system(size: 15))
-                                .foregroundStyle(AssistantLook.muted(scheme))
-                                .lineHeight(.exact(points: 21))
-                                .fixedSize(horizontal: false, vertical: true)
-                                .contentTransition(.numericText())
-                                .padding(.top, 10)
-                        }
-                        .animation(motion(SCMotion.textRoll), value: copy.title)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 24)
-                        .offset(x: text)
-                    }
-                    .padding(.top, 20)
-
-                    endStep(2, rise: 16) {
-                        ProposalRecap(
-                            options: options,
-                            contexts: contexts,
-                            status: status,
-                            shown: isEnd,
-                            members: members,
-                            me: me
-                        )
-                    }
-                    .padding(.top, 24)
-
-                    if status == .pending, !isBusy, let onRegenerate {
-                        endStep(3, rise: 10) {
-                            ProposalRegenerateLink(title: regenerateTitle, action: onRegenerate)
-                        }
-                        .padding(.top, 10)
-                        .transition(.opacity)
-                    }
-                }
-                // 118 = uchwyt, nagłówek i segmenty nad treścią.
-                .padding(.top, 118)
-                // Oddech nad stopką; samą stopkę odlicza `safeAreaBar` niżej.
-                .padding(.bottom, 16)
-                .animation(motion(.smooth(duration: 0.4)), value: status)
-                .animation(motion(.smooth(duration: 0.3)), value: isBusy)
-            }
-            // Krótka treść stoi na środku wolnego miejsca; dłuższa
-            // (tydzień, mały telefon) zaczyna od góry i się przewija.
-            .defaultScrollAnchor(.center, for: .alignment)
-            .defaultScrollAnchor(.top, for: .initialOffset)
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollIndicators(.hidden)
-            .scScrollEdgeFade()
-            // Stopka natywnie (iOS 26 `safeAreaBar`): lista przejeżdża pod
-            // szklanym przyciskiem i kończy się nad nim; pod przyciskiem
-            // tylko natywny efekt krawędzi systemu.
-            .safeAreaBar(edge: .bottom, spacing: 0) {
-                endStep(3, rise: 20) {
-                    // JEDEN przycisk na dole (runda 15, Rafał): zapis całości,
-                    // po zapisie „Otwórz plan”, a gdy propozycji nie da się już
-                    // zapisać — „Napisz, co zmienić”. Nowe dania to cichy
-                    // odnośnik pod listą, nie drugi przycisk.
-                    //
-                    // Wspólna stopka arkuszy (`SCSheetFooter`) — same szklane
-                    // przyciski, bez tła (4.10.2026).
-                    SCSheetFooter(horizontalPadding: 16) {
-                    Group {
-                        if let applyTitle, let onApply {
-                            ProposalAcceptButton(
-                                title: isBusy ? "Zapisuję…" : applyTitle,
-                                icon: "checkmark",
-                                isBusy: isBusy,
-                                action: onApply
-                            )
-                            .transition(.opacity)
-                        } else if status == .applied, let onOpenPlan {
-                            ProposalAcceptButton(title: "Otwórz plan", icon: "arrow.right", action: onOpenPlan)
-                                .transition(.opacity)
-                        } else if !isBusy {
-                            AssistantGhostButton(
-                                action: AssistantCardAction(
-                                    title: copy.composeTitle,
-                                    icon: "square.and.pencil"
-                                ) {
-                                    onCompose()
-                                }
-                            )
-                            .transition(.opacity)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .animation(motion(.smooth(duration: 0.35)), value: status)
-                    .animation(motion(.smooth(duration: 0.3)), value: isBusy)
-                    }
-                }
-            }
-            // Pod przyciskiem miękki efekt krawędzi, bez kreski i tła.
-            .scSheetFooterEdge()
-        }
-        .background(
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
-                .opacity(isEnd ? 1 : 0)
-                .animation(motion(.easeInOut(duration: 0.35)), value: isEnd)
-        )
-        // Zapis się udał — ta sama chwila, w której odznaka staje się
-        // szałwiowym ptaszkiem.
-        .sensoryFeedback(trigger: status) { old, new in
-            old != .applied && new == .applied ? .success : nil
-        }
-    }
-
-    /// Do trzech zdjęć do wachlarza: dzień — jego dania; tydzień — po jednym
-    /// z trzech pierwszych dni (inaczej wachlarz tygodnia byłby samym
-    /// poniedziałkiem).
-    private var heroImages: [URL?] {
-        var picked: [Int] = []
-        if options.count > 5 {
-            var days = Set<String>()
-            for index in options.indices {
-                let day = contexts.indices.contains(index) ? (contexts[index].day ?? "") : ""
-                guard !days.contains(day) else { continue }
-                days.insert(day)
-                picked.append(index)
-                if picked.count == 3 { break }
-            }
-        } else {
-            picked = Array(options.indices.prefix(3))
-        }
-        return picked.map { options[$0].imageUrl.flatMap(URL.init(string:)) }
-    }
-
     /// `OptStorySheet end`: kreskowany segment staje się pełny — znak marki
     /// (`EBrand` × 1,7, środek na 248/798), jedno pytanie (od 366/798), dwa
     /// wyjścia przypięte do dołu. Wchodzi kaskadą: znak, pytanie, przyciski.
-    private var choiceEndLayer: some View {
+    private var endLayer: some View {
         GeometryReader { geo in
             let full = geo.size.height + geo.safeAreaInsets.bottom
             let text = reduceMotion ? 0 : dragX * 0.16
@@ -2531,11 +1893,6 @@ private struct AssistantOptionsStorySheet: View {
         )
     }
 
-    /// Jedno danie — „Zaproponuj inne danie”, kilka — „inne dania”.
-    private var regenerateTitle: String {
-        options.count == 1 ? "Zaproponuj inne danie" : "Zaproponuj inne dania"
-    }
-
     private var endBody: String {
         morePrompt == nil
             ? "Napisz, na co masz ochotę — poszukam w Twoich przepisach."
@@ -2568,9 +1925,9 @@ private struct AssistantOptionsStorySheet: View {
     /// szybki ruch też przewraca stronę.
     private func finishSwipe(dx: CGFloat, velocity: CGFloat) {
         if dx < -50 || (dx < -16 && velocity < -450) {
-            go(to: neighbor(1))
+            go(to: page + 1)
         } else if dx > 50 || (dx > 16 && velocity > 450) {
-            go(to: neighbor(-1))
+            go(to: page - 1)
         }
         // Treść wraca spod palca sprężyną — także gdy strona się zmieniła,
         // bo wtedy odjeżdża razem z przewróceniem.
@@ -2593,14 +1950,6 @@ private struct AssistantOptionsStorySheet: View {
     /// `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` — arkusz sam przechodzi po stronach,
     /// żeby animacje dało się nagrać na symulatorze bez dotyku.
     private func debugAutoplay() async {
-        // `propozycja`: jeden krok z ostatniego dania na stronę końcową —
-        // do nagrania jej wejścia.
-        if ProcessInfo.processInfo.environment["SCOFFIE_DEBUG_OPTIONS"] == "propozycja", !isEnd {
-            try? await Task.sleep(for: .seconds(1.5))
-            if Task.isCancelled { return }
-            go(to: endPage)
-            return
-        }
         guard ProcessInfo.processInfo.environment["SCOFFIE_DEBUG_OPTIONS_AUTOPLAY"] != nil,
               endPage >= 1 else { return }
         try? await Task.sleep(for: .seconds(3))
@@ -2611,705 +1960,6 @@ private struct AssistantOptionsStorySheet: View {
         }
     }
     #endif
-}
-
-/// Przełącznik osób w linii z „Zamień to danie” (runda 12): kapsuła z domkiem
-/// („Wszyscy”) i awatarami domowników — wybrany krążek ma podświetlenie „soft”,
-/// które przesuwa się między krążkami (`matchedGeometryEffect`). Osoba bez
-/// żadnego dania przy obecnych filtrach jest przygaszona i nieaktywna. Przy
-/// więcej niż trzech osobach — jeden krążek z menu, żeby przycisk obok miał
-/// miejsce.
-private struct ProposalPersonSwitcher: View {
-    let members: [HouseholdMemberSnapshot]
-    let me: String?
-    let selection: String?
-    let isAvailable: (String?) -> Bool
-    let onSelect: (String?) -> Void
-
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var pill
-
-    private static let disc: CGFloat = 34
-
-    /// Ty pierwszy.
-    private var ordered: [HouseholdMemberSnapshot] {
-        members.filter { $0.id == me } + members.filter { $0.id != me }
-    }
-
-    var body: some View {
-        if members.count > 3 {
-            menuVariant
-        } else {
-            HStack(spacing: 2) {
-                segment(nil, label: "Wszyscy") { houseGlyph }
-                ForEach(ordered) { member in
-                    segment(member.id, label: member.id == me ? "Ty" : HouseholdMemberStyle.shortName(member.displayName)) {
-                        MemberAvatar(member: member, members: members, size: 26)
-                    }
-                }
-            }
-            .padding(4)
-            .frame(height: 46)
-            .background(Capsule(style: .continuous).fill(AssistantLook.field(scheme)))
-            .overlay(Capsule(style: .continuous).strokeBorder(AssistantLook.cardStroke(scheme), lineWidth: 1))
-        }
-    }
-
-    private var houseGlyph: some View {
-        Image(systemName: "house.fill")
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(AssistantLook.terra(scheme))
-            .frame(width: 26, height: 26)
-    }
-
-    private func segment<Content: View>(
-        _ id: String?,
-        label: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        let isOn = selection == id
-        let available = isAvailable(id)
-        return Button {
-            onSelect(id)
-        } label: {
-            content()
-                .frame(width: Self.disc, height: Self.disc)
-                .background {
-                    if isOn {
-                        // Wybrany = szklana soczewka w tincie terakoty na
-                        // płaskim torze, jak przełączniki iOS 26.
-                        Color.clear
-                            .scSoftSurface(Circle(), accent: AssistantLook.terra(scheme))
-                            .matchedGeometryEffect(id: "selected", in: pill)
-                    }
-                }
-                .opacity(available || isOn ? 1 : 0.35)
-                .contentShape(Circle())
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.92))
-        .disabled(!available && !isOn)
-        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .smooth(duration: 0.3), value: selection)
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-    }
-
-    private var menuVariant: some View {
-        Menu {
-            Button { onSelect(nil) } label: {
-                if selection == nil { Label("Wszyscy", systemImage: "checkmark") } else { Text("Wszyscy") }
-            }
-            ForEach(ordered) { member in
-                let title = member.id == me ? "Ty" : HouseholdMemberStyle.shortName(member.displayName)
-                Button { onSelect(member.id) } label: {
-                    if selection == member.id { Label(title, systemImage: "checkmark") } else { Text(title) }
-                }
-                .disabled(!isAvailable(member.id))
-            }
-        } label: {
-            Group {
-                if let id = selection, let member = members.first(where: { $0.id == id }) {
-                    MemberAvatar(member: member, members: members, size: 30)
-                } else {
-                    houseGlyph
-                }
-            }
-            .frame(width: 46, height: 46)
-            .background(Circle().fill(AssistantLook.field(scheme)))
-            .overlay(Circle().strokeBorder(AssistantLook.cardStroke(scheme), lineWidth: 1))
-        }
-        .accessibilityLabel("Czyje dania")
-    }
-}
-
-// MARK: - Przegląd propozycji: kiedy, stan, zgoda
-
-/// Słowa strony końcowej przeglądu dla każdego stanu propozycji.
-private struct ProposalEndCopy {
-    let status: AssistantCardStatus
-    let isBusy: Bool
-
-    var eyebrow: String {
-        if isBusy { return "Zapisuję" }
-        switch status {
-        case .pending: return "Cały zestaw"
-        case .applied: return "Zapisane"
-        case .undone: return "Cofnięte"
-        case .stale: return "Nieaktualna"
-        case .expired: return "Wygasła"
-        case .failed: return "Nie zapisano"
-        }
-    }
-
-    var title: String {
-        if isBusy { return "Wstawiam do planu…" }
-        switch status {
-        case .pending: return "Wszystko pasuje?"
-        case .applied: return "Jest w planie"
-        case .undone: return "Plan wrócił"
-        case .stale: return "Plan się zmienił"
-        case .expired: return "Propozycja wygasła"
-        case .failed: return "Nie udało się zapisać"
-        }
-    }
-
-    var body: String {
-        if isBusy { return "Chwila — zaraz wszystko będzie w planie." }
-        switch status {
-        case .pending: return "Zapiszę cały zestaw jednym dotknięciem."
-        case .applied: return "Wszystkie dania z tej propozycji czekają w Twoim planie."
-        case .undone: return "Cofnąłem ten zapis. Możesz zastosować go jeszcze raz."
-        case .stale: return "Od tej propozycji plan się zmienił. Poproś o nową — policzę od nowa."
-        case .expired: return "Poproś o nową — policzę ją od nowa."
-        case .failed: return "Plan jest bez zmian. Spróbuj jeszcze raz."
-        }
-    }
-
-    var composeTitle: String { "Napisz, co zmienić" }
-
-    func accent(_ scheme: ColorScheme) -> Color {
-        switch status {
-        case .pending, .applied: return AssistantLook.sage(scheme)
-        case .failed: return AssistantLook.terra(scheme)
-        case .undone, .stale, .expired: return AssistantLook.faint(scheme)
-        }
-    }
-}
-
-/// Wachlarz dań zestawu nad pytaniem (27.09.2026, zamiast pustego kółka
-/// z ptaszkiem, które PRZED zapisem mówiło „zapisane”): do trzech zdjęć,
-/// środkowe na wierzchu, boczne odchylone. Przy wejściu na stronę końcową
-/// leżą na sobie i rozkładają się sprężyną jak karty w dłoni.
-///
-/// Stan mówi odznaka na środkowym zdjęciu: zapis w toku — kręciołek, zapisane
-/// — szałwiowy ptaszek (wyskakuje, a wachlarz lekko podskakuje), cofnięte /
-/// nieaktualne / wygasłe — cicha ikona i przygaszone zdjęcia, błąd zapisu —
-/// wykrzyknik w terakocie. Propozycja czekająca na zgodę — bez odznaki.
-private struct ProposalHero: View {
-    let images: [URL?]
-    /// Ile dań zestawu nie zmieściło się w wachlarzu (tydzień).
-    let extra: Int
-    let status: AssistantCardStatus
-    let isBusy: Bool
-    /// Strona końcowa jest na ekranie — wachlarz się rozkłada.
-    let shown: Bool
-
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Podbicie = podskok wachlarza po zapisie.
-    @State private var cheer = 0
-
-    private static let size: CGFloat = 86
-
-    private var fanned: Bool { shown || reduceMotion }
-
-    /// Położenie i odchylenie każdego zdjęcia po rozłożeniu.
-    private var spread: [(x: CGFloat, angle: Double)] {
-        switch images.count {
-        case 0, 1: return [(0, 0)]
-        case 2: return [(-32, -7), (32, 7)]
-        default: return [(-62, -9), (0, 0), (62, 9)]
-        }
-    }
-
-    private var centerIndex: Int { images.count == 3 ? 1 : 0 }
-    private var dimmed: Bool { status.tone == .muted }
-
-    var body: some View {
-        ZStack {
-            ForEach(Array(images.enumerated()), id: \.offset) { index, url in
-                let target = spread[min(index, spread.count - 1)]
-                let isCenter = index == centerIndex
-                AssistantThumbnail(url: url, size: Self.size)
-                    .clipShape(Circle())
-                    .overlay(Circle().strokeBorder(Color.scPageBase(scheme), lineWidth: 3))
-                    .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.14), radius: 12, y: 6)
-                    .scaleEffect(isCenter ? 1.06 : 0.92)
-                    .rotationEffect(.degrees(fanned ? target.angle : 0))
-                    .offset(x: fanned ? target.x : 0, y: fanned ? 0 : 12)
-                    .opacity(shown || reduceMotion ? 1 : 0)
-                    .zIndex(isCenter ? 3 : Double(2 - index))
-                    .animation(
-                        reduceMotion
-                            ? .easeInOut(duration: 0.2)
-                            : .spring(response: 0.6, dampingFraction: 0.7).delay(0.12 + 0.06 * Double(index)),
-                        value: shown
-                    )
-            }
-
-            badge
-                .offset(x: Self.size * 0.36, y: Self.size * 0.36)
-                .zIndex(4)
-        }
-        .saturation(dimmed ? 0.3 : 1)
-        .opacity(dimmed ? 0.75 : 1)
-        .frame(height: Self.size + 16)
-        .keyframeAnimator(initialValue: 0.0, trigger: cheer) { content, lift in
-            content.offset(y: lift)
-        } keyframes: { _ in
-            KeyframeTrack {
-                SpringKeyframe(-9, duration: 0.18, spring: .snappy)
-                SpringKeyframe(0, duration: 0.45, spring: .bouncy)
-            }
-        }
-        .overlay(alignment: .trailing) {
-            if extra > 0 {
-                Text("+\(extra)")
-                    .font(.system(size: 12, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(AssistantLook.muted(scheme))
-                    .padding(.horizontal, 8)
-                    .frame(height: 24)
-                    .background(Capsule().fill(Color.scChipBg(scheme)))
-                    .offset(x: images.count == 3 ? -8 : 20)
-                    .opacity(shown ? 1 : 0)
-                    .animation(.smooth(duration: 0.4).delay(0.35), value: shown)
-            }
-        }
-        .animation(.spring(response: 0.45, dampingFraction: 0.6), value: status)
-        .animation(.smooth(duration: 0.3), value: isBusy)
-        .onChange(of: status) { old, new in
-            guard old != .applied, new == .applied, !reduceMotion else { return }
-            cheer += 1
-        }
-        .accessibilityHidden(true)
-    }
-
-    @ViewBuilder
-    private var badge: some View {
-        if isBusy {
-            badgeCircle(fill: Color.scPageBase(scheme), stroke: AssistantLook.sage(scheme)) {
-                ProgressView().controlSize(.small).tint(AssistantLook.sage(scheme))
-            }
-            .transition(.scale(scale: 0.4).combined(with: .opacity))
-        } else if let symbol = badgeSymbol {
-            let solid = status == .applied
-            let color = badgeColor
-            badgeCircle(fill: solid ? color : Color.scPageBase(scheme), stroke: color) {
-                Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(solid ? Color.white : color)
-            }
-            .transition(.scale(scale: 0.3).combined(with: .opacity))
-            .id(symbol)
-        }
-    }
-
-    private func badgeCircle<Content: View>(fill: Color, stroke: Color, @ViewBuilder content: () -> Content) -> some View {
-        ZStack {
-            Circle().fill(fill)
-            Circle().strokeBorder(stroke.opacity(0.55), lineWidth: 1.5)
-            content()
-        }
-        .frame(width: 32, height: 32)
-        .overlay(Circle().strokeBorder(Color.scPageBase(scheme), lineWidth: 3).padding(-3))
-    }
-
-    private var badgeSymbol: String? {
-        switch status {
-        case .pending: return nil
-        case .applied: return "checkmark"
-        case .undone: return "arrow.uturn.backward"
-        case .stale: return "arrow.triangle.2.circlepath"
-        case .expired: return "hourglass"
-        case .failed: return "exclamationmark"
-        }
-    }
-
-    private var badgeColor: Color {
-        switch status {
-        case .pending, .applied: return AssistantLook.sage(scheme)
-        case .failed: return AssistantLook.terra(scheme)
-        case .undone, .stale, .expired: return AssistantLook.faint(scheme)
-        }
-    }
-}
-
-/// Cały zestaw jeszcze raz — „kto co je” (27.09.2026, Rafał: „jak wchodzi
-/// więcej dań, więcej osób, to się robi totalne zamieszanie”).
-///
-/// Układ: dzień → pora → danie. Każdy dzień to osobna karta (`scTileBg` +
-/// `scTileStroke`, bez cienia) z nazwą dnia nad nią. Pora z jednym daniem =
-/// jeden wiersz (pora z ikoną nad nazwą); pora z KILKOMA daniami (różne dania
-/// dla różnych osób) = nagłówek pory i pod nim dania, każde z „dla kogo” —
-/// rozgałęzienie na osoby. W domu z kilku osób nad listą filtr „Wszyscy · Ty ·
-/// Ania”: wybrana osoba widzi tylko swoje dania i SWOJE kcal dnia (suma dań
-/// różnych osób nie znaczyła nic, więc przy „Wszyscy” kcal dnia nie ma).
-/// Dawny tydzień „wiersz na dzień z trzema krążkami” odpadł — nie mówił,
-/// co kto je.
-private struct ProposalRecap: View {
-    let options: [OptionsCardItemDTO]
-    let contexts: [ProposalStoryContext]
-    let status: AssistantCardStatus
-    /// Strona końcowa na ekranie: wiersze wchodzą po kolei.
-    var shown: Bool = true
-    var members: [HouseholdMemberSnapshot] = []
-    var me: String? = nil
-
-    @Environment(\.colorScheme) private var scheme
-    /// `nil` = wszyscy. Na start „Ty” (runda 10: „dla 2 osób i więcej wciąż
-    /// nieczytelne… ściana tekstu”) — lista „co ja jem”, a reszta domu jednym
-    /// stuknięciem w filtrze.
-    @State private var person: String?
-    @State private var didSeedPerson = false
-
-    private static let thumb: CGFloat = 42
-
-    private var multiPerson: Bool { members.count > 1 }
-
-    private struct Dish: Identifiable {
-        let id: Int
-        let option: OptionsCardItemDTO
-        let participantIds: [String]
-    }
-
-    private struct Meal: Identifiable {
-        let id: String
-        let slot: MealSlot?
-        let label: String
-        var dishes: [Dish]
-    }
-
-    private struct Day: Identifiable {
-        let id: String
-        let label: String?
-        var meals: [Meal]
-
-        var kcal: Int { meals.flatMap(\.dishes).reduce(0) { $0 + $1.option.kcalPerServing } }
-    }
-
-    private func context(_ index: Int) -> ProposalStoryContext? {
-        contexts.indices.contains(index) ? contexts[index] : nil
-    }
-
-    /// Dania osoby (albo wszystkie), w kolejności propozycji, zgrupowane po
-    /// dniu i porze.
-    private var days: [Day] {
-        var result: [Day] = []
-        for index in options.indices {
-            let ctx = context(index)
-            let ids = ctx?.participantIds ?? []
-            guard ProposalAudience.eats(ids, person: person) else { continue }
-            let dayKey = ctx?.day ?? ""
-            let mealLabel = ctx?.slot?.title ?? ctx?.mealLabel ?? ""
-            let dish = Dish(id: index, option: options[index], participantIds: ids)
-            // Dzień po kluczu, nie „ostatni”: ten sam dzień nie obok siebie
-            // dawał dwa wiersze o tym samym `id`.
-            let dayIndex: Int
-            if let found = result.firstIndex(where: { $0.id == dayKey }) {
-                dayIndex = found
-            } else {
-                result.append(Day(id: dayKey, label: ctx?.day, meals: []))
-                dayIndex = result.count - 1
-            }
-            if let at = result[dayIndex].meals.firstIndex(where: { $0.label == mealLabel }) {
-                result[dayIndex].meals[at].dishes.append(dish)
-            } else {
-                result[dayIndex].meals.append(Meal(id: "\(dayKey)-\(mealLabel)", slot: ctx?.slot, label: mealLabel, dishes: [dish]))
-            }
-        }
-        return result
-    }
-
-    /// Kcal dnia mają sens dla JEDNEJ osoby (albo domu jednoosobowego).
-    private var showsDayKcal: Bool { !multiPerson || person != nil }
-
-    var body: some View {
-        let days = self.days
-        return VStack(alignment: .leading, spacing: 14) {
-            if multiPerson {
-                ProposalPersonFilter(members: members, me: me, selection: $person)
-                    .opacity(shown ? 1 : 0)
-                    .animation(.smooth(duration: 0.4).delay(0.18), value: shown)
-            }
-
-            if days.isEmpty {
-                Text("Ta propozycja nie zmienia nic dla tej osoby.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(AssistantLook.muted(scheme))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 18)
-                    .padding(.horizontal, 16)
-            }
-
-            ForEach(Array(days.enumerated()), id: \.element.id) { order, day in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text((day.label ?? (days.count == 1 ? "Zestaw" : "")).uppercased())
-                            .font(.system(size: 10.5, weight: .bold))
-                            .tracking(1.4)
-                            .foregroundStyle(AssistantLook.faint(scheme))
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        if showsDayKcal, day.kcal > 0 {
-                            Text("\(day.kcal) kcal")
-                                .font(.system(size: 12.5, weight: .semibold))
-                                .monospacedDigit()
-                                .foregroundStyle(AssistantLook.muted(scheme))
-                                .contentTransition(.numericText(value: Double(day.kcal)))
-                        }
-                    }
-                    .padding(.horizontal, 4)
-
-                    dayCard(day)
-                }
-                .padding(.horizontal, 16)
-                // Kaskada dni przy wejściu na stronę końcową.
-                .opacity(shown ? 1 : 0)
-                .offset(y: shown ? 0 : 8)
-                .animation(.smooth(duration: 0.45).delay(0.22 + 0.06 * Double(min(order, 6))), value: shown)
-            }
-        }
-        .animation(.smooth(duration: 0.3), value: person)
-        .opacity(status.tone == .muted ? 0.6 : 1)
-        .onAppear {
-            guard !didSeedPerson else { return }
-            didSeedPerson = true
-            if multiPerson, let me, members.contains(where: { $0.id == me }) {
-                person = me
-            }
-        }
-    }
-
-    private func dayCard(_ day: Day) -> some View {
-        let shape = RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
-        return VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(day.meals.enumerated()), id: \.element.id) { index, meal in
-                if index > 0 {
-                    Rectangle()
-                        .fill(Color.scTileStroke(scheme))
-                        .frame(height: 1)
-                        .padding(.leading, 16 + Self.thumb + 12)
-                        .padding(.trailing, 16)
-                }
-                mealView(meal)
-            }
-        }
-        .padding(.vertical, 4)
-        .background(shape.fill(Color.scTileBg(scheme)))
-        .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
-        .accessibilityElement(children: .contain)
-    }
-
-    @ViewBuilder
-    private func mealView(_ meal: Meal) -> some View {
-        if meal.dishes.count == 1, let dish = meal.dishes.first {
-            dishRow(dish, meal: meal, showsMeal: true)
-        } else if multiPerson, person == nil {
-            // „Wszyscy”, różne dania w jednej porze: pora raz, pod nią ZWARTE
-            // linie „awatary · danie · kcal” — bez miniatur i pigułek, które
-            // przy kilku osobach robiły ścianę tekstu.
-            VStack(alignment: .leading, spacing: 2) {
-                mealLabel(meal)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-                    .padding(.bottom, 4)
-                ForEach(meal.dishes) { dish in
-                    compactLine(dish)
-                }
-            }
-            .padding(.bottom, 8)
-        } else {
-            // Kilka dań w jednej porze — różne dla różnych osób: pora raz,
-            // pod nią dania, każde z „dla kogo”.
-            VStack(alignment: .leading, spacing: 0) {
-                mealLabel(meal)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-                ForEach(meal.dishes) { dish in
-                    dishRow(dish, meal: meal, showsMeal: false)
-                }
-            }
-        }
-    }
-
-    private func mealLabel(_ meal: Meal) -> some View {
-        HStack(spacing: 4) {
-            if let icon = meal.slot?.icon {
-                Image(systemName: icon)
-                    .font(.system(size: 10, weight: .bold))
-            }
-            Text(meal.label)
-                .font(.system(size: 11.5, weight: .bold))
-                .tracking(0.2)
-                .lineLimit(1)
-        }
-        .foregroundStyle(meal.slot?.cozyAccent ?? AssistantLook.muted(scheme))
-    }
-
-    /// Kto je danie — „Wspólne” = cały dom.
-    private func eaters(_ dish: Dish) -> [HouseholdMemberSnapshot] {
-        let named = members.filter { dish.participantIds.contains($0.id) }
-        return named.isEmpty ? members : named
-    }
-
-    /// Zwarta linia w porze z kilkoma daniami: nachodzące awatary jedzących,
-    /// nazwa w jednej linii, kcal.
-    private func compactLine(_ dish: Dish) -> some View {
-        let people = Array(eaters(dish).prefix(3))
-        let avatar: CGFloat = 22
-        return HStack(spacing: 10) {
-            ZStack(alignment: .leading) {
-                ForEach(Array(people.enumerated()), id: \.element.id) { index, member in
-                    MemberAvatar(member: member, members: members, size: avatar)
-                        .overlay(Circle().strokeBorder(Color.scTileBg(scheme), lineWidth: 1.5))
-                        .offset(x: CGFloat(index) * (avatar - 9))
-                }
-            }
-            .frame(width: avatar + CGFloat(max(0, people.count - 1)) * (avatar - 9), alignment: .leading)
-
-            Text(dish.option.title)
-                .font(.system(size: 14.5, weight: .semibold))
-                .tracking(-0.3)
-                .foregroundStyle(AssistantLook.ink(scheme))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if dish.option.kcalPerServing > 0 {
-                Text("\(dish.option.kcalPerServing) kcal")
-                    .font(.system(size: 12, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(AssistantLook.faint(scheme))
-                    .fixedSize()
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(ProposalAudience.label(dish.participantIds, members: members, me: me) ?? ""): \(dish.option.title)"
-        )
-    }
-
-    private func dishRow(_ dish: Dish, meal: Meal, showsMeal: Bool) -> some View {
-        HStack(spacing: 12) {
-            AssistantThumbnail(url: dish.option.imageUrl.flatMap(URL.init(string:)), size: Self.thumb)
-                // Zapisane: ptaszek w szałwii na zdjęciu — przed zapisem
-                // ptaszków nie ma (mówiłyby „już w planie”).
-                .overlay(alignment: .bottomTrailing) {
-                    let saved = status == .applied
-                    ZStack {
-                        Circle().fill(AssistantLook.sage(scheme))
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .heavy))
-                            .foregroundStyle(.white)
-                    }
-                    .frame(width: 19, height: 19)
-                    .overlay(Circle().strokeBorder(Color.scTileBg(scheme), lineWidth: 2).padding(-2))
-                    .offset(x: 5, y: 5)
-                    .scaleEffect(saved ? 1 : 0.2)
-                    .opacity(saved ? 1 : 0)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.55).delay(saved ? 0.25 : 0), value: saved)
-                    .accessibilityHidden(true)
-                }
-
-            VStack(alignment: .leading, spacing: 3) {
-                if showsMeal {
-                    mealLabel(meal)
-                }
-                Text(dish.option.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .tracking(-0.3)
-                    .foregroundStyle(AssistantLook.ink(scheme))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                // „Dla kogo” tylko przy „Wszyscy” — po wyborze osoby każde
-                // danie na liście jest jej.
-                if multiPerson, person == nil {
-                    ProposalAudiencePill(
-                        participantIds: dish.participantIds,
-                        members: members,
-                        me: me,
-                        size: 16,
-                        filled: false
-                    )
-                    .padding(.top, 1)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            if dish.option.kcalPerServing > 0 {
-                Text("\(dish.option.kcalPerServing) kcal")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(AssistantLook.faint(scheme))
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// Cichy odnośnik pod listą zestawu: ikona odświeżenia + tytuł w terakocie,
-/// bez tła — opcja, nie druga decyzja obok zapisu.
-private struct ProposalRegenerateLink: View {
-    let title: String
-    let action: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 13, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .tracking(-0.2)
-            }
-            .foregroundStyle(AssistantLook.terra(scheme))
-            .padding(.horizontal, 14)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.97))
-        .accessibilityHint("Asystent przygotuje nowy zestaw zamiast tego")
-    }
-}
-
-/// Zgoda na całość: pigułka „soft” w szałwii — ten sam przycisk co
-/// `AssistantPrimaryButton` (rozmiar `.regular`), tylko w kolorze zapisu.
-private struct ProposalAcceptButton: View {
-    let title: String
-    var icon: String = "checkmark"
-    var isBusy: Bool = false
-    let action: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    private let size = AssistantButtonSize.regular
-
-    var body: some View {
-        let sage = AssistantLook.sage(scheme)
-        Button(action: action) {
-            HStack(spacing: 7) {
-                if isBusy {
-                    ProgressView().controlSize(.small).tint(sage)
-                }
-                Text(title)
-                    .font(.system(size: size.fontSize, weight: .semibold))
-                    .tracking(-0.3)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .contentTransition(.numericText())
-                if !isBusy {
-                    Image(systemName: icon)
-                        .font(.system(size: size.iconSize, weight: .bold))
-                }
-            }
-            .foregroundStyle(sage)
-            .padding(.horizontal, size.horizontalPadding)
-            .frame(maxWidth: .infinity)
-            .frame(height: size.height)
-            .scSoftCapsule(sage)
-            .contentShape(Capsule())
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.985))
-        .disabled(isBusy)
-    }
 }
 
 /// `OptStats variant="macro"`: kcal · min 22/700, pod nimi pasek białko /
@@ -4257,70 +2907,3 @@ struct AssistantAppliedCard: View {
         }
     }
 }
-
-#if DEBUG
-/// `SCOFFIE_DEBUG_OPTIONS=propozycja` — strona końcowa przeglądu propozycji
-/// dnia na prawdziwych zdjęciach z katalogu: arkusz staje na ostatnim daniu,
-/// sam przechodzi na „Wszystko pasuje?”, po chwili „zapisuje” (kręciołek)
-/// i kończy na „Jest w planie” — żeby wejście i zapis dało się nagrać.
-struct ProposalEndDebugScreen: View {
-    @Environment(\.recipeCatalogStore) private var catalog
-    @State private var status: AssistantCardStatus = .pending
-    @State private var busy = false
-
-    private static func image(_ id: String) -> String {
-        "https://img.scoffie.app/recipe-images/\(id).webp"
-    }
-
-    private static let options: [OptionsCardItemDTO] = [
-        ("Owsianka z bananem i borówką", 447, "9e845247-f630-4dcc-9bab-3656828cac29", "Śniadanie"),
-        ("Omlet ze szpinakiem i fetą", 620, "1a66ef3b-f1dc-4427-b6b3-3ca5d6986e80", "Obiad"),
-        ("Skyr z granolą i malinami", 393, "386586d2-b4f8-41f0-9641-cce2b7c20dd7", "Kolacja"),
-    ].map { title, kcal, id, meal in
-        OptionsCardItemDTO(
-            recipeId: id, title: title, kcalPerServing: kcal, prepTimeMinutes: 15,
-            imageUrl: image(id), description: nil, proteinGrams: nil, carbsGrams: nil,
-            fatGrams: nil, ingredientCount: nil, tag: meal, prompt: title
-        )
-    }
-
-    private static let contexts: [ProposalStoryContext] = [
-        ProposalStoryContext(slot: .breakfast, mealLabel: "Śniadanie", day: "Dziś, 27 września"),
-        ProposalStoryContext(slot: .lunch, mealLabel: "Obiad", day: "Dziś, 27 września"),
-        ProposalStoryContext(slot: .dinner, mealLabel: "Kolacja", day: "Dziś, 27 września"),
-    ]
-
-    var body: some View {
-        SCPageBackground(scheme: .light).ignoresSafeArea()
-            .sheet(isPresented: .constant(true)) {
-                AssistantOptionsStorySheet(
-                    slotDetail: "niedziela, 27 września",
-                    options: Self.options,
-                    initialPage: Self.options.count - 1,
-                    mode: .review(
-                        swapTitle: nil,
-                        applyTitle: status == .pending ? "Zapisz niedzielę" : nil,
-                        status: status
-                    ),
-                    catalog: catalog,
-                    onChoose: { _ in },
-                    onCompose: {},
-                    onApply: {},
-                    contexts: Self.contexts,
-                    isBusy: busy,
-                    onOpenPlan: {},
-                    onRegenerate: {}
-                )
-                .presentationDetents([.large])
-                .interactiveDismissDisabled()
-            }
-            .task {
-                try? await Task.sleep(for: .seconds(5))
-                busy = true
-                try? await Task.sleep(for: .seconds(1.2))
-                busy = false
-                status = .applied
-            }
-    }
-}
-#endif

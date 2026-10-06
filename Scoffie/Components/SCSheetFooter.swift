@@ -77,7 +77,7 @@ extension View {
     /// Natywny efekt krawędzi pod przyklejonymi przyciskami — zawsze miękki
     /// (`.soft`), nigdy z kreską i kryjącym tłem (`.hard`). Na każdym
     /// przewijaniu z dolnym `safeAreaBar`: stopka arkusza, pasek szczegółów
-    /// posiłku, strona końcowa przeglądu propozycji.
+    /// posiłku, przegląd propozycji Asystenta.
     func scSheetFooterEdge() -> some View {
         scrollEdgeEffectStyle(.soft, for: .bottom)
     }
