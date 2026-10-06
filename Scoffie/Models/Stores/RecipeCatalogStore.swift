@@ -158,15 +158,26 @@ final class RecipeCatalogStore {
 
     func loadIfNeeded() async {
         guard !didLoad, !isInvalidated else { return }
-        if loadCache() {
-            didLoad = true
-            errorMessage = nil
-            Task { @MainActor [weak self] in
-                await self?.reload()
-            }
-            return
-        }
+        if loadFromCacheIfPossible() { return }
         await reload()
+    }
+
+    /// Katalog z pliku, BEZ czekania na sieć — szybki zimny start
+    /// (`SessionStore.runStartupIfNeeded`). `true` = katalog stoi w pamięci
+    /// (z pliku albo z wcześniejszego pobrania). Wczytany z pliku rusza
+    /// synchronizację obok, dokładnie jak `loadIfNeeded`; bez pliku nie robi
+    /// nic — pobranie zostaje dla `loadIfNeeded`.
+    @discardableResult
+    func loadFromCacheIfPossible() -> Bool {
+        guard !isInvalidated else { return false }
+        if didLoad { return true }
+        guard loadCache() else { return false }
+        didLoad = true
+        errorMessage = nil
+        Task { @MainActor [weak self] in
+            await self?.reload()
+        }
+        return true
     }
 
     /// Synchronizacja katalogu (delta albo snapshot) i odświeżenie stanu domu.
