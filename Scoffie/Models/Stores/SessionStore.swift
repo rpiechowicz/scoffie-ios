@@ -2656,8 +2656,10 @@ final class SessionStore {
                 defaults.set(sex.lowercased(), forKey: ProfileKeys.sex)
             }
         } else {
+            // Flagi NIE zdejmujemy: spóźniony odczyt z `null` sprzed nowszego
+            // „Nie podaję” skasowałby jej znacznik. Zdejmuje ją tylko
+            // potwierdzony zapis (ponowny `null` serwerowi nie szkodzi).
             defaults.removeObject(forKey: ProfileKeys.sex)
-            defaults.removeObject(forKey: ProfileKeys.sexClearPending)
         }
     }
 
