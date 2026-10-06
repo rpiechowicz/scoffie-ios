@@ -117,46 +117,6 @@ struct MealDayTimesCard: View {
     }
 }
 
-// MARK: - Ostrzeżenie o kolejności
-
-/// Kolejność posiłków w planie jest stała — godziny jej nie przestawiają.
-/// Użytkownik ma się o tym dowiedzieć od nas, a nie ze zdziwienia nad
-/// ekranem Planu.
-struct MealTimesOrderNotice: View {
-    let slots: [MealSlot]
-    let schedule: MealSlotSchedule
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        if let pair = schedule.outOfOrderPair(among: slots) {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.sc(size: 11, weight: .semibold))
-                    .foregroundStyle(SCPalette.terracotta)
-
-                Text(text(pair))
-                    .font(.sc(size: 12, weight: .regular))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 6)
-        }
-    }
-
-    private func text(_ pair: (earlier: MealSlot, later: MealSlot)) -> String {
-        let earlierTime = schedule.time(for: pair.earlier) ?? ""
-        let laterTime = schedule.time(for: pair.later) ?? ""
-        let tail = "Plan i zakładka Dziś i tak pokażą posiłki w stałej kolejności dnia."
-
-        if earlierTime == laterTime {
-            return "\(pair.earlier.title) i \(pair.later.title.lowercased()) mają tę samą porę (\(earlierTime)). \(tail)"
-        }
-        return "\(pair.later.title) (\(laterTime)) wypada nie później niż \(pair.earlier.title.lowercased()) (\(earlierTime)). \(tail)"
-    }
-}
-
 // MARK: - Edytor pory
 
 /// Koło godzin dla jednego posiłku, we własnym arkuszu do połowy ekranu.
@@ -171,12 +131,24 @@ struct MealTimesOrderNotice: View {
 /// Godzina zapisuje się sama przy każdym obrocie koła (`onPick`), więc nie
 /// ma czego zatwierdzać: zamyka się krzyżykiem, jak każdy arkusz, a nie
 /// przyciskiem „Gotowe”, który udawał zapis.
-private struct MealTimeEditorSheet: View {
+///
+/// Wspólny dla osi kreatora (`MealDayTimesCard`) i osi Ustawień
+/// (`MealSlotsSheet`). Ustawienia podają `action` — „Wyłącz” przy porach
+/// dodatkowych obok krzyżyka; kreator go nie podaje i wygląda jak dotąd.
+struct MealTimeEditorSheet: View {
+    /// Akcja obok krzyżyka (szklana pigułka ze słowem).
+    struct Action {
+        let title: String
+        let accessibilityLabel: String
+        let run: () -> Void
+    }
+
     let slot: MealSlot
     let minutes: Int?
     let onPick: (Int) -> Void
     let onClearTime: () -> Void
     let onClose: () -> Void
+    let action: Action?
 
     @Environment(\.colorScheme) private var scheme
 
@@ -189,13 +161,15 @@ private struct MealTimeEditorSheet: View {
         minutes: Int?,
         onPick: @escaping (Int) -> Void,
         onClearTime: @escaping () -> Void,
-        onClose: @escaping () -> Void
+        onClose: @escaping () -> Void,
+        action: Action? = nil
     ) {
         self.slot = slot
         self.minutes = minutes
         self.onPick = onPick
         self.onClearTime = onClearTime
         self.onClose = onClose
+        self.action = action
         let start = minutes ?? MealSlotSchedule.snackSuggestedMinutes
         _selection = State(initialValue: MealSlotSchedule.date(fromMinutes: start))
     }
@@ -213,7 +187,21 @@ private struct MealTimeEditorSheet: View {
                     accent: slot.cozyAccent,
                     compact: true,
                     onClose: onClose
-                )
+                ) {
+                    if let action {
+                        Button(action: action.run) {
+                            Text(action.title)
+                                .font(.sc(size: 13.5, weight: .semibold))
+                                .foregroundStyle(Color.scLabel(scheme))
+                                .padding(.horizontal, 14)
+                                .frame(height: SCSheetIconLabel.size)
+                                .scChromeGlass(in: Capsule(style: .continuous))
+                                .contentShape(Capsule(style: .continuous))
+                        }
+                        .buttonStyle(PlanPressStyle(scale: 0.94))
+                        .accessibilityLabel(action.accessibilityLabel)
+                    }
+                }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .padding(.bottom, 2)
