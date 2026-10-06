@@ -1363,6 +1363,18 @@ final class SessionStore {
     /// nazwa zostawałaby na telefonie, a serwer odrzucałby ją po cichu.
     static let displayNameMaxLength = 64
 
+    /// Imię przycięte do limitu serwera. `@MaxLength` liczy PUNKTY KODOWE, nie
+    /// znaki: emoji z łącznikiem to jeden znak, a kilka punktów, więc cięcie po
+    /// `count` przepuszczało imię, które serwer odrzucał — razem z całym zapisem
+    /// sylwetki. Odcinamy całe znaki od końca, aż zmieszczą się punkty kodowe.
+    static func limitedDisplayName(_ name: String) -> String {
+        var limited = name
+        while limited.unicodeScalars.count > displayNameMaxLength {
+            limited.removeLast()
+        }
+        return limited
+    }
+
     func createHousehold(name: String) async {
         guard let userId = currentUserId, !userId.isEmpty else {
             authError = "Brak użytkownika sesji."
@@ -2919,16 +2931,18 @@ final class SessionStore {
         yearOfBirth: Int? = nil,
         heightCm: Int? = nil,
         weightKg: Double? = nil,
-        sex: String? = nil
+        sex: String? = nil,
+        /// „Nie podaję” w „Twoich danych” — jawny `null` dla płci. Pominięte
+        /// pole znaczy dla serwera „nie ruszaj”, więc bez tego stara płeć
+        /// zostawała w bazie i wracała z `users:me` po ponownym uruchomieniu.
+        clearSex: Bool = false
     ) async -> Bool {
         guard let userId = currentUserId, !userId.isEmpty else { return false }
 
         var data: [String: Any] = [:]
         if let displayName {
-            let trimmed = String(
-                displayName
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .prefix(Self.displayNameMaxLength)
+            let trimmed = Self.limitedDisplayName(
+                displayName.trimmingCharacters(in: .whitespacesAndNewlines)
             )
             if !trimmed.isEmpty {
                 data["displayName"] = trimmed
@@ -2951,7 +2965,10 @@ final class SessionStore {
             data["weightKg"] = rounded
             UserDefaults.standard.set(rounded, forKey: ProfileKeys.weightKg)
         }
-        if let sex, !sex.isEmpty {
+        if clearSex {
+            data["sex"] = NSNull()
+            UserDefaults.standard.removeObject(forKey: ProfileKeys.sex)
+        } else if let sex, !sex.isEmpty {
             data["sex"] = sex.uppercased()
             UserDefaults.standard.set(sex.lowercased(), forKey: ProfileKeys.sex)
         }

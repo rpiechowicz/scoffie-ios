@@ -68,6 +68,18 @@ struct ProfileDetailsSheet: View {
     /// Co pokazuje mały arkusz. Zostaje przy ostatnim wierszu, gdy `picking`
     /// wraca do `nil` — inaczej arkusz zjeżdżałby w dół pusty.
     @State private var pickerField: ProfileField = .year
+    /// Mały arkusz jest na ekranie — od otwarcia do KOŃCA zjazdu (`onDismiss`),
+    /// dłużej niż `picking`, które gaśnie już na początku zjazdu.
+    @State private var pickerOnScreen = false
+    /// Okno („Imię”, „Usunąć konto?”) czekające, aż mały arkusz zjedzie —
+    /// alert z widoku, który właśnie prezentuje arkusz, system odrzuca, a ołówek
+    /// i „Usuń konto” da się stuknąć przy otwartym wyborze.
+    @State private var pendingAlert: PendingAlert?
+
+    private enum PendingAlert {
+        case rename
+        case deleteAccount
+    }
 
     /// Czy w tym otwarciu arkusza doszło do JAKIEJKOLWIEK edycji. Zapis do
     /// backendu (debounce i ten przy zamknięciu) wychodzi tylko wtedy —
@@ -78,6 +90,9 @@ struct ProfileDetailsSheet: View {
     /// nadpisywały w bazie realną sylwetkę.
     @State private var didObserveInitialToken = false
     @State private var didEditThisSession = false
+    /// W tym otwarciu wybrano „Nie podaję” — zapis kasuje płeć na serwerze
+    /// (`saveProfile(clearSex:)`), zamiast ją pomijać.
+    @State private var clearsSex = false
 
     // Te same wartości startowe co w kreatorze powitalnym — arkusz nie może
     // pokazać innych liczb niż ekran, który je pierwszy zapisał.
@@ -95,13 +110,6 @@ struct ProfileDetailsSheet: View {
             if isPushed {
                 scrollContent
                     .scPushedPage("Twoje dane")
-                    // „Wstecz” nie woła `commitAndClose` — zapis domyka się
-                    // przy zejściu z ekranu. Nie w trakcie ani po usunięciu
-                    // konta: zasłona zdejmuje ekran, zanim `deleteAccount` wróci.
-                    .onDisappear {
-                        guard !isDeleting, !accountDeleted else { return }
-                        commitAndSave()
-                    }
             } else {
                 ZStack {
                     SCPageBackground(scheme: scheme)
@@ -131,7 +139,26 @@ struct ProfileDetailsSheet: View {
         .onAppear {
             normaliseStoredValues()
         }
-        .sheet(isPresented: pickerPresented) {
+        // Zejście z ekranu domyka zapis w obu trybach: „wstecz” w ekranie
+        // wepchniętym i przeciągnięcie arkusza w dół nie przechodzą przez
+        // `commitAndClose`, a anulują zaplanowany `task(id:)` — zmiana sprzed
+        // 600 ms zostałaby tylko na telefonie. Nie w trakcie ani po usunięciu
+        // konta: zasłona zdejmuje ekran, zanim `deleteAccount` wróci.
+        .onDisappear {
+            guard !isDeleting, !accountDeleted else { return }
+            commitAndSave()
+        }
+        // „Nie podaję” wybrane w TYM otwarciu — dopiero wtedy zapis wysyła
+        // jawny `null`. Puste pole z samego startu (konto bez płci, logowanie
+        // przed `users:me`) nie może skasować płci zapisanej na serwerze.
+        .onChange(of: sexRaw) { previous, current in
+            if current.isEmpty, !previous.isEmpty {
+                clearsSex = true
+            } else if !current.isEmpty {
+                clearsSex = false
+            }
+        }
+        .sheet(isPresented: pickerPresented, onDismiss: { pickerDidDismiss() }) {
             ProfileFieldPickerSheet(
                 field: pickerField,
                 sexRaw: $sexRaw,
@@ -159,11 +186,12 @@ struct ProfileDetailsSheet: View {
         } message: {
             Text("Widzą je domownicy.")
         }
-        // Limit serwera (`UpdateProfileDto`, 64) — przycinamy w polu, żeby
-        // stan lokalny = to, co przyjmie backend.
+        // Limit serwera (`UpdateProfileDto`, 64 punkty kodowe) — przycinamy
+        // w polu, żeby stan lokalny = to, co przyjmie backend.
         .onChange(of: nameDraft) { _, newValue in
-            if newValue.count > SessionStore.displayNameMaxLength {
-                nameDraft = String(newValue.prefix(SessionStore.displayNameMaxLength))
+            let limited = SessionStore.limitedDisplayName(newValue)
+            if limited != newValue {
+                nameDraft = limited
             }
         }
         .alert("Usunąć konto?", isPresented: $isConfirmingDeletion) {
@@ -282,7 +310,34 @@ struct ProfileDetailsSheet: View {
 
     private func startEditingName() {
         nameDraft = displayName
-        isEditingName = true
+        present(.rename)
+    }
+
+    /// Okno od razu — albo, gdy na ekranie stoi mały arkusz z wyborem, dopiero
+    /// po jego zjeździe (`pickerDidDismiss`).
+    private func present(_ alert: PendingAlert) {
+        guard pickerOnScreen else {
+            show(alert)
+            return
+        }
+        pendingAlert = alert
+        picking = nil
+    }
+
+    private func show(_ alert: PendingAlert) {
+        switch alert {
+        case .rename:        isEditingName = true
+        case .deleteAccount: isConfirmingDeletion = true
+        }
+    }
+
+    private func pickerDidDismiss() {
+        // Wiersz stuknięty w trakcie zjazdu otwiera arkusz od nowa — wtedy
+        // dalej jest na ekranie.
+        pickerOnScreen = picking != nil
+        guard !pickerOnScreen, let alert = pendingAlert else { return }
+        pendingAlert = nil
+        show(alert)
     }
 
     /// Puste imię się nie zapisuje — „Zapisz” jest wtedy wyłączone.
@@ -440,6 +495,9 @@ struct ProfileDetailsSheet: View {
         } else {
             pickerField = field
             picking = field
+            pickerOnScreen = true
+            // Nowy wybór odwołuje okno czekające na zjazd poprzedniego.
+            pendingAlert = nil
         }
     }
 
@@ -489,8 +547,7 @@ struct ProfileDetailsSheet: View {
                 icon: "trash.fill",
                 isLoading: isDeleting
             ) {
-                picking = nil
-                isConfirmingDeletion = true
+                present(.deleteAccount)
             }
 
             if let deletionError {
@@ -541,7 +598,8 @@ struct ProfileDetailsSheet: View {
             yearOfBirth: yearOfBirth,
             heightCm: heightCm,
             weightKg: weightKg,
-            sex: sexRaw.isEmpty ? nil : sexRaw
+            sex: sexRaw.isEmpty ? nil : sexRaw,
+            clearSex: sexRaw.isEmpty && clearsSex
         )
 
         await sessionStore.saveUserPreferences(activityLevel: activityLevelRaw)
@@ -572,6 +630,10 @@ struct ProfileDetailsSheet: View {
         let weight = weightKg
         let activity = activityLevelRaw
         let sexValue = sexRaw
+        let clearSex = sexValue.isEmpty && clearsSex
+        // Zapis już zaplanowany — krzyżyk woła tę funkcję, a zaraz po nim
+        // `onDisappear` drugi raz; bez zdjęcia flagi poszłyby dwa zapisy.
+        didEditThisSession = false
 
         // Kolejka do stałej PRZED zadaniem: zaraz po tej funkcji arkusz się
         // zamyka (`commitAndClose`) albo ekran schodzi „wstecz”, i środowisko
@@ -583,7 +645,8 @@ struct ProfileDetailsSheet: View {
                 yearOfBirth: year,
                 heightCm: height,
                 weightKg: weight,
-                sex: sexValue.isEmpty ? nil : sexValue
+                sex: sexValue.isEmpty ? nil : sexValue,
+                clearSex: clearSex
             )
             let preferencesSaved = await store.saveUserPreferences(activityLevel: activity)
 
@@ -724,13 +787,16 @@ private struct ProfileFieldPickerSheet: View {
                 .padding(.bottom, 2)
 
                 // Inny wiersz = inny wybór w tym samym arkuszu: stary gaśnie,
-                // nowy wchodzi w jego miejsce.
-                picker
-                    .id(field)
-                    .transition(.opacity)
-                    .frame(maxHeight: .infinity)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
+                // nowy wchodzi w JEGO miejsce (`ZStack` — w `VStack` przez chwilę
+                // stałyby oba jeden pod drugim).
+                ZStack {
+                    picker
+                        .id(field)
+                        .transition(.opacity)
+                }
+                .frame(maxHeight: .infinity)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
             }
         }
         .animation(.smooth(duration: 0.22), value: field)
@@ -920,7 +986,7 @@ private extension ActivityLevel {
         case .sedentary:  return "sofa.fill"
         case .light:      return "figure.walk"
         case .active:     return "figure.run"
-        case .veryActive: return "figure.highintensity.intervalTraining"
+        case .veryActive: return "figure.highintensity.intervaltraining"
         }
     }
 

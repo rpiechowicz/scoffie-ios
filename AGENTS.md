@@ -150,8 +150,14 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   wynik zmienia się na oczach, a stuknięcie w inny wiersz podmienia wybór bez zamykania (`picking` / `pickerField`);
   zamyka krzyżyk, przeciągnięcie albo ten sam wiersz, zapis od razu (bez „Gotowe”). Płeć = kafle z „Nie podaję”,
   rok i wzrost = koło, waga = koło kilogramów i dziesiątych jak w Zdrowiu (dokładność 0,1 kg jak dawne pole).
-  `SCWheelPicker` (`Components/`) = `UIPickerView` z kolumnami — WŁASNY, bo dwa `Picker(.wheel)` obok siebie nakładają
-  obszary dotyku (UIKit liczy je z naturalnej szerokości koła); wartość wchodzi, gdy koło stanie. Treningi =
+  „Nie podaję” wybrane w TYM otwarciu = `saveProfile(clearSex: true)` → jawny `null` (pominięte pole serwer zostawia
+  i stara płeć wracała z `users:me`). Ołówek i „Usuń konto” przy otwartym małym arkuszu: najpierw zjazd, okno
+  z `onDismiss` (`pendingAlert`) — alertu z widoku prezentującego arkusz system nie pokaże. Zapis przy zejściu
+  (`onDisappear`) w OBU trybach — przeciągnięcie w dół anulowało debounce. Imię tnie `SessionStore.limitedDisplayName`
+  (punkty kodowe, jak `@MaxLength` serwera). `SCWheelPicker` (`Components/`) = `UIPickerView` z kolumnami — WŁASNY,
+  bo dwa `Picker(.wheel)` obok siebie nakładają obszary dotyku (UIKit liczy je z naturalnej szerokości koła); wartość
+  wchodzi, gdy koło stanie; koło przestawia się TYLKO przy zmianie z zewnątrz (`shownRows`, nie `selectedRow` — to
+  cofało wybiegające koło), a przycięty zapis (250 kg zeruje dziesiąte) dociąga w `didSelectRow`. Treningi =
   `SCIconTilePicker` (`Components/`, wariant A „Kafle”): ikona w kółku w kolorze wysiłku (0–1 indygo `sofa.fill`, 2–3
   szałwia, 4–5 terakota, 6+ `SCPalette.Toast.ember`), wybrany = pełne kółko (głęboki wariant) + szklana soczewka
   przesuwana sprężyną z `LensSquish` (wspólne z `RecipeFilterSegment`) + podskok ikony; BEZ podpisu z nazwą poziomu

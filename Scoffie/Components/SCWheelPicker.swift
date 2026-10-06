@@ -56,15 +56,22 @@ struct SCWheelPicker: UIViewRepresentable {
             picker.reloadAllComponents()
         }
 
-        // Wartość zmieniona z zewnątrz (np. 250 kg zeruje dziesiąte) — koło
-        // dojeżdża do niej. Przy pierwszym ułożeniu staje od razu, bez jazdy.
+        // Koło dojeżdża TYLKO do wartości zmienionej z zewnątrz — porównanie
+        // z `shownRows`, nie z `selectedRow`: w trakcie wybiegania UIKit oddaje
+        // wiersz akurat pod paskiem, a przestawienie go w tej chwili cofałoby
+        // kręcącemu się użytkownikowi koło (przelicza się przecież cały arkusz,
+        // np. gdy staje sąsiednia kolumna wagi albo zapis odświeża `@AppStorage`).
+        // Przy pierwszym ułożeniu koło staje od razu, bez jazdy.
         for (component, column) in columns.enumerated() {
             guard let selection = column.selection else { continue }
             let row = selection.wrappedValue
             guard column.titles.indices.contains(row),
-                  picker.selectedRow(inComponent: component) != row
+                  needsReload || coordinator.shownRows[component] != row
             else { continue }
-            picker.selectRow(row, inComponent: component, animated: !needsReload)
+            coordinator.shownRows[component] = row
+            if picker.selectedRow(inComponent: component) != row {
+                picker.selectRow(row, inComponent: component, animated: !needsReload)
+            }
         }
     }
 
@@ -78,6 +85,9 @@ struct SCWheelPicker: UIViewRepresentable {
         var columns: [SCWheelColumn] = []
         var titles: [[String]] = []
         var textColor: UIColor = .label
+        /// Wiersz, na którym koło stoi według ostatniej wiedzy — z wyboru
+        /// użytkownika albo z wartości ustawionej z zewnątrz (kolumna → wiersz).
+        var shownRows: [Int: Int] = [:]
 
         /// Krój koła systemu (~22 pt) rosnący z „Większym tekstem” — z sufitem,
         /// żeby trzy kolumny wagi mieściły się w szerokości telefonu.
@@ -126,6 +136,21 @@ struct SCWheelPicker: UIViewRepresentable {
                   let selection = columns[component].selection
             else { return }
             selection.wrappedValue = row
+            shownRows[component] = row
+
+            // Zapis mógł zostać przycięty (250 kg zeruje dziesiąte). Gdy zapisana
+            // wartość się przy tym NIE zmieniła, SwiftUI nie zawoła `updateUIView`
+            // i koło zostałoby na odrzuconym wierszu — dociągamy je tu, każdą
+            // kolumnę, której przyjęta wartość różni się od tej na kole.
+            for (index, column) in columns.enumerated() {
+                guard let binding = column.selection else { continue }
+                let accepted = binding.wrappedValue
+                guard column.titles.indices.contains(accepted),
+                      shownRows[index] != accepted
+                else { continue }
+                shownRows[index] = accepted
+                pickerView.selectRow(accepted, inComponent: index, animated: true)
+            }
         }
 
         func pickerView(_ pickerView: UIPickerView, accessibilityLabelForComponent component: Int) -> String? {
