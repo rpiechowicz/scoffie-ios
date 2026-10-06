@@ -419,6 +419,7 @@ struct WeeklyPlanView: View {
                 PlanDayGoalBar(
                     nutrition: selectedDayNutrition,
                     targets: dailyTargets(for: nutritionPersonId),
+                    tab: .plan,
                     action: {
                         simpleSheet = .dayGoal
                         // Cel domownika mógł się zmienić od ostatniego
@@ -447,15 +448,13 @@ struct WeeklyPlanView: View {
                         }
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Color.clear.frame(width: 1, height: 1)
-                }
-            }
-            // Pusta warstwa paska nawigacji zjadałaby stuknięcia w akcje
-            // nagłówka, które siedzą pod nią.
-            .background(NavBarHitTestPassthrough())
+            // Pasek nawigacji SCHOWANY — jak w Zakupach i na korzeniu Przepisów.
+            // Pusty, ale żywy pasek leżał na wierszu nagłówka i łapał
+            // stuknięcia; hak wyłączający mu dotyk (`NavBarHitTestPassthrough`)
+            // pod systemowym `TabView` przestał działać — koszyk i „…” były
+            // martwe (Rafał 6.10.2026). Plan nie wpycha żadnych ekranów, więc
+            // pasek nie ma tu nic do pokazania.
+            .toolbar(.hidden, for: .navigationBar)
             .task(id: datesViewModel.weekStartISO) {
                 await mealStore.loadWeekPlanFromBackend(
                     weekStart: datesViewModel.weekStartISO,
@@ -951,41 +950,4 @@ struct WeeklyPlanView: View {
 
 #Preview {
     WeeklyPlanView()
-}
-
-// MARK: - Nav bar hit-test pass-through
-//
-// Ten sam prywatny pomocnik, co na każdym ekranie v2 (Kalendarz, Przepisy,
-// Produkty, Ustawienia): warstwa paska narzędzi zostaje żywa, więc systemowe
-// rozmycie przy przewijaniu dalej działa, ale przestaje łapać dotknięcia na
-// swojej ~44-punktowej wysokości — inaczej zjadałaby stuknięcia w akcje
-// nagłówka i strzałki tygodnia, które siedzą pod nią.
-private struct NavBarHitTestPassthrough: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        BarUnlocker()
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {}
-
-    private final class BarUnlocker: UIView {
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            // Defer one runloop tick so the navigation controller is wired up.
-            DispatchQueue.main.async { [weak self] in
-                self?.findNavigationBar()?.isUserInteractionEnabled = false
-            }
-        }
-
-        private func findNavigationBar() -> UINavigationBar? {
-            var responder: UIResponder? = self
-            while let r = responder {
-                if let vc = r as? UIViewController,
-                   let bar = vc.navigationController?.navigationBar {
-                    return bar
-                }
-                responder = r.next
-            }
-            return nil
-        }
-    }
 }

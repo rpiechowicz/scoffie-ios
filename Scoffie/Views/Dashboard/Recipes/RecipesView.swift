@@ -70,6 +70,9 @@ struct RecipesView: View {
     /// otwarciu, żeby arkusz nie przestawiał się pod palcem, gdy zakładka
     /// wyników wróci do „Wszystkie”.
     @State private var filterSheetScope: RecipesCategory?
+    /// Systemowy pasek zakładek zwinięty przewijaniem korzenia — pasek
+    /// szukania zjeżdża wtedy obok jego ikony (`recipesTracksTabBarMinimize`).
+    @State private var isTabBarMinimized = false
 
     /// Numer doby posiłkowej — ziarno codziennej rotacji propozycji.
     /// Trzymany w stanie, a nie liczony w locie z `Date()`, żeby przewijanie
@@ -541,6 +544,7 @@ struct RecipesView: View {
         .scrollDismissesKeyboard(.immediately)
         // Duży tytuł zjechał — pod paskiem stanu staje szklana kapsuła.
         .scReportsCompactTitle("Przepisy", for: .recipes)
+        .recipesTracksTabBarMinimize($isTabBarMinimized)
         .ignoresSafeArea(.container, edges: .top)
         // Nowa fraza albo wejście w wyniki / wyjście z nich — od góry
         // (wyniki mogły zacząć się wysoko nad miejscem, w którym się było).
@@ -569,23 +573,18 @@ struct RecipesView: View {
             if !active { scope = nil }
         }
         }
-        // Pasek szukania stoi nad systemowym paskiem zakładek (a przy
-        // klawiaturze — nad nią) jako pasek bezpiecznego obszaru: lista
-        // przejeżdża pod szkłem i kończy się nad nim, a pod paskiem leży
-        // natywny efekt krawędzi przewijania (jak w Poczcie na iOS 26).
-        .safeAreaBar(edge: .bottom, spacing: 0) {
+        // Pasek szukania nad systemowym paskiem zakładek, przy jego zwinięciu
+        // zjeżdża obok ikony — ta sama droga, co na ekranie kategorii.
+        .recipesSearchDock(
             RecipesSearchBar(
                 text: $searchText,
                 activeFilterCount: filters.activeCount(in: scope),
                 onSubmit: { debouncedSearchText = searchText },
-                onOpenFilters: { openFilters(scope: scope) }
-            )
-            .padding(.horizontal, pageHorizontalPadding)
-            .padding(.bottom, 8)
-        }
-        // Miękki, jawnie — `.automatic` z Xcode Cloud wychodził jako `.hard`
-        // (kreska i kryjące tło, patrz `scSheetFooterEdge`).
-        .scrollEdgeEffectStyle(.soft, for: .bottom)
+                onOpenFilters: { openFilters(scope: scope) },
+                besideMinimizedTabBar: isTabBarMinimized
+            ),
+            horizontalPadding: pageHorizontalPadding
+        )
     }
 
     private static let topAnchor = "recipes-top"

@@ -912,6 +912,7 @@ struct CalendarView: View {
                     // odróżnić dnia z planem od dnia pustego. Blada warstwa
                     // pod każdym torem mówi, dokąd ten dzień ma dojść.
                     planned: planNutrition(on: selectedDate),
+                    tab: .calendar,
                     action: { simpleSheet = .dayGoal }
                 )
                 .frame(width: goalBarWidth)
@@ -932,23 +933,11 @@ struct CalendarView: View {
                         }
                 }
             }
-            // Pasek nawigacji zostaje na miejscu, ale pusty i przezroczysty:
-            // nagłówek ekranu jest przypięty, więc nie ma czego pod niego
-            // wsunąć i materiał `.bar` już się nie zapala. Pusty element
-            // trzyma pasek przed zwinięciem.
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Color.clear.frame(width: 1, height: 1)
-                }
-            }
-            // The empty nav-bar layer would otherwise intercept taps in the
-            // ~44pt zone of the header, blocking its day arrows. We let
-            // SwiftUI keep rendering the bar (so the auto-blur still runs),
-            // but disable its UIKit hit testing so touches fall through to
-            // the scroll content underneath. There are no real toolbar
-            // items, so nothing legitimate is lost.
-            .background(NavBarHitTestPassthrough())
+            // Pasek nawigacji SCHOWANY, jak na Planie i w Ustawieniach — pusty,
+            // żywy pasek łapał stuknięcia w ‹ › nagłówka, a hak
+            // `NavBarHitTestPassthrough` pod systemowym `TabView` przestał
+            // działać (6.10.2026). Dziś nie wpycha żadnych ekranów.
+            .toolbar(.hidden, for: .navigationBar)
             // Wejście na zakładkę: nowa doba wraca na dziś, a zakres dni
             // dociąga się (raz na dobę) albo przejmuje nasłuch tygodnia.
             // Flaga zamiast `onAppear`, bo zakładki żyją wszystkie naraz.
@@ -1690,46 +1679,4 @@ struct CalendarView: View {
 
 #Preview {
     CalendarView()
-}
-
-// MARK: - Nav bar hit-test pass-through
-//
-// SwiftUI's `NavigationStack` keeps the toolbar layer "live" so the auto-blur
-// material can fade in on scroll, but that layer also captures touches across
-// its full ~44pt height — even when the toolbar is visually empty. That
-// blocks the week-bar chips from receiving taps once the layout extends
-// under it via `.ignoresSafeArea(.container, edges: .top)`.
-//
-// We don't have any real toolbar items here (just an invisible 1×1 placeholder
-// used to keep the bar from collapsing). Disabling user interaction on the
-// underlying `UINavigationBar` lets touches fall through to the SwiftUI
-// content below while leaving the auto-blur rendering intact.
-private struct NavBarHitTestPassthrough: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        BarUnlocker()
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {}
-
-    private final class BarUnlocker: UIView {
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            // Defer one runloop tick so the navigation controller is wired up.
-            DispatchQueue.main.async { [weak self] in
-                self?.findNavigationBar()?.isUserInteractionEnabled = false
-            }
-        }
-
-        private func findNavigationBar() -> UINavigationBar? {
-            var responder: UIResponder? = self
-            while let r = responder {
-                if let vc = r as? UIViewController,
-                   let bar = vc.navigationController?.navigationBar {
-                    return bar
-                }
-                responder = r.next
-            }
-            return nil
-        }
-    }
 }

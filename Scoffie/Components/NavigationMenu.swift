@@ -39,12 +39,19 @@ extension EnvironmentValues {
 /// - `compactTitles` — kapsuła z tytułem pod paskiem stanu (`SCCompactTitle`),
 ///   którą rysuje `NavigationMenu` nad wszystkimi zakładkami;
 /// - `keyboardCurve` — krzywa klawiatury dla wszystkiego, co jedzie z polem
-///   nad klawiaturą (powitanie Asystenta).
+///   nad klawiaturą (powitanie Asystenta);
+/// - `goalBarHeights` — wysokości pigułek kcal Planu i Dziś, z których
+///   pigułka zakładki, na którą się weszło, zaczyna swoje przejście.
 @Observable
 final class SCTabBarChrome {
     /// Tytuł do kapsuły pod paskiem stanu (`SCCompactTitle`) dla zakładek,
     /// których duży tytuł zjechał już pod górną krawędź.
     var compactTitles: [DashboardTab: String] = [:]
+
+    /// Ostatnia zmierzona wysokość pigułki kcal (`PlanDayGoalBar`) na danej
+    /// zakładce. Czytana tylko w akcjach, nigdy w `body` — zapis nie
+    /// przebudowuje menu.
+    var goalBarHeights: [DashboardTab: CGFloat] = [:]
 
     /// Krzywa klawiatury iOS — krzywa 7 z `UIKeyboardAnimationCurveUserInfoKey`
     /// nie ma publicznego odpowiednika; to jej znane przybliżenie Béziera.

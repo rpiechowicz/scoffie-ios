@@ -390,13 +390,10 @@ struct SettingsView: View {
                 .scReportsCompactTitle("Ustawienia", for: .settings)
                 .ignoresSafeArea(.container, edges: .top)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Color.clear.frame(width: 1, height: 1)
-                }
-            }
-            .background(NavBarHitTestPassthrough())
+            // Pasek nawigacji SCHOWANY, jak na Planie i Dziś — pusty, żywy pasek
+            // łapał stuknięcia w górne wiersze, a hak `NavBarHitTestPassthrough`
+            // pod systemowym `TabView` przestał działać (6.10.2026).
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showLegalDocumentsSheet) {
                 LegalDocumentsSheet(dataExportClient: sessionStore.dataExportClient)
             }
@@ -3003,44 +3000,6 @@ struct ProfileAvatar: View {
             return String(first).uppercased()
         }
         return "?"
-    }
-}
-
-// MARK: - Nav bar hit-test pass-through (shared with Calendar / Produkty)
-//
-// SwiftUI's `NavigationStack` keeps the toolbar layer "live" so the auto-blur
-// material can fade in on scroll, but that layer also captures touches across
-// its full ~44pt height — even when the toolbar is visually empty. That blocks
-// taps on the top-most rows once the layout extends under it via
-// `.ignoresSafeArea(.container, edges: .top)`. There are no real toolbar
-// items here, so disabling user interaction on the underlying
-// `UINavigationBar` lets touches fall through while the auto-blur stays live.
-private struct NavBarHitTestPassthrough: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        BarUnlocker()
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {}
-
-    private final class BarUnlocker: UIView {
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            DispatchQueue.main.async { [weak self] in
-                self?.findNavigationBar()?.isUserInteractionEnabled = false
-            }
-        }
-
-        private func findNavigationBar() -> UINavigationBar? {
-            var responder: UIResponder? = self
-            while let r = responder {
-                if let vc = r as? UIViewController,
-                   let bar = vc.navigationController?.navigationBar {
-                    return bar
-                }
-                responder = r.next
-            }
-            return nil
-        }
     }
 }
 
