@@ -16,7 +16,8 @@ struct CookidooIntegrationSheet: View {
     @State private var passwordDraft = ""
     @State private var isPasswordVisible = false
     @State private var errorMessage: String?
-    @State private var showInfoSheet = false
+    /// „Jak to działa” — ekran wepchnięty w ten arkusz, nie arkusz na nim.
+    @State private var showsThermomixInfo = false
     @State private var showDisconnectAlert = false
 
     @FocusState private var focusedField: Field?
@@ -33,51 +34,50 @@ struct CookidooIntegrationSheet: View {
     }
 
     var body: some View {
-        ZStack {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
+        NavigationStack {
+            ZStack {
+                SCPageBackground(scheme: scheme)
+                    .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    EditorialSheetHeader(
-                        eyebrow: "Integracje",
-                        title: "Cookidoo",
-                        icon: "app.connected.to.app.below.fill",
-                        accent: SCPalette.sage,
-                        onClose: onClose
-                    )
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        EditorialSheetHeader(
+                            eyebrow: "Integracje",
+                            title: "Cookidoo",
+                            icon: "app.connected.to.app.below.fill",
+                            accent: SCPalette.sage,
+                            onClose: onClose
+                        )
 
-                    switch store?.status {
-                    case .connected(let login):
-                        connectedCard(login: login)
-                        subscriptionWarningCard
-                        howItWorksLink
-                        disconnectButton
-                    case .authFailed(let login):
-                        authFailedBanner
-                        connectForm(prefilledEmail: login)
-                    case .notConnected, .unknown, .disabled, nil:
-                        introCard
-                        howItWorksLink
-                        connectForm(prefilledEmail: nil)
+                        switch store?.status {
+                        case .connected(let login):
+                            connectedCard(login: login)
+                            subscriptionWarningCard
+                            howItWorksLink
+                            disconnectButton
+                        case .authFailed(let login):
+                            authFailedBanner
+                            connectForm(prefilledEmail: login)
+                        case .notConnected, .unknown, .disabled, nil:
+                            introCard
+                            howItWorksLink
+                            connectForm(prefilledEmail: nil)
+                        }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 22)
+                    .padding(.bottom, 40)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 22)
-                .padding(.bottom, 40)
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
             }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showsThermomixInfo) {
+                ThermomixInfoSheet(isPushed: true)
+            }
         }
         .task {
             await store?.refresh()
-        }
-        .sheet(isPresented: $showInfoSheet) {
-            ThermomixInfoSheet {
-                showInfoSheet = false
-            }
-            .presentationDetents([.medium, .large])
-            .dashboardLiquidSheet()
         }
         .alert("Rozłączyć Cookidoo?", isPresented: $showDisconnectAlert) {
             Button("Anuluj", role: .cancel) {}
@@ -120,7 +120,7 @@ struct CookidooIntegrationSheet: View {
 
     private var howItWorksLink: some View {
         Button {
-            showInfoSheet = true
+            showsThermomixInfo = true
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "questionmark.circle.fill")

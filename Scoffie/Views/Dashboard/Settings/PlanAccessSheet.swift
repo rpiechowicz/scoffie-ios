@@ -14,8 +14,10 @@ import SwiftUI
 /// jedna sprawa i jedno miejsce, a nie dwa ekrany z tymi samymi liczbami.
 ///
 /// Odpowiada na „co mam?": stan, pula i jeden wiersz wejścia do planów.
-/// Wybór planu ma własny arkusz (`PlansSheet`), który wjeżdża NA ten —
-/// karuzela chowała dwa z trzech planów i kazała porównywać ceny kawałkami.
+/// Wybór planu (`PlansSheet`) wjeżdża jako kolejny ekran TEGO arkusza (push
+/// z systemowym „wstecz”), tak samo regulamin i polityka — bez arkuszy na
+/// arkuszu. Karuzela chowała dwa z trzech planów i kazała porównywać ceny
+/// kawałkami.
 ///
 /// Cztery stany, ta sama kolejność w każdym (plakietka → zużycie → reszta),
 /// żeby powrót na ekran nie wymagał ponownego czytania:
@@ -36,7 +38,7 @@ struct PlanAccessSheet: View {
     /// niczego nie kupi. Normalnie używamy tego z `SessionStore`, bo tylko on
     /// żyje wystarczająco długo, żeby złapać odnowienie subskrypcji.
     @State private var fallbackSubscriptions = SubscriptionStore()
-    /// „Wybierz plan" — arkusz wyboru NA tym arkuszu, nie zamiast niego.
+    /// „Wybierz plan" — ekran wyboru wepchnięty w stos tego arkusza.
     @State private var showsPlans = false
     @State private var showTerms = false
     @State private var showPrivacy = false
@@ -71,19 +73,21 @@ struct PlanAccessSheet: View {
                     .animation(.smooth(duration: 0.3), value: usage)
             }
             .toolbar(.hidden, for: .navigationBar)
+            // Plany i dokumenty to kolejne ekrany TEGO arkusza (push), nie
+            // arkusze na arkuszu. Wewnątrz stosu, na jego pierwszym ekranie.
+            .navigationDestination(isPresented: $showsPlans) {
+                PlansSheet(isPushed: true, onPurchased: {
+                    Task { usage = await sessionStore.agentStore?.loadUsage() }
+                })
+            }
+            .navigationDestination(isPresented: $showTerms) {
+                LegalDocumentPage(title: "Regulamin") { TermsOfServiceContent() }
+            }
+            .navigationDestination(isPresented: $showPrivacy) {
+                LegalDocumentPage(title: "Polityka prywatności") { PrivacyPolicyContent() }
+            }
         }
         .presentationDragIndicator(.visible)
-        .sheet(isPresented: $showsPlans) {
-            PlansSheet(onPurchased: {
-                Task { usage = await sessionStore.agentStore?.loadUsage() }
-            })
-        }
-        .sheet(isPresented: $showTerms) {
-            LegalDocumentSheet(title: "Regulamin") { TermsOfServiceContent() }
-        }
-        .sheet(isPresented: $showPrivacy) {
-            LegalDocumentSheet(title: "Polityka prywatności", icon: "hand.raised.fill", accent: SCPalette.indigo) { PrivacyPolicyContent() }
-        }
         .onChange(of: subscriptions.state) { _, _ in
             // TRANSAKCJA POTRAFI DOJŚĆ, GDY ARKUSZ JEST OTWARTY: odnowienie,
             // zatwierdzone „Poproś o zakup", zgłoszenie ponowione po powrocie

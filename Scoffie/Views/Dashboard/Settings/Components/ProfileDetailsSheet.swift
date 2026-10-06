@@ -14,6 +14,11 @@ import SwiftUI
 // `settings.profile.*` kontra `settings.diet.*`.
 struct ProfileDetailsSheet: View {
     var onClose: () -> Void
+    /// Ekran wepchnięty w inny arkusz (odsyłacz „Uzupełnij sylwetkę w „Twoje
+    /// dane”” w „Dieta i alergeny”): systemowy pasek z „wstecz” zamiast
+    /// nagłówka z krzyżykiem, a zapis przy zejściu z ekranu — „wstecz” nie
+    /// przechodzi przez `commitAndClose`.
+    var isPushed: Bool = false
 
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.toasts) private var toasts
@@ -35,6 +40,9 @@ struct ProfileDetailsSheet: View {
 
     @State private var isConfirmingDeletion = false
     @State private var isDeleting = false
+    /// Konto usunięte — ekran wepchnięty, który właśnie schodzi, nie ma już
+    /// czego zapisywać.
+    @State private var accountDeleted = false
     @State private var deletionError: String?
 
     // Pola tekstowe NIE są związane wprost z `@AppStorage`. `SessionStore
@@ -83,40 +91,38 @@ struct ProfileDetailsSheet: View {
     private var sex: Sex? { Sex(rawValue: sexRaw) }
 
     var body: some View {
-        ZStack {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // Przypięty nad treścią: arkusz jest dłuższy niż ekran,
-                // a nagłówek w `ScrollView` odjeżdżał razem z krzyżykiem.
-                // Sylwetka — ten sam kafelek, co pierwszy krok kreatora.
-                EditorialSheetHeader(eyebrow: "Konto", title: "Twoje dane", icon: "person.fill") {
-                    commitAndClose()
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 12)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        Text("Na podstawie tych danych aplikacja podpowiada zapotrzebowanie kaloryczne. Zostają na Twoim koncie — nie trafiają nigdzie dalej.")
-                            .font(.system(size: 13.5, weight: .regular))
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        identitySection
-                        bodySection
-                        activitySection
-                        deleteAccountSection
+        Group {
+            if isPushed {
+                scrollContent
+                    .scPushedPage("Twoje dane")
+                    // „Wstecz” nie woła `commitAndClose` — pola i zapis
+                    // domykają się przy zejściu z ekranu. Nie w trakcie ani po
+                    // usunięciu konta: zasłona zdejmuje ekran, zanim
+                    // `deleteAccount` wróci.
+                    .onDisappear {
+                        guard !isDeleting, !accountDeleted else { return }
+                        commitAndSave()
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 6)
-                    .padding(.bottom, 28)
+            } else {
+                ZStack {
+                    SCPageBackground(scheme: scheme)
+                        .ignoresSafeArea()
+
+                    VStack(spacing: 0) {
+                        // Przypięty nad treścią: arkusz jest dłuższy niż ekran,
+                        // a nagłówek w `ScrollView` odjeżdżał razem z krzyżykiem.
+                        // Sylwetka — ten sam kafelek, co pierwszy krok kreatora.
+                        EditorialSheetHeader(eyebrow: "Konto", title: "Twoje dane", icon: "person.fill") {
+                            commitAndClose()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 18)
+                        .padding(.bottom, 12)
+
+                        scrollContent
+                            .scScrollEdgeFade()
+                    }
                 }
-                .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.interactively)
-                .scScrollEdgeFade()
             }
         }
         .onAppear {
@@ -153,6 +159,27 @@ struct ProfileDetailsSheet: View {
             guard !Task.isCancelled else { return }
             await pushProfile()
         }
+    }
+
+    private var scrollContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Na podstawie tych danych aplikacja podpowiada zapotrzebowanie kaloryczne. Zostają na Twoim koncie — nie trafiają nigdzie dalej.")
+                    .font(.system(size: 13.5, weight: .regular))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                identitySection
+                bodySection
+                activitySection
+                deleteAccountSection
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, isPushed ? 8 : 6)
+            .padding(.bottom, 28)
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
     }
 
     // MARK: - Tożsamość
@@ -457,6 +484,7 @@ struct ProfileDetailsSheet: View {
             isDeleting = false
 
             if succeeded {
+                accountDeleted = true
                 onClose()
             } else {
                 deletionError = store.authError ?? "Nie udało się usunąć konta. Spróbuj ponownie."
@@ -577,12 +605,18 @@ struct ProfileDetailsSheet: View {
     /// zmieniło — otwarcie i zamknięcie arkusza bez edycji nie może wypchnąć
     /// lokalnego stanu do bazy (patrz komentarz przy `didEditThisSession`).
     private func commitAndClose() {
+        commitAndSave()
+        onClose()
+    }
+
+    /// Domknięcie pól i zapis na serwer, jeśli w tym otwarciu coś się
+    /// zmieniło — bez zamykania (ekran wepchnięty schodzi „wstecz” sam).
+    private func commitAndSave() {
         focusedField = nil
         let tokenBeforeCommit = profileSyncToken
         commitAllFields()
         normaliseStoredValues()
         guard didEditThisSession || profileSyncToken != tokenBeforeCommit else {
-            onClose()
             return
         }
         let store = sessionStore
@@ -593,9 +627,9 @@ struct ProfileDetailsSheet: View {
         let activity = activityLevelRaw
         let sexValue = sexRaw
 
-        // Kolejka do stałej PRZED zadaniem: `onClose()` leci kilka linijek
-        // niżej i środowisko tego arkusza już nie istnieje, gdy `await`
-        // wracają.
+        // Kolejka do stałej PRZED zadaniem: zaraz po tej funkcji arkusz się
+        // zamyka (`commitAndClose`) albo ekran schodzi „wstecz”, i środowisko
+        // tego widoku już nie istnieje, gdy `await` wracają.
         let toasts = toasts
         Task { @MainActor in
             let profileSaved = await store.saveProfile(
@@ -622,8 +656,6 @@ struct ProfileDetailsSheet: View {
                 )
             }
         }
-
-        onClose()
     }
 
     /// `@AppStorage` oddaje 0 dla klucza, którego nie ma albo który ktoś

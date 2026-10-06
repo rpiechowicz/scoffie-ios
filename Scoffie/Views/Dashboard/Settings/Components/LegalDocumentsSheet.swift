@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// „Prywatność i regulamin" — jeden arkusz z Ustawień, z którego otwierają
-/// się (jako arkusze nad nim) polityka prywatności, warunki korzystania
-/// i „Pobierz moje dane". Trzy osobne wiersze w Ustawieniach robiły z sekcji
-/// Informacje listę dokumentów; tu jest jedno wejście i komplet w środku.
+/// „Prywatność i regulamin" — jeden arkusz z Ustawień, w którym polityka
+/// prywatności, warunki korzystania i „Pobierz moje dane" wjeżdżają jako
+/// kolejne ekrany TEGO arkusza (push z systemowym „wstecz”), a nie arkusze
+/// nad nim. Trzy osobne wiersze w Ustawieniach robiły z sekcji Informacje
+/// listę dokumentów; tu jest jedno wejście i komplet w środku.
 struct LegalDocumentsSheet: View {
     let dataExportClient: DataExportAPIClient?
 
@@ -80,22 +81,46 @@ struct LegalDocumentsSheet: View {
             .scrollIndicators(.hidden)
             .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showPrivacy) {
+                LegalDocumentPage(title: "Polityka prywatności") {
+                    PrivacyPolicyContent()
+                }
+            }
+            .navigationDestination(isPresented: $showTerms) {
+                LegalDocumentPage(title: "Warunki korzystania") {
+                    TermsOfServiceContent()
+                }
+            }
+            .navigationDestination(isPresented: $showExport) {
+                if let dataExportClient {
+                    DataExportPage(client: dataExportClient)
+                }
+            }
         }
         .presentationDragIndicator(.visible)
-        .sheet(isPresented: $showPrivacy) {
-            LegalDocumentSheet(title: "Polityka prywatności", icon: "hand.raised.fill", accent: SCPalette.indigo) {
-                PrivacyPolicyContent()
+    }
+}
+
+/// Dokument prawny jako ekran WEPCHNIĘTY w arkusz („Prywatność i regulamin”,
+/// „Asystent i plan”, wybór planu): systemowy pasek z „wstecz” i tytułem,
+/// pod nim sama treść. `LegalDocumentSheet` (własny nagłówek z krzyżykiem)
+/// zostaje dla miejsc, w których dokument JEST pierwszym arkuszem — stopka
+/// logowania, zgoda Asystenta.
+struct LegalDocumentPage<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                content()
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 28)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .sheet(isPresented: $showTerms) {
-            LegalDocumentSheet(title: "Warunki korzystania") {
-                TermsOfServiceContent()
-            }
-        }
-        .sheet(isPresented: $showExport) {
-            if let dataExportClient {
-                DataExportSheet(client: dataExportClient)
-            }
-        }
+        .scrollIndicators(.hidden)
+        .scPushedPage(title)
     }
 }

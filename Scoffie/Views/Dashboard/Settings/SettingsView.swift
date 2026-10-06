@@ -48,6 +48,9 @@ struct SettingsView: View {
 
     @State private var showCreateHouseholdSheet = false
     @State private var showHouseholdSheet = false
+    /// „Utwórz gospodarstwo” z pustej karty arkusza gospodarstwa: arkusz
+    /// tworzenia wchodzi PO zamknięciu tamtego, a nie na nim.
+    @State private var opensCreateAfterHousehold = false
     @State private var showNotificationsSheet = false
     /// Zgoda systemu na powiadomienia — `nil`, dopóki system nie odpowiedział.
     /// Czytana przy wejściu, po powrocie aplikacji na wierzch i przy otwarciu
@@ -56,6 +59,10 @@ struct SettingsView: View {
     @State private var isRequestingNotifications = false
     @State private var showAppearanceSheet = false
     @State private var showDietSheet = false
+    /// Ekrany wpychane w arkusz „Dieta i alergeny” — wybór alergenów i „Twoje
+    /// dane” (z odsyłacza „Uzupełnij sylwetkę”), zamiast arkuszy na arkuszu.
+    @State private var showsAllergenPicker = false
+    @State private var showsProfileFromDiet = false
     @State private var showMealSlotsSheet = false
     @State private var showProfileSheet = false
     /// „Pomoc” — strona wsparcia scoffie.app w Safari w aplikacji.
@@ -402,7 +409,11 @@ struct SettingsView: View {
                 createHouseholdSheet
                     .dashboardLiquidSheet()
             }
-            .sheet(isPresented: $showHouseholdSheet) {
+            .sheet(isPresented: $showHouseholdSheet, onDismiss: {
+                guard opensCreateAfterHousehold else { return }
+                opensCreateAfterHousehold = false
+                showCreateHouseholdSheet = true
+            }) {
                 householdManagementSheet
                     .dashboardLiquidSheet()
             }
@@ -462,7 +473,12 @@ struct SettingsView: View {
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
             }
-            .sheet(isPresented: $showDietSheet) {
+            .sheet(isPresented: $showDietSheet, onDismiss: {
+                // Arkusz zamknięty z wepchniętym ekranem — następne otwarcie
+                // ma zacząć od diety, nie od alergenów czy „Twoich danych”.
+                showsAllergenPicker = false
+                showsProfileFromDiet = false
+            }) {
                 dietSheet
                     .dashboardLiquidSheet()
             }
@@ -1316,34 +1332,58 @@ struct SettingsView: View {
     // Both selections persist to `@AppStorage` instantly — the xmark
     // button is the only way out, no save / cancel needed.
     private var dietSheet: some View {
-        pinnedEditorialSheet {
-            EditorialSheetHeader(
-                eyebrow: "Personalizacja",
-                title: "Dieta i alergeny",
-                icon: "leaf.fill",
-                accent: SCPalette.sage
-            ) {
-                showDietSheet = false
-            }
-        } content: {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Aplikacja użyje tych ustawień na liście przepisów: dieta i alergeny odsiewają dania, a cel decyduje, które trafią na górę.")
-                    .font(.system(size: 13.5, weight: .regular))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
+        // Własny stos nawigacji: wybór alergenów i „Twoje dane” wjeżdżają jako
+        // kolejne ekrany TEGO arkusza, nie arkusze na nim. Pierwszy ekran
+        // zostaje przy swoim nagłówku (pasek systemu schowany).
+        NavigationStack {
+            pinnedEditorialSheet {
+                EditorialSheetHeader(
+                    eyebrow: "Personalizacja",
+                    title: "Dieta i alergeny",
+                    icon: "leaf.fill",
+                    accent: SCPalette.sage
+                ) {
+                    showDietSheet = false
+                }
+            } content: {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Aplikacja użyje tych ustawień na liście przepisów: dieta i alergeny odsiewają dania, a cel decyduje, które trafią na górę.")
+                        .font(.system(size: 13.5, weight: .regular))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
 
-                calorieGoalSection
-                macroSection
-                goalPickerSection
-                dietPickerSection
-                allergensSection
+                    calorieGoalSection
+                    macroSection
+                    goalPickerSection
+                    dietPickerSection
+                    allergensSection
 
-                if hasCustomisedPreferences {
-                    resetPreferencesButton
-                        .padding(.top, 4)
+                    if hasCustomisedPreferences {
+                        resetPreferencesButton
+                            .padding(.top, 4)
+                    }
                 }
             }
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showsAllergenPicker) {
+                AllergenPickerSheet(
+                    selected: selectedAllergens,
+                    hiddenRecipes: allergenHiddenRecipes,
+                    onToggle: { toggleAllergen($0) },
+                    onClear: { clearAllergens() },
+                    isPushed: true
+                )
+            }
+            .navigationDestination(isPresented: $showsProfileFromDiet) {
+                // Usunięcie konta stamtąd zamyka cały arkusz.
+                ProfileDetailsSheet(onClose: { showDietSheet = false }, isPushed: true)
+            }
         }
+        // Alert, zapis i jego licznik na STOSIE, nie na pierwszym ekranie:
+        // ekran przykryty wepchniętym znika z widoku (`onDisappear`), a `task`
+        // związany z nim anulowałby się razem z nim — zmiana alergenów na
+        // ekranie wyboru nie doszłaby wtedy na serwer.
+        //
         // Na arkuszu diety, a nie na ekranie Ustawień — alert podpięty pod
         // widok przykryty arkuszem się nie pokaże.
         .alert("Wyczyścić preferencje?", isPresented: $showResetPreferencesAlert) {
@@ -1507,11 +1547,19 @@ struct SettingsView: View {
                 .foregroundStyle(SCPalette.butter)
                 .frame(width: 22)
 
-            Text(calorieSuggestionText)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.scMuted(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(calorieSuggestionText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // Odsyłacz do sylwetki prowadzi TAM, w tym samym arkuszu —
+                // zamiast kazać zamknąć dietę i szukać karty profilu.
+                if bodyMetrics == nil {
+                    openProfileFromDietLink
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Button {
                 withAnimation(.smooth(duration: 0.22)) {
@@ -1634,11 +1682,16 @@ struct SettingsView: View {
                         .frame(height: 1)
                     macroFooter(macros)
                 } else {
-                    Text("Uzupełnij sylwetkę w „Twoje dane”, a rozbijemy dzienny cel na białko, węglowodany i tłuszcze.")
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(16)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Uzupełnij sylwetkę w „Twoje dane”, a rozbijemy dzienny cel na białko, węglowodany i tłuszcze.")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(Color.scMuted(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        openProfileFromDietLink
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
                 }
             }
             .background(
@@ -1651,6 +1704,26 @@ struct SettingsView: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
+    }
+
+    /// „Twoje dane ›” — odsyłacz z arkusza diety do sylwetki. Wpycha ekran
+    /// „Twoje dane” w ten arkusz (`showsProfileFromDiet`); „wstecz” wraca do
+    /// diety z policzonymi już kaloriami i makro.
+    private var openProfileFromDietLink: some View {
+        Button {
+            showsProfileFromDiet = true
+        } label: {
+            HStack(spacing: 3) {
+                Text("Twoje dane")
+                    .font(.system(size: 13, weight: .semibold))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundStyle(SCPalette.terracotta)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.96))
+        .accessibilityHint("Otwiera wzrost, wagę i rok urodzenia")
     }
 
     private var macroDivider: some View {
@@ -1879,8 +1952,8 @@ struct SettingsView: View {
     }
 
     /// Alergeny w arkuszu diety to sam wynik — co jest wykluczone i ile
-    /// przepisów przez to znika. Wybór ma własny arkusz
-    /// (`AllergenPickerSheet`), patrz opis w `AllergenPickerSheet.swift`.
+    /// przepisów przez to znika. Wybór (`AllergenPickerSheet(isPushed:)`)
+    /// wjeżdża jako kolejny ekran tego arkusza, patrz `dietSheet`.
     private var allergensSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             EditorialSheetSectionLabel(title: "Alergeny i nietolerancje")
@@ -1889,7 +1962,8 @@ struct SettingsView: View {
                 selected: selectedAllergens,
                 hiddenRecipes: allergenHiddenRecipes,
                 onToggle: { toggleAllergen($0) },
-                onClear: { clearAllergens() }
+                onClear: { clearAllergens() },
+                onEdit: { showsAllergenPicker = true }
             )
         }
     }
@@ -2455,8 +2529,13 @@ struct SettingsView: View {
                 icon: "house.badge.plus",
                 isEnabled: true
             ) {
+                // Karta stoi W arkuszu gospodarstwa (dom zniknął, gdy był
+                // otwarty) — arkusz tworzenia zastępuje go zamiast wjeżdżać
+                // na niego; dwa arkusze z jednego ekranu SwiftUI i tak by nie
+                // pokazał.
                 createHouseholdName = ""
-                showCreateHouseholdSheet = true
+                opensCreateAfterHousehold = true
+                showHouseholdSheet = false
             }
         }
         .padding(18)

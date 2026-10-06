@@ -1,7 +1,8 @@
 import SwiftUI
 
 // Alergeny w Ustawieniach → „Dieta i alergeny”: karta z tym, czego unikasz,
-// i osobny arkusz wyboru.
+// i osobny wybór (w Ustawieniach ekran wepchnięty w arkusz diety, od
+// 6.10.2026 — bez arkusza na arkuszu; w kreatorze własny arkusz).
 //
 // Trzy wcześniejsze układy w samym arkuszu diety nie działały: chmura pigułek
 // rozjeżdżała się długością nazw, piętnaście kafli z opisami zajmowało półtora
@@ -17,8 +18,13 @@ import SwiftUI
 // MARK: - Karta + arkusz (Ustawienia i kreator)
 
 /// Alergeny tam, gdzie się je ustawia: Ustawienia → „Dieta i alergeny”
-/// i krok 3 kreatora. Karta z wynikiem otwiera arkusz wyboru — jeden
-/// mechanizm w obu miejscach.
+/// i krok 3 kreatora. Karta z wynikiem otwiera wybór — jeden mechanizm
+/// w obu miejscach.
+///
+/// Jak otwiera, zależy od miejsca. W kreatorze (ekran, nie arkusz) wybór
+/// wjeżdża własnym arkuszem. W Ustawieniach karta stoi już W arkuszu diety,
+/// więc tam wybór jest kolejnym ekranem tego arkusza (push) — właściciel
+/// podaje `onEdit` i sam wpycha `AllergenPickerSheet(isPushed: true)`.
 ///
 /// Widok niczego nie zapisuje: dostaje zaznaczone i oddaje stuknięcia.
 /// Unię „znane ∪ nieznane” (alergeny z nowszego buildu) trzyma właściciel,
@@ -30,6 +36,9 @@ struct AllergenSelectionField: View {
     let hiddenRecipes: Int?
     let onToggle: (Allergen) -> Void
     let onClear: () -> Void
+    /// Własne otwarcie wyboru (push w arkuszu Ustawień). `nil` = karta
+    /// otwiera wybór we własnym arkuszu.
+    var onEdit: (() -> Void)? = nil
 
     @State private var showsPicker = false
 
@@ -37,7 +46,13 @@ struct AllergenSelectionField: View {
         AllergenSummaryCard(
             selected: selected,
             hiddenRecipes: hiddenRecipes,
-            onEdit: { showsPicker = true }
+            onEdit: {
+                if let onEdit {
+                    onEdit()
+                } else {
+                    showsPicker = true
+                }
+            }
         )
         .sheet(isPresented: $showsPicker) {
             AllergenPickerSheet(
@@ -166,6 +181,11 @@ struct AllergenPickerSheet: View {
     let onToggle: (Allergen) -> Void
     /// „Wyczyść” obok krzyżyka — zdejmuje wszystkie zaznaczone alergeny.
     let onClear: () -> Void
+    /// Ekran wepchnięty w arkusz „Dieta i alergeny” (Ustawienia): systemowy
+    /// pasek z „wstecz” i „Wyczyść” zamiast nagłówka z krzyżykiem; „Gotowe”
+    /// w stopce wraca o ekran (`dismiss` w stosie). Bez tego — własny arkusz
+    /// (kreator).
+    var isPushed: Bool = false
 
     /// Pytanie przed wyczyszczeniem wszystkich alergenów.
     @State private var confirmsClear = false
@@ -174,60 +194,57 @@ struct AllergenPickerSheet: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        ZStack(alignment: .top) {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // „Wyczyść” jak w filtrach i w wykluczaniu składników —
-                // tylko wtedy, gdy coś jest zaznaczone.
-                // Tarcza w szałwii — jak karta „Jesz wszystko” pod spodem
-                // i etykieta alergenów w zachęcie Asystenta.
-                EditorialSheetHeader(
-                    eyebrow: "Dieta",
-                    title: "Alergeny",
-                    icon: "checkmark.shield.fill",
-                    accent: SCPalette.sage,
-                    onClose: { dismiss() }
-                ) {
-                    if !selected.isEmpty {
-                        // Z pytaniem, w odróżnieniu od „Wyczyść” w filtrach:
-                        // alergeny to bezpieczeństwo, a jedno stuknięcie
-                        // przywracało na listy wszystko, co ukrywały — tak
-                        // samo jak „Wyczyść preferencje”, które pyta.
-                        RecipeFilterClearButton(accessibilityLabel: "Wyczyść alergeny") {
-                            confirmsClear = true
+        Group {
+            if isPushed {
+                list
+                    .scSheetFooter { footer }
+                    .scPushedPage("Alergeny")
+                    .toolbar {
+                        if !selected.isEmpty {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button("Wyczyść") { confirmsClear = true }
+                                    .accessibilityLabel("Wyczyść alergeny")
+                            }
                         }
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    }
+            } else {
+                ZStack(alignment: .top) {
+                    SCPageBackground(scheme: scheme)
+                        .ignoresSafeArea()
+
+                    VStack(spacing: 0) {
+                        // „Wyczyść” jak w filtrach i w wykluczaniu składników —
+                        // tylko wtedy, gdy coś jest zaznaczone.
+                        // Tarcza w szałwii — jak karta „Jesz wszystko” pod spodem
+                        // i etykieta alergenów w zachęcie Asystenta.
+                        EditorialSheetHeader(
+                            eyebrow: "Dieta",
+                            title: "Alergeny",
+                            icon: "checkmark.shield.fill",
+                            accent: SCPalette.sage,
+                            onClose: { dismiss() }
+                        ) {
+                            if !selected.isEmpty {
+                                // Z pytaniem, w odróżnieniu od „Wyczyść” w filtrach:
+                                // alergeny to bezpieczeństwo, a jedno stuknięcie
+                                // przywracało na listy wszystko, co ukrywały — tak
+                                // samo jak „Wyczyść preferencje”, które pyta.
+                                RecipeFilterClearButton(accessibilityLabel: "Wyczyść alergeny") {
+                                    confirmsClear = true
+                                }
+                                .transition(.scale(scale: 0.85).combined(with: .opacity))
+                            }
+                        }
+                        .animation(.smooth(duration: 0.22), value: selected.isEmpty)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 18)
+                        .padding(.bottom, 12)
+
+                        list
+                            .scScrollEdgeFade()
+                            .scSheetFooter { footer }
                     }
                 }
-                .animation(.smooth(duration: 0.22), value: selected.isEmpty)
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 12)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(AllergenPickerGroup.all.enumerated()), id: \.element.id) { index, group in
-                            EditorialSheetSectionLabel(title: group.title)
-                                .padding(.top, index == 0 ? 6 : 20)
-                            groupCard(group)
-                        }
-
-                        Text("Laktoza to nietolerancja cukru mlecznego, mleko — alergia na jego białko.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.scFaint(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 6)
-                            .padding(.top, 12)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
-                    .containerRelativeFrame(.horizontal)
-                }
-                .scrollIndicators(.hidden)
-                .scScrollEdgeFade()
-                .scSheetFooter { footer }
             }
         }
         .sensoryFeedback(.selection, trigger: selected)
@@ -239,6 +256,31 @@ struct AllergenPickerSheet: View {
         } message: {
             Text("Przepisy z tymi alergenami znów pokażą się na listach i w podpowiedziach.")
         }
+    }
+
+    /// Trzy grupy alergenów i dopisek o laktozie — ta sama lista w arkuszu
+    /// i na ekranie wepchniętym.
+    private var list: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(AllergenPickerGroup.all.enumerated()), id: \.element.id) { index, group in
+                    EditorialSheetSectionLabel(title: group.title)
+                        .padding(.top, index == 0 ? 6 : 20)
+                    groupCard(group)
+                }
+
+                Text("Laktoza to nietolerancja cukru mlecznego, mleko — alergia na jego białko.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.scFaint(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 6)
+                    .padding(.top, 12)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+            .containerRelativeFrame(.horizontal)
+        }
+        .scrollIndicators(.hidden)
     }
 
     private func groupCard(_ group: AllergenPickerGroup) -> some View {

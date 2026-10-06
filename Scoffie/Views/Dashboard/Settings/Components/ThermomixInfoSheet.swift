@@ -9,18 +9,32 @@ import SwiftUI
 /// oficjalna aplikacja Cookidoo, więc mówimy to wprost zamiast pozwolić
 /// użytkownikowi czekać przy urządzeniu na cud.
 struct ThermomixInfoSheet: View {
-    var onClose: () -> Void
+    /// Ekran wepchnięty w arkusz Cookidoo: systemowy pasek z „wstecz”
+    /// i tytułem zamiast nagłówka z krzyżykiem.
+    var isPushed: Bool = false
+    var onClose: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        ZStack {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
+        if isPushed {
+            cards
+                .scPushedPage("Gotuj z Thermomixem")
+        } else {
+            ZStack {
+                SCPageBackground(scheme: scheme)
+                    .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    // Płyta w szałwii — znaczek „Thermomix” przy przepisach.
+                cards
+            }
+        }
+    }
+
+    private var cards: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                // Płyta w szałwii — znaczek „Thermomix” przy przepisach.
+                if !isPushed {
                     EditorialSheetHeader(
                         eyebrow: "Integracje",
                         title: "Gotuj z Thermomixem",
@@ -29,41 +43,41 @@ struct ThermomixInfoSheet: View {
                         onClose: onClose
                     )
                     .padding(.bottom, 4)
-
-                    infoCard(
-                        icon: "fork.knife.circle.fill",
-                        tint: SCPalette.terracotta,
-                        title: "Co to jest?",
-                        body: "Część przepisów w Scoffie ma swój odpowiednik w Cookidoo — oficjalnej bibliotece przepisów Thermomixa. Takie przepisy poznasz po znaczku Thermomix."
-                    )
-
-                    infoCard(
-                        icon: "paperplane.circle.fill",
-                        tint: SCPalette.sage,
-                        title: "Jak to działa?",
-                        body: "Gdy stukniesz \u{201E}Gotuj w Thermomixie\u{201D}, przepis trafi do planu \u{201E}Mój tydzień\u{201D} w Cookidoo na dzisiejszy dzień. Thermomix sam pobierze go z chmury — znajdziesz go na ekranie urządzenia, gotowego do rozpoczęcia gotowania."
-                    )
-
-                    infoCard(
-                        icon: "hand.raised.circle.fill",
-                        tint: SCPalette.indigo,
-                        title: "Czego się spodziewać?",
-                        body: "Przepis czeka w Twoim tygodniu na Thermomixie — nie otworzy się sam na jego ekranie. Tego nie potrafi nawet oficjalna aplikacja Cookidoo: gotowanie zawsze zatwierdzasz na urządzeniu."
-                    )
-
-                    infoCard(
-                        icon: "lock.circle.fill",
-                        tint: SCPalette.butter,
-                        title: "Bezpieczeństwo",
-                        body: "Dane logowania do Cookidoo są przechowywane na naszym serwerze w postaci zaszyfrowanej i używane wyłącznie do połączenia z Cookidoo. Nigdy nie wracają do aplikacji — w każdej chwili możesz się rozłączyć."
-                    )
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 22)
-                .padding(.bottom, 40)
+
+                infoCard(
+                    icon: "fork.knife.circle.fill",
+                    tint: SCPalette.terracotta,
+                    title: "Co to jest?",
+                    body: "Część przepisów w Scoffie ma swój odpowiednik w Cookidoo — oficjalnej bibliotece przepisów Thermomixa. Takie przepisy poznasz po znaczku Thermomix."
+                )
+
+                infoCard(
+                    icon: "paperplane.circle.fill",
+                    tint: SCPalette.sage,
+                    title: "Jak to działa?",
+                    body: "Gdy stukniesz \u{201E}Gotuj w Thermomixie\u{201D}, przepis trafi do planu \u{201E}Mój tydzień\u{201D} w Cookidoo na dzisiejszy dzień. Thermomix sam pobierze go z chmury — znajdziesz go na ekranie urządzenia, gotowego do rozpoczęcia gotowania."
+                )
+
+                infoCard(
+                    icon: "hand.raised.circle.fill",
+                    tint: SCPalette.indigo,
+                    title: "Czego się spodziewać?",
+                    body: "Przepis czeka w Twoim tygodniu na Thermomixie — nie otworzy się sam na jego ekranie. Tego nie potrafi nawet oficjalna aplikacja Cookidoo: gotowanie zawsze zatwierdzasz na urządzeniu."
+                )
+
+                infoCard(
+                    icon: "lock.circle.fill",
+                    tint: SCPalette.butter,
+                    title: "Bezpieczeństwo",
+                    body: "Dane logowania do Cookidoo są przechowywane na naszym serwerze w postaci zaszyfrowanej i używane wyłącznie do połączenia z Cookidoo. Nigdy nie wracają do aplikacji — w każdej chwili możesz się rozłączyć."
+                )
             }
-            .scrollIndicators(.hidden)
+            .padding(.horizontal, 20)
+            .padding(.top, isPushed ? 8 : 22)
+            .padding(.bottom, 40)
         }
+        .scrollIndicators(.hidden)
     }
 
     private func infoCard(icon: String, tint: Color, title: String, body: String) -> some View {
