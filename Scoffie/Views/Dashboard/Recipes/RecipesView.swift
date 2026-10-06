@@ -426,6 +426,15 @@ struct RecipesView: View {
                     .padding(.top, pageTopPadding)
                     .padding(.bottom, 12)
 
+                // Dopasowanie wyłączone, a profil ma dietę albo alergeny —
+                // widać to stale, w zwykłym widoku i w wynikach.
+                if showsFitOffChip {
+                    RecipeFitOffChip { enablePersonalization() }
+                        .padding(.horizontal, pageHorizontalPadding)
+                        .padding(.bottom, 14)
+                        .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .topLeading)))
+                }
+
                 // Zakładki tylko tam, gdzie jest z czego wybierać — nie nad
                 // pustym stanem (Rafał 4.10.2026).
                 if showsScopeTabs {
@@ -487,6 +496,7 @@ struct RecipesView: View {
             }
             .padding(.bottom, pageBottomPadding)
             .animation(Self.stateMotion, value: showsScopeTabs)
+            .animation(Self.stateMotion, value: showsFitOffChip)
         }
         .scrollIndicators(.hidden)
         // Przewinięcie listy chowa klawiaturę — jak w Poczcie.
@@ -566,6 +576,16 @@ struct RecipesView: View {
     /// na filtrach globalnych”; „na pustym brakuje mi tab kategorii”).
     private var showsScopeTabs: Bool {
         !shouldShowSkeleton && isResultsMode
+    }
+
+    /// Żeton „Bez dopasowania · Włącz” — dopasowanie wyłączone, choć profil
+    /// ma dietę albo alergeny.
+    private var showsFitOffChip: Bool {
+        !shouldShowSkeleton && personalization.isBypassed
+    }
+
+    private func enablePersonalization() {
+        withAnimation(Self.stateMotion) { isPersonalizationEnabled = true }
     }
 
     // MARK: - Wyniki
@@ -868,6 +888,7 @@ struct RecipesView: View {
                 // Przełącznik „Dopasowane do Ciebie” mieszka w Filtrach, ale
                 // pusty ekran przez dietę to jedyna sytuacja, w której trzeba
                 // go szukać — więc wyłącza się go stąd jednym stuknięciem.
+                // Do końca uruchomienia; wraca żetonem pod tytułem.
                 Button {
                     withAnimation(.smooth(duration: 0.2)) { isPersonalizationEnabled = false }
                 } label: {

@@ -336,14 +336,13 @@ struct PlanSlotPickerSheet: View {
 
                 // Karta nad listą — ta sama, co w liście kategorii. Bez niej
                 // krótka lista wygląda na brak przepisów, a nie na skutek
-                // ustawień z zupełnie innego ekranu. Nad pustym stanem jej
-                // nie ma — ten mówi o diecie sam.
-                if !rows.isEmpty,
-                   let diet = RecipeListContextCard.Row.personalization(
-                       personalization,
-                       hidden: hiddenByPersonalizationCount
-                   ) {
-                    RecipeListContextCard(rows: [diet])
+                // ustawień z zupełnie innego ekranu. Wiersza diety nad pustym
+                // stanem nie ma — ten mówi o diecie sam; „Bez dopasowania”
+                // stoi zawsze, gdy dopasowanie wyłączono (jak żeton na
+                // Przepisach).
+                let context = contextRows(listIsEmpty: rows.isEmpty)
+                if !context.isEmpty {
+                    RecipeListContextCard(rows: context)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 8)
                 }
@@ -390,6 +389,18 @@ struct PlanSlotPickerSheet: View {
         // i stopka z „Dla kogo” stoją, bo obie odpowiadają na pytanie
         // „co się stanie, gdy stuknę”, i muszą być widoczne w tej chwili.
         .frame(maxHeight: .infinity)
+    }
+
+    /// Wiersze karty nad listą: dieta, gdy coś ukrywa (nad pustym stanem
+    /// nie), albo „Bez dopasowania · Włącz”, gdy dopasowanie wyłączono.
+    private func contextRows(listIsEmpty: Bool) -> [RecipeListContextCard.Row] {
+        let off = RecipeListContextCard.Row.personalizationOff(personalization) {
+            withAnimation(.smooth(duration: 0.25)) { isPersonalizationEnabled = true }
+        }
+        let diet = listIsEmpty
+            ? nil
+            : RecipeListContextCard.Row.personalization(personalization, hidden: hiddenByPersonalizationCount)
+        return [off, diet].compactMap { $0 }
     }
 
     /// Pusty stan mówi, co opróżniło listę, a przycisk zdejmuje dokładnie to
