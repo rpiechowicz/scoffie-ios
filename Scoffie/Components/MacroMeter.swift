@@ -194,7 +194,11 @@ struct MacroMeter: View {
                 // 0.85, nie 0.8: przy 0.8 cel schodził poniżej 9 pt na węższych
                 // ekranach, a po podniesieniu baz i tak rzadko dochodzi do skalowania.
                 .minimumScaleFactor(0.85)
-                .contentTransition(.numericText())
+                // Z wartością: rosnąca liczba roluje w górę, malejąca w dół.
+                .contentTransition(.numericText(value: Double(value)))
+                // Cyfry tym samym ruchem co tor pod nimi — liczba i pasek
+                // lądują razem (także z opóźnieniem kolumny w pigułce kcal).
+                .animation(animation, value: value)
 
             if let progress {
                 MacroProgressTrack(
