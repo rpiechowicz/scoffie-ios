@@ -114,6 +114,7 @@ struct RecipeDetailView: View {
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
+    @Environment(\.mealCalendarStore) private var mealStore
     @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -159,7 +160,9 @@ struct RecipeDetailView: View {
     /// Porcje łączne w jednostkach 1/20: w katalogu stepper co 0,5, w planie
     /// (gdy nie ma porcji osób) co 1 — `plannedServings` to liczba całkowita.
     @State private var servingsUnits: Int
-    @State private var isAddToPlanPresented = false
+    /// Pełny arkusz „Dodaj do planu” — z dniem i porą z szybkiego menu
+    /// (pora zajęta innym daniem) albo bez („Inny dzień…”, cudzy przepis).
+    @State private var addToPlanRequest: AddToPlanRequest?
     /// Półarkusz „Kto ile je” spod przyczepionej pigułki porcji.
     @State private var isPortionsSheetPresented = false
 
@@ -198,9 +201,6 @@ struct RecipeDetailView: View {
 
     /// Wysyłka brakujących na listę zakupów.
     @State private var shoppingSend: ShoppingSendState = .idle
-
-    /// Wjazd treści — sekcje wchodzą kolejno, donut rysuje się od góry.
-    @State private var hasAppeared = false
 
     @State private var scrollPosition = ScrollPosition(edge: .top)
 
@@ -328,13 +328,16 @@ struct RecipeDetailView: View {
                 .ignoresSafeArea()
 
             ScrollView {
+                // Szczegóły otwierają się w GOTOWYM stanie (6.10.2026, „jak od
+                // Apple”): wjazd arkusza systemu wystarcza — bez osiadania
+                // zdjęcia, kaskady sekcji, rosnących pierścieni i liczb od
+                // zera. Animują się tylko ZMIANY: porcje, „mam w domu”, serce.
                 VStack(alignment: .leading, spacing: 0) {
-                    DetailHeroPhoto(url: recipe.imageURL, isRevealed: hasAppeared)
+                    DetailHeroPhoto(url: recipe.imageURL)
 
                     header
                         .padding(.horizontal, 20)
                         .padding(.top, 6)
-                        .detailReveal(hasAppeared, order: 0)
 
                     // „Kto ile je” nie jest już sekcją tutaj — to pigułka
                     // przyczepiona nad przyciskami (`portionsPill`), jak
@@ -342,18 +345,15 @@ struct RecipeDetailView: View {
 
                     nutritionSection
                         .padding(.top, 24)
-                        .detailReveal(hasAppeared, order: 1)
 
                     if !recipe.preparationSteps.isEmpty {
                         preparationSection
                             .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 2)
                     }
 
                     if !recipe.ingredients.isEmpty {
                         ingredientsSection
                             .padding(.top, 24)
-                            .detailReveal(hasAppeared, order: 3)
                     }
 
                     // Oddech nad dolnym paskiem. Sam pasek liczy system
@@ -413,7 +413,6 @@ struct RecipeDetailView: View {
             .disabled(onSetFavourite == nil)
             .padding(.leading, 20)
             .padding(.top, 16)
-            .detailChrome(hasAppeared)
         }
         .overlay(alignment: .topTrailing) {
             HStack(spacing: 10) {
@@ -426,17 +425,8 @@ struct RecipeDetailView: View {
             }
             .padding(.trailing, 20)
             .padding(.top, 16)
-            .detailChrome(hasAppeared)
         }
         .onAppear { applyDebugLaunchOptions() }
-        // Klatka oddechu jak w wyborze posiłku u Asystenta: arkusz zaczyna
-        // wjeżdżać, dopiero potem treść. Ustawione w `onAppear` padało w tej
-        // samej klatce co wstawienie widoku i wjazd sekcji w ogóle nie grał.
-        .task {
-            guard !hasAppeared else { return }
-            try? await Task.sleep(for: .milliseconds(80))
-            hasAppeared = true
-        }
         // Scenariusz Gotuj w pamięci telefonu — przycisk „Gotuj” pojawia się,
         // gdy paczka jest (§4.1), i działa potem bez sieci.
         .task(id: recipe.id) {
@@ -461,7 +451,7 @@ struct RecipeDetailView: View {
         } message: {
             Text("Gotujemy jedno danie naraz — tamto ma swoje timery.")
         }
-        .sheet(isPresented: $isAddToPlanPresented) {
+        .sheet(item: $addToPlanRequest) { request in
             // Liczba porcji ze steppera jedzie do arkusza jako punkt startowy:
             // użytkownik właśnie na nią patrzył, więc przestawienie jej przy
             // dodawaniu wyglądałoby na zgubienie jego wyboru.
@@ -474,6 +464,8 @@ struct RecipeDetailView: View {
                 // że użytkownik świadomie go ruszył — i arkusz nie ma prawa
                 // nadpisać jej regułą auto z chipów.
                 didOverrideServings: didTouchStepper,
+                initialDate: request.date,
+                initialSlot: request.slot,
                 onAdded: { day, slot in
                     onAddedToPlan?(day, slot)
                 }
@@ -1203,28 +1195,134 @@ struct RecipeDetailView: View {
     }
 
     /// Akcja planu w standardowym wariancie „soft" — terakota na tincie.
+    /// W katalogu ten sam przycisk otwiera szybkie menu (`quickPlanMenu`).
+    @ViewBuilder
     private func planActionButton(title: String) -> some View {
-        Button(action: performPrimaryAction) {
-            HStack(spacing: 7) {
-                Image(systemName: primaryActionIcon)
-                    .font(.system(size: 13, weight: .heavy))
-                Text(title)
-                    .font(.system(size: 14, weight: .bold))
-                    .tracking(-0.1)
-                    .lineLimit(1)
+        let options = quickPlanOptions
+        if !options.isEmpty {
+            quickPlanMenu(options, title: title)
+        } else {
+            Button(action: performPrimaryAction) {
+                planActionLabel(title: title)
             }
-            .foregroundStyle(SCPalette.terracotta)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .scSoftCapsule()
+            .buttonStyle(.plain)
+            .disabled(!isPrimaryActionEnabled || isSavingServings)
+            // Wygaszony tylko na chwilę pracy (zapis, przygotowanie planu) —
+            // „Zapisz porcje” bez zmian w ogóle się nie pokazuje (`showsPlanAction`).
+            .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
+            .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
+            .accessibilityLabel(primaryActionTitle)
         }
-        .buttonStyle(.plain)
-        .disabled(!isPrimaryActionEnabled || isSavingServings)
-        // Wygaszony tylko na chwilę pracy (zapis, przygotowanie planu) —
-        // „Zapisz porcje” bez zmian w ogóle się nie pokazuje (`showsPlanAction`).
-        .opacity(isPrimaryActionEnabled && !isSavingServings ? 1 : 0.45)
-        .animation(.smooth(duration: 0.18), value: isPrimaryActionEnabled)
+    }
+
+    private func planActionLabel(title: String) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: primaryActionIcon)
+                .font(.system(size: 13, weight: .heavy))
+            Text(title)
+                .font(.system(size: 14, weight: .bold))
+                .tracking(-0.1)
+                .lineLimit(1)
+        }
+        .foregroundStyle(SCPalette.terracotta)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .scSoftCapsule()
+    }
+
+    // MARK: - Szybkie „Dodaj do planu”
+
+    /// Pozycje szybkiego menu — tylko przepis z katalogu (posiłek z planu ma
+    /// „Zapisz porcje”, cudzy przepis najpierw zapisuje kopię). Dla całego
+    /// domu i z porcjami ze steppera, jak arkusz bez ruszania czegokolwiek.
+    /// Pusto, gdy dom nie planuje żadnej pory, w którą przepis pasuje — wtedy
+    /// przycisk otwiera od razu pełny arkusz.
+    private var quickPlanOptions: [RecipeQuickPlan.Option] {
+        guard case .catalog = context else { return [] }
+        return RecipeQuickPlan.options(
+            recipe: recipe,
+            store: mealStore,
+            enabledSlots: sessionStore.mealSlots.enabled,
+            schedule: sessionStore.mealSlotSchedule,
+            members: sessionStore.householdMembers,
+            portions: AddToPlanPortions(units: servingsUnits, didOverride: didTouchStepper)
+        )
+    }
+
+    /// „Dodaj do planu” z katalogu = SYSTEMOWE menu zamiast ciężkiego arkusza
+    /// (6.10.2026, „jak od Apple — prościej, mniej ceremonii”): „Dziś · Obiad”
+    /// (gdy ta pora dziś jeszcze przed nami) i „Jutro · Obiad” zapisują jednym
+    /// stuknięciem, „Inny dzień…” otwiera pełny arkusz. Pora zajęta INNYM
+    /// daniem → pozycja z „Zamiast: …” (zapis by je podmienił) albo „Jest już:
+    /// …” (danie części domu) otwiera arkusz z tym dniem i porą — po cichu nie
+    /// podmieniamy ani nie dokładamy drugiego obiadu; to danie już tam stoi →
+    /// pozycja wyłączona „Już w planie”. Szkło jest CAŁĄ etykietą menu, więc
+    /// iOS 26 może z niego animować menu (patrz „Szkło w etykiecie `Menu`”
+    /// w CLAUDE.md).
+    ///
+    /// Kolejność stała (`menuOrder(.fixed)`): czyta się z góry na dół jak
+    /// kalendarz — dziś, jutro, inny dzień — a „Inny dzień…” stoi przy palcu.
+    private func quickPlanMenu(_ options: [RecipeQuickPlan.Option], title: String) -> some View {
+        Menu {
+            ForEach(options) { option in
+                quickPlanItem(option)
+            }
+
+            Divider()
+
+            Button {
+                addToPlanRequest = AddToPlanRequest()
+            } label: {
+                Label("Inny dzień…", systemImage: "calendar")
+            }
+        } label: {
+            planActionLabel(title: title)
+        }
+        .menuOrder(.fixed)
         .accessibilityLabel(primaryActionTitle)
+        .accessibilityHint("Wybierz dziś, jutro albo inny dzień")
+    }
+
+    /// Pozycja menu: pora dnia jako ikona, podtytuł mówi, co stoi na drodze.
+    @ViewBuilder
+    private func quickPlanItem(_ option: RecipeQuickPlan.Option) -> some View {
+        switch option.outcome {
+        case .add:
+            Button {
+                quickAdd(option)
+            } label: {
+                Label(option.title, systemImage: option.slot.icon)
+            }
+        case .replaces(let meal):
+            Button {
+                addToPlanRequest = AddToPlanRequest(date: option.date, slot: option.slot)
+            } label: {
+                Label(option.title, systemImage: option.slot.icon)
+                Text("Zamiast: \(meal.recipe.name)")
+            }
+        case .besides(let meal):
+            Button {
+                addToPlanRequest = AddToPlanRequest(date: option.date, slot: option.slot)
+            } label: {
+                Label(option.title, systemImage: option.slot.icon)
+                Text("Jest już: \(meal.recipe.name)")
+            }
+        case .alreadyPlanned:
+            Button {} label: {
+                Label(option.title, systemImage: option.slot.icon)
+                Text("Już w planie")
+            }
+            .disabled(true)
+        }
+    }
+
+    /// Szybkie dodanie: zapis tą samą drogą co arkusz (`AddToPlanDraft.save`
+    /// — toast „Dodano do planu · Jutro · Obiad” z haptyką sukcesu po
+    /// potwierdzeniu), a ekran pod spodem — jak po arkuszu — dostaje
+    /// `onAddedToPlan` (wejścia katalogu zamykają wtedy szczegóły).
+    private func quickAdd(_ option: RecipeQuickPlan.Option) {
+        option.draft.save(store: mealStore, toasts: toasts, placement: option.title)
+        onAddedToPlan?(option.date, option.slot)
     }
 
     // MARK: - Gotuj
@@ -1458,7 +1556,9 @@ struct RecipeDetailView: View {
     private func performPrimaryAction() {
         switch context {
         case .catalog:
-            isAddToPlanPresented = true
+            // Tu tylko wtedy, gdy szybkiego menu nie ma (dom nie planuje
+            // żadnej pory, w którą przepis pasuje) — od razu pełny arkusz.
+            addToPlanRequest = AddToPlanRequest()
         case .shared:
             addSharedToPlan()
         case .planned:
@@ -1537,7 +1637,7 @@ struct RecipeDetailView: View {
     private func addSharedToPlan() {
         guard case .shared(let token, _) = context, !isPreparingPlan else { return }
         if savedCopy != nil {
-            isAddToPlanPresented = true
+            addToPlanRequest = AddToPlanRequest()
             return
         }
         isPreparingPlan = true
@@ -1546,7 +1646,7 @@ struct RecipeDetailView: View {
                 savedCopy = try await recipeCatalogStore.saveSharedRecipe(token: token)
                 sharedSave = .saved
                 isPreparingPlan = false
-                isAddToPlanPresented = true
+                addToPlanRequest = AddToPlanRequest()
             } catch {
                 isPreparingPlan = false
                 guard !UserFacingErrorMapper.isCancellation(error) else { return }
@@ -1580,6 +1680,17 @@ struct RecipeDetailView: View {
         }
         #endif
     }
+}
+
+// MARK: - „Dodaj do planu”
+
+/// Otwarcie pełnego arkusza „Dodaj do planu” — z dniem i porą wybranymi już
+/// w szybkim menu (pora zajęta innym daniem) albo bez (`nil` = dziś
+/// i domyślna pora przepisu).
+private struct AddToPlanRequest: Identifiable {
+    let id = UUID()
+    var date: Date? = nil
+    var slot: MealSlot? = nil
 }
 
 // MARK: - „Zapisz u siebie”
@@ -1748,9 +1859,6 @@ struct RecipeDetailPlaceholder: View {
 /// oba efekty to `visualEffect`, więc nie przeliczają układu co klatkę.
 private struct DetailHeroPhoto: View {
     let url: URL?
-    /// Wjazd arkusza: zdjęcie startuje lekko przybliżone i osiada — ten sam
-    /// ruch co zdjęcie w wyborze posiłku u Asystenta.
-    var isRevealed: Bool = true
 
     // `nonisolated`, bo czyta ją domknięcie `onScrollGeometryChange` ekranu.
     nonisolated static let height: CGFloat = 340
@@ -1826,8 +1934,6 @@ private struct DetailHeroPhoto: View {
                 EditorialShimmerBlock()
             }
         }
-        .scaleEffect(isRevealed || reduceMotion ? 1 : 1.12)
-        .animation(.easeOut(duration: 1.1), value: isRevealed)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
     }
@@ -2145,13 +2251,11 @@ private struct DetailNutritionCard: View {
     }
 }
 
-/// Jedna krzywa dla pierścieni, torów i liczników sekcji — ruch ma się
-/// czytać jako jeden. Wolniejszy i łagodniej hamujący niż w „Celu dnia”:
-/// tu wykres jest główną treścią karty, a nie podsumowaniem nad listą.
+/// Jedna krzywa dla pierścieni, torów i liczb sekcji przy ZMIANIE porcji —
+/// ruch ma się czytać jako jeden (ease-out quint, 0,8 s). Wjazdu nie ma:
+/// szczegóły otwierają się z wartościami docelowymi (6.10.2026 — dawniej
+/// pierścienie rosły 1,4 s, a liczby liczyły się od zera przy każdym otwarciu).
 private enum DetailNutritionMotion {
-    /// Wjazd: 1,4 s z długim, miękkim wyhamowaniem (ease-out quint).
-    static let reveal: Animation = .timingCurve(0.22, 1, 0.36, 1, duration: 1.4)
-    /// Zmiana porcji: ta sama krzywa, krócej.
     static let change: Animation = .timingCurve(0.22, 1, 0.36, 1, duration: 0.8)
 }
 
@@ -2162,13 +2266,11 @@ private struct DetailGoalRings: View {
     let progresses: [Double]
     let colors: [Color]
 
-    @State private var isRevealed = false
-
     var body: some View {
         ZStack {
             ForEach(Array(progresses.enumerated()), id: \.offset) { index, progress in
                 ActivityRing(
-                    progress: isRevealed ? CGFloat(progress) : 0,
+                    progress: CGFloat(progress),
                     lineWidth: PlanGoalRings.lineWidth,
                     startColor: colors[index],
                     endColor: colors[index],
@@ -2178,23 +2280,16 @@ private struct DetailGoalRings: View {
             }
         }
         .frame(width: PlanGoalRings.size, height: PlanGoalRings.size)
-        // Zmiana porcji — wjazd prowadzi `withAnimation` niżej, bo w jego
-        // trakcie ta wartość się nie zmienia.
         .animation(DetailNutritionMotion.change, value: progresses)
-        .onAppear {
-            guard !isRevealed else { return }
-            withAnimation(DetailNutritionMotion.reveal.delay(0.05)) { isRevealed = true }
-        }
     }
 }
 
-/// Wiersz legendy jak `PlanGoalLegendRow`, z liczbą liczącą się
-/// `CountingNumber` i torem na tej samej krzywej co pierścienie.
+/// Wiersz legendy jak `PlanGoalLegendRow`: liczba roluje się przy zmianie
+/// porcji, tor jedzie tą samą krzywą co pierścienie.
 private struct DetailGoalLegendRow: View {
     let row: PlanGoalLegendRow.Row
 
     @Environment(\.colorScheme) private var scheme
-    @State private var isRevealed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -2212,13 +2307,14 @@ private struct DetailGoalLegendRow: View {
                 Spacer(minLength: 6)
 
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    CountingNumber(
-                        target: row.value,
-                        loadAnimation: DetailNutritionMotion.reveal,
-                        changeAnimation: DetailNutritionMotion.change
-                    )
-                    .scFont(12.5, weight: .bold, relativeTo: .caption)
-                    .foregroundStyle(row.isOverTarget ? row.color : Color.scLabel(scheme))
+                    Text(verbatim: "\(row.value)")
+                        .scFont(12.5, weight: .bold, relativeTo: .caption)
+                        .monospacedDigit()
+                        .foregroundStyle(row.isOverTarget ? row.color : Color.scLabel(scheme))
+                        // Cyfry rolują w miejscu przy zmianie porcji — ta
+                        // sama animacja co każda liczba w aplikacji.
+                        .contentTransition(.numericText(value: Double(row.value)))
+                        .animation(SCMotion.textRoll, value: row.value)
 
                     Text(row.target.map { "/ \($0) \(row.unit)" } ?? row.unit)
                         .scFont(10.5, weight: .semibold, relativeTo: .caption2)
@@ -2231,14 +2327,13 @@ private struct DetailGoalLegendRow: View {
 
             if let progress = row.progress {
                 MacroProgressTrack(
-                    progress: isRevealed ? max(progress, 0) : 0,
+                    progress: max(progress, 0),
                     color: row.color,
                     height: 3,
-                    animation: isRevealed ? DetailNutritionMotion.change : DetailNutritionMotion.reveal
+                    animation: DetailNutritionMotion.change
                 )
             }
         }
-        .onAppear { isRevealed = true }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             row.target.map { "\(row.title): \(row.value) z \($0) \(row.unit)" }
@@ -2342,37 +2437,6 @@ private struct DetailIngredientRow: View {
         .padding(.vertical, 9)
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.2), value: have)
-    }
-}
-
-// MARK: - Wjazd sekcji
-
-// Kaskada sekcji to `scReveal(_:order:)` (`Components/SCReveal.swift`) —
-// wyniesiona w rundzie 14, bo „Dodaj do planu” wjeżdża tak samo.
-
-/// Przyciski na zdjęciu (serce, krzyżyk) pojawiają się razem z treścią,
-/// a nie wiszą nad pustym kadrem, zanim zdjęcie osiądzie.
-private struct DetailChrome: ViewModifier {
-    let isVisible: Bool
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(isVisible ? 1 : 0)
-            .scaleEffect(isVisible || reduceMotion ? 1 : 0.85)
-            .animation(.easeOut(duration: 0.35).delay(0.05), value: isVisible)
-    }
-}
-
-private extension View {
-    /// Sekcje wchodzą po kolei — góra pierwsza, składniki ostatnie.
-    func detailReveal(_ isVisible: Bool, order: Int) -> some View {
-        scReveal(isVisible, order: order)
-    }
-
-    func detailChrome(_ isVisible: Bool) -> some View {
-        modifier(DetailChrome(isVisible: isVisible))
     }
 }
 
