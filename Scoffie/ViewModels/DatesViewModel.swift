@@ -101,6 +101,23 @@ class DatesViewModel {
         return next
     }
 
+    /// Pokazuje tydzień, w którym leży `date`, z tym dniem zaznaczonym — skok
+    /// z innej zakładki („Zaplanuj” na pustej porze w „Dziś”), a nie
+    /// przewijanie, więc bez reguły „nowy tydzień od poniedziałku”.
+    ///
+    /// Odstęp tygodni liczy się z dni między poniedziałkami w kalendarzu
+    /// `PlanWeek` — arytmetyka kalendarzowa, więc zmiana czasu nie gubi godziny.
+    func show(day date: Date) {
+        let calendar = PlanWeek.calendar
+        let days = calendar.dateComponents(
+            [.day],
+            from: PlanWeek.monday(of: Date()),
+            to: PlanWeek.monday(of: date)
+        ).day ?? 0
+        currentWeekOffset = Int((Double(days) / 7).rounded())
+        selectedDate = date
+    }
+
     /// Wraca do bieżącego tygodnia
     func goToCurrentWeek() {
         currentWeekOffset = 0

@@ -990,7 +990,8 @@ struct CalendarView: View {
             // „Dziś” nie planuje — picker zniknął stąd celowo. Dwie drogi
             // dodawania posiłków (Plan i Kalendarz) robiły to samo w dwóch
             // miejscach i myliły się nawzajem; układanie tygodnia ma jedno
-            // miejsce, a „Dziś” odpowiada na „co jem i czy zjadłem”.
+            // miejsce, a „Dziś” odpowiada na „co jem i czy zjadłem”. Pusta
+            // pora tylko PROWADZI do Planu („Zaplanuj”, `planSlot`).
             .sheet(item: $simpleSheet) { which in
                 switch which {
                 case .dayGoal:
@@ -1360,6 +1361,14 @@ struct CalendarView: View {
         if let focused, focused.cooking != nil {
             startCook = { cook(withCardId: focused.id, on: date) }
         }
+        // „Zaplanuj” — pusta pora (albo pusty dzień: `focused == nil`) dziś
+        // lub jutro prowadzi do Planu. Wczoraj planować się nie da (jak
+        // w Planie), więc tam pusta pora zostaje samą podpowiedzią.
+        var planAction: (() -> Void)?
+        if canPlan(on: date), focused?.isEmptySlot ?? true {
+            let slot = focused?.slot
+            planAction = { planSlot(slot, on: date) }
+        }
 
         return VStack(spacing: fit.gap) {
             CalendarPlateKicker(item: focused)
@@ -1385,7 +1394,8 @@ struct CalendarView: View {
                     canToggle: canToggle,
                     onToggle: { toggleEaten(withCardId: focused?.id, on: date) },
                     onOpenDetail: openDetail,
-                    onCook: startCook
+                    onCook: startCook,
+                    onPlan: planAction
                 )
                 .contentShape(.contextMenuPreview, Circle().inset(by: -CalendarPlate.rimInset(for: size)))
                 .contextMenu { plateActions(for: focused, on: date, canLog: canLog) }
@@ -1408,7 +1418,8 @@ struct CalendarView: View {
                 dayKey: dayKey,
                 titleLines: fit.titleLines,
                 showsChips: fit.showsChips,
-                onOpenDetail: openDetail
+                onOpenDetail: openDetail,
+                onPlan: planAction
             )
             .modifier(turn.effect(travel: 72, lift: 6, shrink: 0.04))
             .layoutPriority(1)
@@ -1513,6 +1524,39 @@ struct CalendarView: View {
     }
 
     // MARK: - Actions
+
+    /// Planować można dziś i do przodu — ta sama granica co w Planie
+    /// (`DatesViewModel.isEditable`); wczoraj zostaje tylko do odhaczania.
+    private func canPlan(on date: Date) -> Bool {
+        let calendar = PlanWeek.calendar
+        return calendar.startOfDay(for: date) >= calendar.startOfDay(for: Date())
+    }
+
+    /// „Zaplanuj” na pustej porze albo pustym dniu.
+    ///
+    /// Planowanie ma JEDNO miejsce — Plan. Ta zakładka tylko tam prowadzi:
+    /// prośba w sklepie sesji (`PlanSlotRequest`), którą Plan odbiera sam
+    /// (ten dzień, wybór przepisu na tę porę), i przełączenie zakładki tą
+    /// samą drogą co skróty Asystenta (`sessionStore.dashboardTab`).
+    ///
+    /// Pora pusta tylko DLA MNIE (ktoś inny ma w niej swoje danie) startuje
+    /// z „dla kogo” = ja: dokładam swoje obok, zamiast dostać propozycję
+    /// zamiany cudzego dania („OBIAD · ANIA MA JUŻ”). Pora pusta dla
+    /// wszystkich — cały dom, jak stuknięcie pustej pory na osi Planu.
+    private func planSlot(_ slot: MealSlot?, on date: Date) {
+        var participants: [String] = []
+        if let slot,
+           let me = sessionStore.currentUserId,
+           !mealStore.meals(for: date, slot: slot).isEmpty {
+            participants = [me]
+        }
+        sessionStore.planSlotRequest = PlanSlotRequest(
+            date: date,
+            slot: slot,
+            participantIds: participants
+        )
+        sessionStore.dashboardTab = .plan
+    }
 
     /// Stuknięcie w pieczątkę w rogu talerza odhacza danie, które na nim
     /// stoi — i ZOSTAWIA je na talerzu.

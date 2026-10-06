@@ -169,6 +169,10 @@ final class SessionStore {
     /// przycisk. Flagę zdejmuje ekran, który ją obsłużył — inaczej arkusz
     /// otwierałby się przy każdym powrocie na Plan.
     var opensShoppingList = false
+    /// Prośba zakładki „Dziś” o zaplanowanie pory (pusta pora → „Zaplanuj”):
+    /// Plan pokazuje ten dzień i otwiera wybór przepisu. Zdejmuje ją Plan,
+    /// który ją obsłużył — jak `opensShoppingList`.
+    var planSlotRequest: PlanSlotRequest?
     private var realtimeSocket: RecipeSocketClient?
     private var pendingPushDeviceToken: String?
     private let appleSignInCoordinator = AppleSignInCoordinator()
@@ -580,6 +584,7 @@ final class SessionStore {
         // Następne logowanie ma zacząć od Kalendarza, a nie od zakładki,
         // na której ktoś zostawił poprzednią sesję.
         dashboardTab = .calendar
+        planSlotRequest = nil
     }
 
     /// Trwale usuwa konto: wypisuje z gospodarstwa, kasuje użytkownika po
@@ -788,6 +793,7 @@ final class SessionStore {
         // wylogowanie i ponowne logowanie wrzucało użytkownika w Plan
         // tygodnia albo w Ustawienia zamiast na ekran „co dziś jem".
         dashboardTab = .calendar
+        planSlotRequest = nil
         // Stary warmup (katalog na starym sockecie, poprzednie gospodarstwo)
         // nie ma już czego dociągać.
         startupTask?.cancel()

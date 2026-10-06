@@ -563,6 +563,14 @@ struct WeeklyPlanView: View {
                 simpleSheet = .products
                 sessionStore.opensShoppingList = false
             }
+            // „Zaplanuj” na pustej porze w „Dziś”: planowanie ma jedno miejsce,
+            // więc tamta zakładka tylko tu prowadzi — ten dzień w Planie i od
+            // razu wybór przepisu na tę porę, jak stuknięcie pustej pory na osi.
+            .onChange(of: sessionStore.planSlotRequest, initial: true) { _, request in
+                guard let request else { return }
+                sessionStore.planSlotRequest = nil
+                openPlanRequest(request)
+            }
             .sheet(item: $pickerTarget) { target in
                 PlanSlotPickerSheet(
                     date: target.date,
@@ -787,6 +795,25 @@ struct WeeklyPlanView: View {
     }
 
     // MARK: - Actions
+
+    /// Prośba z zakładki „Dziś” (`PlanSlotRequest`): tydzień i dzień z prośby,
+    /// a gdy dzień da się jeszcze planować — wybór przepisu na tę porę.
+    ///
+    /// Tydzień i dzień idą RAZEM do `datesViewModel` i do stanu ekranu: obie
+    /// obserwacje wyżej (`isActiveTab`, `weekStartISO`) czytają dzień
+    /// z modelu, więc w jakiejkolwiek kolejności SwiftUI je odpali, zostaje
+    /// dzień z prośby.
+    private func openPlanRequest(_ request: PlanSlotRequest) {
+        datesViewModel.show(day: request.date)
+        selectedDate = request.date
+        guard let slot = request.slot, datesViewModel.isEditable(request.date) else { return }
+        pickerTarget = PickerTarget(
+            date: request.date,
+            slot: slot,
+            editing: nil,
+            defaultParticipantIds: request.participantIds
+        )
+    }
 
     private func openDetail(date: Date, slot: MealSlot, meal: PlanMeal) {
         Task { @MainActor in

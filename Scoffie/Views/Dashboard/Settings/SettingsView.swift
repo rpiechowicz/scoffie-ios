@@ -108,16 +108,16 @@ struct SettingsView: View {
     // user can jump straight to the area they care about; only one row is
     // expanded at a time (`expandedFAQ` accordion state).
     fileprivate static let faqSections: [FAQSection] = [
-        FAQSection(id: "plan", title: "Plan i kalendarz", items: [
+        FAQSection(id: "plan", title: "Plan i Dziś", items: [
             FAQItem(
                 id: "plan-create",
                 question: "Jak ułożyć plan posiłków na tydzień?",
-                answer: "Wejdź w zakładkę Kalendarz, wybierz dzień i stuknij pusty slot — Śniadanie, Obiad lub Kolację. Otworzy się biblioteka przepisów, z której możesz wybrać danie. Powtórz dla pozostałych dni i posiłków."
+                answer: "Wejdź w zakładkę Plan, wybierz dzień i stuknij pustą porę — Śniadanie, Obiad lub Kolację. Otworzy się biblioteka przepisów, z której możesz wybrać danie. Powtórz dla pozostałych dni i posiłków. Pusta pora w zakładce Dziś ma przycisk „Zaplanuj”, który prowadzi prosto tutaj."
             ),
             FAQItem(
                 id: "plan-change",
                 question: "Jak zmienić przepis dla danego dnia?",
-                answer: "Stuknij kartę przepisu w kalendarzu — otworzą się szczegóły. Aby podmienić go na inny, wróć do dnia, usuń obecny przepis i przypisz nowy z biblioteki."
+                answer: "Stuknij danie w Planie albo w zakładce Dziś — otworzą się szczegóły. Aby podmienić przepis na inny, w Planie usuń obecny i przypisz nowy z biblioteki."
             ),
             FAQItem(
                 id: "plan-past",
