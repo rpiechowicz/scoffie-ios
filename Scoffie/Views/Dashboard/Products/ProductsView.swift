@@ -35,31 +35,12 @@ struct ProductsView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
 
-    @State private var showDeleteAllHistoryAlert = false
+    /// Arkusz „Na dziś” — jedyny arkusz nad Zakupami.
+    @State private var showsTodaySheet = false
 
-    /// Arkusze bez własnego celu — historia, jeden miesiąc historii i „Na dziś”.
-    ///
-    /// Jeden `@State` na wszystkie, a nie osobne `Bool`-e z własnymi
-    /// `.sheet(isPresented:)`: SwiftUI potrafi zgubić wcześniejszy
-    /// `.sheet(isPresented:)` w łańcuchu modyfikatorów tego samego widoku.
-    /// Ta sama zasada, co w `WeeklyPlanView`.
-    @State private var infoSheet: InfoSheet?
-
-    private enum InfoSheet: Identifiable, Hashable {
-        case today
-        case history
-        /// Miesiąc otwarty WPROST z ekranu z zamkniętą listą, z pominięciem
-        /// arkusza historii — tam miesiące stoją już na ekranie.
-        case month(String)
-
-        var id: String {
-            switch self {
-            case .today:            return "today"
-            case .history:          return "history"
-            case .month(let key):   return "month.\(key)"
-            }
-        }
-    }
+    /// Stos historii W arkuszu Zakupów: historia → miesiąc → lista to push
+    /// z systemowym „wstecz” (6.10.2026), a nie trzy arkusze jeden na drugim.
+    @State private var historyPath: [ShoppingHistoryRoute] = []
 
     /// Dania tygodnia stojące za produktami. Liczone z planu, nie z serwera —
     /// przeliczane dopiero, gdy plan naprawdę się zmieni (`planSignature`),
@@ -305,7 +286,7 @@ struct ProductsView: View {
     @State private var footerAnimates = false
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $historyPath) {
             ZStack(alignment: .top) {
                 SCPageBackground(scheme: scheme)
                     .ignoresSafeArea()
@@ -385,9 +366,19 @@ struct ProductsView: View {
             // Pasek nawigacji SCHOWANY (Rafał 4.10.2026: „na Zakupach nie da się
             // kliknąć X oraz ustawień”). Pusty, ale żywy pasek leżał dokładnie
             // na wierszu nagłówka i łapał stuknięcia; hak wyłączający mu dotyk
-            // (`NavBarHitTestPassthrough`) bywał zawodny. Zakupy niczego nie
-            // wpychają na stos, więc pasek jest tu zbędny.
+            // (`NavBarHitTestPassthrough`) bywał zawodny. Pasek jest schowany
+            // TYLKO na tym pierwszym ekranie — wepchnięte ekrany historii mają
+            // systemowy z „wstecz” (`scPushedPage`).
             .toolbar(.hidden, for: .navigationBar)
+            // Historia, miesiąc i lista — kolejne ekrany tego arkusza.
+            .navigationDestination(for: ShoppingHistoryRoute.self) { route in
+                historyDestination(route)
+            }
+            // Skasowana lista albo miesiąc bez list — jego ekran schodzi ze
+            // stosu sam, zamiast pokazywać coś, czego już nie ma.
+            .onChange(of: shoppingListStore.archivedLists.map(\.archiveId)) { _, _ in
+                pruneHistoryPath()
+            }
             // Odhaczenie produktu jest jedyną czynnością na tym ekranie i robi
             // się je z ręką w koszyku, często nie patrząc — stuknięcie w palec
             // potwierdza je szybciej niż animacja kółka.
@@ -396,18 +387,6 @@ struct ProductsView: View {
             // pojedynczy produkt; przy cofnięciu ptaszka nie ma czego świętować.
             .sensoryFeedback(trigger: canCloseCurrentList) { _, isReady in
                 isReady ? .success : nil
-            }
-            // Kasowanie POJEDYNCZEJ listy potwierdza się w arkuszu, w którym
-            // się jej dotyka: alert przypięty tutaj wisiałby pod dwoma
-            // arkuszami historii i nigdy by się nie pokazał.
-            .alert("Usunąć całą historię list?", isPresented: $showDeleteAllHistoryAlert) {
-                Button("Anuluj", role: .cancel) { }
-                Button("Usuń wszystko", role: .destructive) {
-                    infoSheet = nil
-                    deleteAllHistory()
-                }
-            } message: {
-                Text("Ta operacja usunie wszystkie zapisane listy produktów z historii.")
             }
             .task(id: datesViewModel.weekStartISO) {
                 todayOnly = false
@@ -455,29 +434,11 @@ struct ProductsView: View {
                 }
                 completedAislesSnapshot = current
             }
-            // Arkusze WOLNO stawiać jeden na drugim: historia → miesiąc →
-            // lista. Każdy poziom zdejmuje się własną strzałką w lewym górnym
-            // rogu, a to, co pod spodem, zostaje tam, gdzie było.
-            .sheet(item: $infoSheet) { which in
-                Group {
-                    switch which {
-                    case .today:
-                        todaySheet
-                    case .history:
-                        ShoppingHistorySheet(
-                            months: historyMonths,
-                            itemsForArchive: { shoppingListStore.archiveDisplayItems(archiveId: $0) },
-                            dishSummary: { item in dishSummary(for: item) },
-                            onDelete: { shoppingListStore.deleteArchivedList(archiveId: $0.archiveId) },
-                            onDeleteAll: { deleteAllHistory() },
-                            onClose: { infoSheet = nil }
-                        )
-                    case .month(let key):
-                        monthSheet(key: key)
-                    }
-                }
-                .presentationDetents([.large])
-                .dashboardLiquidSheet()
+            // „Na dziś” — arkusz nad Zakupami, bez zmian.
+            .sheet(isPresented: $showsTodaySheet) {
+                todaySheet
+                    .presentationDetents([.large])
+                    .dashboardLiquidSheet()
             }
         }
     }
@@ -502,7 +463,7 @@ struct ProductsView: View {
     }
 
     /// Wszystko, co dotyczy CAŁEJ listy: masowe odhaczenie, zamknięcie
-    /// i historia. Wcześniej dwie pierwsze akcje dzieliły jeden przycisk
+    /// i wejście do historii. Wcześniej dwie pierwsze akcje dzieliły jeden przycisk
     /// w karcie hero, który raz mówił „Kupione”, a raz „Zamknij” — a historia
     /// nie miała wejścia w ogóle (arkusz istniał w kodzie i nikt nie mógł go
     /// otworzyć).
@@ -522,19 +483,15 @@ struct ProductsView: View {
             }
             .disabled(!canCloseCurrentList || isBusy)
 
+            // „Usuń całą historię” stoi w JEDNYM miejscu — w „…” ekranu
+            // Historii, przy liście, którą kasuje.
             if !shoppingListStore.archivedLists.isEmpty {
                 Divider()
 
                 Button {
-                    infoSheet = .history
+                    historyPath = [.history]
                 } label: {
                     Label("Historia list", systemImage: "clock.arrow.circlepath")
-                }
-
-                Button(role: .destructive) {
-                    showDeleteAllHistoryAlert = true
-                } label: {
-                    Label("Usuń całą historię", systemImage: "trash")
                 }
             }
         } label: {
@@ -752,7 +709,7 @@ struct ProductsView: View {
     /// z trybu filtra wraca do całej listy.
     private func handleTodayTap() {
         guard todayOnly else {
-            infoSheet = .today
+            showsTodaySheet = true
             return
         }
         withAnimation(Self.filterAnimation) { todayOnly = false }
@@ -784,10 +741,10 @@ struct ProductsView: View {
                 disablesTaps: shoppingListStore.isBatchUpdating,
                 onToggleItem: { handleToggle($0) },
                 onShowInList: {
-                    infoSheet = nil
+                    showsTodaySheet = false
                     withAnimation(Self.filterAnimation) { todayOnly = true }
                 },
-                onClose: { infoSheet = nil }
+                onClose: { showsTodaySheet = false }
             )
         }
     }
@@ -923,8 +880,10 @@ struct ProductsView: View {
                 .padding(.top, 18)
                 .padding(.bottom, 4)
 
+                // Miesiąc wprost z ekranu z zamkniętą listą — z pominięciem
+                // ekranu historii, bo miesiące stoją już tutaj.
                 ShoppingMonthList(months: historyMonths) { month in
-                    infoSheet = .month(month.key)
+                    historyPath.append(.month(month.key))
                 }
                 .padding(.horizontal, pageHorizontalPadding)
             }
@@ -969,21 +928,77 @@ struct ProductsView: View {
         historyMonths.reduce(0) { $0 + $1.listCount }
     }
 
-    /// Arkusz jednego miesiąca — otwierany wprost z ekranu z zamkniętą listą.
-    /// Miesiąc wyszukiwany po kluczu przy każdym rysowaniu: skasowanie
-    /// ostatniej listy miesiąca zamyka arkusz samo, zamiast zostawiać otwarty
-    /// ekran czegoś, czego już nie ma.
+    // MARK: - Stos historii
+
+    /// Ekran stosu historii. Dane wyszukiwane po kluczu przy każdym
+    /// rysowaniu — skasowanie listy albo ostatniej listy miesiąca zdejmuje
+    /// jego ekran ze stosu (`pruneHistoryPath`).
     @ViewBuilder
-    private func monthSheet(key: String) -> some View {
-        if let month = historyMonths.first(where: { $0.key == key }) {
-            ShoppingHistoryMonthSheet(
-                month: month,
-                itemsForArchive: { shoppingListStore.archiveDisplayItems(archiveId: $0) },
-                dishSummary: { item in dishSummary(for: item) },
-                onDelete: { shoppingListStore.deleteArchivedList(archiveId: $0.archiveId) },
-                onClose: { infoSheet = nil }
+    private func historyDestination(_ route: ShoppingHistoryRoute) -> some View {
+        switch route {
+        case .history:
+            ShoppingHistoryPage(
+                months: historyMonths,
+                onOpenMonth: { historyPath.append(.month($0.key)) },
+                onDeleteAll: { deleteAllHistory() }
             )
+        case .month(let key):
+            if let month = historyMonths.first(where: { $0.key == key }) {
+                ShoppingHistoryMonthPage(
+                    month: month,
+                    onOpenArchive: { historyPath.append(.archive($0.archiveId)) },
+                    onDelete: { shoppingListStore.deleteArchivedList(archiveId: $0.archiveId) }
+                )
+            }
+        case .archive(let archiveId):
+            if let week = historyWeek(containing: archiveId),
+               let entry = week.entries.first(where: { $0.archiveId == archiveId }) {
+                ShoppingArchivePage(
+                    entry: entry,
+                    items: shoppingListStore.archiveDisplayItems(archiveId: archiveId),
+                    weekRange: week.rangeLabel,
+                    dishSummary: archiveDishSummary(isCurrentWeek: week.isCurrent),
+                    onDelete: { shoppingListStore.deleteArchivedList(archiveId: archiveId) }
+                )
+            }
         }
+    }
+
+    /// Tydzień historii, w którym leży lista o tym id.
+    private func historyWeek(containing archiveId: String) -> ShoppingHistoryWeek? {
+        historyMonths
+            .flatMap(\.weeks)
+            .first { week in week.entries.contains { $0.archiveId == archiveId } }
+    }
+
+    /// Dania pod nazwą produktu tylko dla OGLĄDANEGO tygodnia — indeks dań
+    /// jest zbudowany z jego planu, więc przy liście sprzed miesiąca
+    /// dopisałby „Pomidorom” dzisiejszą zupę. Funkcja zamiast `cond ? … : …`
+    /// z domknięciami (SE-0418).
+    private func archiveDishSummary(isCurrentWeek: Bool) -> (ShoppingItem) -> String? {
+        guard isCurrentWeek else { return { _ in nil } }
+        return { item in dishSummary(for: item) }
+    }
+
+    /// Zdejmuje ze stosu ekrany rzeczy, których już nie ma: skasowaną listę
+    /// i miesiąc, w którym nie została żadna. Historia zostaje (pusta mówi
+    /// „Historia jest pusta”).
+    private func pruneHistoryPath() {
+        let months = historyMonths
+        let monthKeys = Set(months.map(\.key))
+        let archiveIds = Set(months.flatMap(\.entries).map(\.archiveId))
+        let firstGone = historyPath.firstIndex { route in
+            switch route {
+            case .history:
+                return false
+            case .month(let key):
+                return !monthKeys.contains(key)
+            case .archive(let archiveId):
+                return !archiveIds.contains(archiveId)
+            }
+        }
+        guard let firstGone else { return }
+        historyPath.removeSubrange(firstGone...)
     }
 
     /// Kasowanie historii jest nieodwracalne i wspólne dla całego domu, a po
@@ -992,7 +1007,7 @@ struct ProductsView: View {
     /// Podtytuł niesie jedyny fakt, którego alert nie mówił — że listy znikają
     /// wszystkim, nie tylko tu.
     private func deleteAllHistory() {
-        // Kolejka i store do stałych PRZED zadaniem — arkusz historii bywa
+        // Kolejka i store do stałych PRZED zadaniem — arkusz Zakupów bywa
         // zamykany w tej samej chwili, a wtedy jego środowisko już nie żyje.
         let toasts = toasts
         let store = shoppingListStore
@@ -1016,6 +1031,17 @@ struct ProductsView: View {
     private func dishSummary(for item: ShoppingItem) -> String? {
         dishIndex.dishSummary(for: item)
     }
+}
+
+/// Ekrany historii wpychane w arkusz Zakupów (`ProductsView.historyPath`).
+enum ShoppingHistoryRoute: Hashable {
+    /// Wszystkie miesiące — z menu „…”.
+    case history
+    /// Jeden miesiąc (klucz `"2026-09"`) — z historii albo wprost z ekranu
+    /// z zamkniętą listą.
+    case month(String)
+    /// Jedna zamknięta lista (`archiveId`).
+    case archive(String)
 }
 
 #Preview {
