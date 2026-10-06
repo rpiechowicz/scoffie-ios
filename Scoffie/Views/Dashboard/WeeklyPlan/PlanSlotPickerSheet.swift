@@ -637,6 +637,7 @@ struct PlanSlotPickerSheet: View {
         let day = date
         let mealSlot = slot
         let week = weekStartISO
+        let isNewMeal = editing == nil
         Task { @MainActor in
             let saved = await store.upsertWeekSlot(
                 recipe: recipe,
@@ -681,6 +682,11 @@ struct PlanSlotPickerSheet: View {
                 }
             }
             completion?()
+            // Pierwsze danie w planie = prośba o zgodę na przypomnienia
+            // o posiłkach (po pierwszym pytaniu nic nie robi).
+            if isNewMeal {
+                await NotificationPermission.requestAfterPlanning()
+            }
         }
         dismiss()
     }

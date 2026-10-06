@@ -248,6 +248,10 @@ struct AddToPlanDraft {
                 return
             }
 
+            // Pierwsze danie w planie = prośba o zgodę na przypomnienia,
+            // PRZED toastem: okno systemu nie zjada czasu na „Cofnij”.
+            await NotificationPermission.requestAfterPlanning()
+
             // Toast sukcesu niesie też haptykę sukcesu (`SCToastHost`).
             if let replacedName {
                 toasts.success("Zamieniono w planie", "\(slot.title) — zamiast: \(replacedName)")
