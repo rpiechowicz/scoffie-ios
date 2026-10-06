@@ -45,13 +45,12 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   nil, range:)`, gest za krawędź wraca sprężyną). Start i nowa doba (`todayKey`: zegar strony, `scenePhase`, wejście
   na zakładkę) = dziś. Własny dzień, bez `DatesViewModel` — osobny tydzień Kalendarza z 4.10 (`calendarDatesViewModel`)
   USUNIĘTY. Tygodnie trzech dni wczytywane raz na dobę (`loadDayWindow`: sąsiedni pierwszy, oglądany ostatni — nasłuch
-  socketu idzie za tygodniem oglądanego dnia). Pigułka = `PlanDayGoalBar(planned:)` w układzie „Zjedzone X z Y kcal ·
-  w planie Z” + tor kcal + B/T/W. Przejście Plan ↔ Dziś (6.10.2026 wieczór, Rafał: „liquid się
-  rozrasta”; wersja z samą wysokością szkła „słabo wygląda”): pigułka zakładki, na którą się weszło z drugiej, na
-  pierwszej klatce = twarz tamtej (`PlanDayGoalFace` z `SCTabBarChrome.goalBarFaces`: układ i liczby,
-  `SessionStore.previousDashboardTab`), potem jednym ruchem (`handoffMotion`) własna: kolumna kcal przelewa się w zdanie
-  „Zjedzone …” (`matchedGeometryEffect`), makra jadą na miejsce, cyfry rolują, tory dojeżdżają, szkło zmienia kształt.
-  JEDNO drzewo dla obu układów (makra na stałym miejscu) — nie wracać do dwóch gałęzi `if/else`. Zakres wczoraj · dziś · jutro jest CELOWY — dalsze dni ogląda się i planuje w Planie. Pusta pora / pusty dzień dziś i jutro = „Zaplanuj” (pierwsza pigułka w kolorze pory + pusty talerz jako
+  socketu idzie za tygodniem oglądanego dnia). Pigułka = `PlanDayGoalBar(planned:)` w TYM SAMYM jednym wierszu co Plan (kcal + B/T/W, zjedzone; plan dnia
+  bladą warstwą pod torami) — zdanie „Zjedzone X z Y kcal · w planie Z” USUNIĘTE 6.10.2026 wieczorem (Rafał: „kompaktowe,
+  czytelne, w 1 wierszu”; dwa układy psuły przejście). Przejście Plan ↔ Dziś: pigułka zakładki, na którą się weszło
+  z drugiej, na pierwszej klatce ma liczby tamtej (`PlanDayGoalFace` z `SCTabBarChrome.goalBarFaces`,
+  `SessionStore.previousDashboardTab`), potem cyfry rolują (`SCMotion.textRoll`) i tory dojeżdżają. Nie wracać do dwóch
+  układów ani do animowania wysokości szkła. Zakres wczoraj · dziś · jutro jest CELOWY — dalsze dni ogląda się i planuje w Planie. Pusta pora / pusty dzień dziś i jutro = „Zaplanuj” (pierwsza pigułka w kolorze pory + pusty talerz jako
   przycisk) → `SessionStore.planSlotRequest` (`PlanSlotRequest`) + `dashboardTab = .plan`; Plan zdejmuje prośbę,
   `DatesViewModel.show(day:)`, otwiera „Wybierz przepis” na tę porę („dla kogo”: `[]` = cały dom, `[ja]`, gdy ktoś
   inny ma w porze swoje danie); wczoraj — tylko podpowiedź „Zaplanujesz w Planie”.
@@ -67,7 +66,12 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   na korzeniu i w kategorii = `recipesSearchDock` (jedna droga), stoi nad paskiem zakładek, który się NIE zwija.
   Zjeżdżanie paska szukania obok zwiniętej ikony (liczone z przewijania) USUNIĘTE tego samego dnia: iOS nie mówi, kiedy
   pasek się rozwija (np. stuknięciem w zwiniętą ikonę), i pasek szukania nachodził na zakładki. Krążek Filtrów BEZ `GlassEffectContainer` (w grupie był martwy
-  pod systemowym `TabView`), plakietka wprost na krążku. „Filtry” działają
+  pod systemowym `TabView`), plakietka wprost na krążku. Arkusz „Filtry” = SAME WIERSZE w kartach jak Ustawienia iOS
+  (6.10.2026 wieczór, Rafał: „za dużo, pomieszane, mega nieczytelne”): karta kategorii (smak = systemowy segment w wierszu,
+  rodzaj dania / mięso / pora = wiersz → podstrona `Pane.facet`), „Najważniejsze” (czas, trudność = `RecipeFilterMenuRow`
+  z systemowym menu; kalorie = `RecipeFilterValueRow` → podstrona z wykresem), „Dieta i składniki” (dieta → podstrona
+  z kafelkami, wyklucz składniki), „Więcej” (cechy, kuchnia, okazje). Kafelki ze zdjęciami i wykres TYLKO na podstronach
+  — nie wracać z siatkami na wierzch. „Filtry” działają
   NA ŻYWO (bez szkicu i „Pokaż”), stopka „N z M przepisów” + tekstowe „Gotowe” (lupa odpadła). Filtry kategorii =
   sekcja „Filtrów”, gdy lista stoi w kategorii (ekran albo zakładka wyników, `scope`), bez kuchni i okazji kategorii;
   bez zakresu — wiersze „Filtry kategorii”. Podstrony Filtrów („Więcej filtrów”, Wyklucz składniki → dział) i filtry

@@ -54,24 +54,18 @@ import SwiftUI
 /// Cztery kolumny potrzebują jej więcej niż dwa wiersze po trzy, bo najdłuższy
 /// podpis („kcal 1135/2100") musi się zmieścić obok trzech makr.
 ///
-/// **Na „Dziś” pigułka MÓWI, co liczy** (6.10.2026, Plan i Kalendarz
-/// z wyostrzonymi rolami). Plan sumuje to, co zaplanowane, a „Dziś” — to, co
-/// odhaczone; ta sama pigułka z „kcal 0/2100” rano wyglądała jak plan, który
-/// gdzieś zginął. Z `planned` (tylko „Dziś”) nad makrami stoi więc zdanie
-/// „Zjedzone 1200 z 2100 kcal · w planie 1800” z torem kalorii pod spodem,
-/// a kolumna kalorii schodzi z rzędu — te same liczby nie stoją dwa razy.
+/// **Na „Dziś” ten sam jeden wiersz** (Rafał 6.10.2026 wieczór: „kompaktowe,
+/// czytelne i mieści się w 1 wierszu”). Zdanie „Zjedzone X z Y kcal · w planie
+/// Z” nad makrami z tego samego dnia odpadło — pigułka miała przez nie dwa
+/// układy, a przejście między nimi „nie siedziało”. Dziś liczy ZJEDZONE,
+/// a plan dnia stoi bladą warstwą pod każdym torem (`planned`), więc poranne
+/// „kcal 0/2100” nie wygląda jak plan, który zginął.
 ///
-/// **Przejście Plan ↔ Dziś** (Rafał 6.10.2026: „ładnie się animował, rozrastał
-/// z tego, co jest na planie, i z powrotem… liquid”; pierwsza wersja — sama
-/// wysokość szkła — „słabo wygląda”). Pigułka zakładki, na którą się weszło,
-/// staje na pierwszej klatce DOKŁADNIE taka, jaka była na poprzedniej
-/// (`PlanDayGoalFace` z `SCTabBarChrome.goalBarFaces`: układ i liczby), więc
-/// systemowe cięcie zakładki jej nie dotyka — a potem jednym ruchem
-/// (`handoffMotion`) przechodzi w swoją: kolumna kalorii przelewa się
-/// w zdanie „Zjedzone …” nad makrami (`matchedGeometryEffect`) albo z niego
-/// wraca, makra przesuwają się na swoje miejsce, cyfry rolują (`numericText`,
-/// jak każda liczba w aplikacji), tory dojeżdżają, a szkło zmienia kształt
-/// razem z treścią.
+/// **Przejście Plan ↔ Dziś**: ten sam układ, więc przechodzą LICZBY. Pigułka
+/// zakładki, na którą się weszło, staje na pierwszej klatce z liczbami
+/// pigułki poprzedniej (`PlanDayGoalFace` z `SCTabBarChrome.goalBarFaces`),
+/// a potem cyfry rolują się do własnych (`numericText`, jak każda liczba
+/// w aplikacji), a tory dojeżdżają.
 struct PlanDayGoalBar: View {
     let nutrition: PlanDayNutrition
     let targets: DailyNutritionTargets
@@ -84,8 +78,7 @@ struct PlanDayGoalBar: View {
     /// dojdzie, tym samym kolorem, tylko ściszonym.
     ///
     /// `nil` w Planie tygodnia — tam pigułka liczy SAM plan, więc zapowiadać
-    /// go drugi raz nie ma czym. Podane (zakładka „Dziś”) przełącza też układ
-    /// na zdanie „Zjedzone … · w planie …” — patrz komentarz typu.
+    /// go drugi raz nie ma czym. Podane na zakładce „Dziś”.
     var planned: PlanDayNutrition?
     /// Zakładka, na której stoi pigułka (`.plan` / `.calendar`) — do przejścia
     /// z pigułki drugiej z nich.
@@ -100,13 +93,6 @@ struct PlanDayGoalBar: View {
 
     /// Twarz pigułki z poprzedniej zakładki na czas przejścia — `nil` = własna.
     @State private var handoff: PlanDayGoalFace?
-    /// Kolumna kalorii i zdanie „Zjedzone …” to jedno miejsce w przejściu.
-    @Namespace private var morph
-
-    // Zdanie „Zjedzone … · w planie …” w stopniach `MacroMeter` (wartość 13,
-    // reszta 11), skalowanych z Dynamic Type tak samo jak tamte podpisy.
-    @ScaledMetric(relativeTo: .footnote) private var summaryValueSize: CGFloat = 13
-    @ScaledMetric(relativeTo: .caption2) private var summaryTextSize: CGFloat = 11
 
     /// Promień rogu szkła i obszaru dotyku — jedna liczba, żeby te dwa
     /// kształty nie mogły się rozjechać.
@@ -117,10 +103,9 @@ struct PlanDayGoalBar: View {
     /// chwilę po liczbie — dwie sprężyny w jednej kolumnie widać jako dwie.
     static let animation: Animation = .spring(response: 0.36, dampingFraction: 0.9)
 
-    /// Ruch przejścia Plan ↔ Dziś — układ, szkło, cyfry i tory razem. Dłuższy
-    /// od zwykłej zmiany liczb (zmienia się cały kształt), z lekkim dobiciem
-    /// szkła na końcu.
-    private static let handoffMotion: Animation = .spring(response: 0.55, dampingFraction: 0.84)
+    /// Ruch przejścia Plan ↔ Dziś — cyfry i tory razem, krzywą rolowania
+    /// tekstu z całej aplikacji.
+    private static let handoffMotion: Animation = SCMotion.textRoll
 
     /// Własne liczby pigułki.
     private var ownFace: PlanDayGoalFace {
@@ -214,113 +199,36 @@ struct PlanDayGoalBar: View {
         }
     }
 
-    /// Treść pigułki: w Planie cztery kolumny w jednym wierszu, na „Dziś”
-    /// zdanie o zjedzonych i planie nad trzema makrami. JEDNO drzewo dla obu
-    /// układów — makra mają w nim stałe miejsce, więc w przejściu jadą,
-    /// a nie budują się od nowa.
+    /// Treść pigułki: cztery kolumny w jednym wierszu — kalorie i trzy makra.
+    /// Na „Dziś” każda z bladą warstwą planu dnia pod torem.
     private var content: some View {
         let face = self.face
-        return VStack(alignment: .leading, spacing: 6) {
-            if let planned = face.planned {
-                eatenSummary(face, planned: planned)
-                    .matchedGeometryEffect(id: "kcal", in: morph)
-                    .transition(.opacity)
-            }
-            HStack(alignment: .top, spacing: 8) {
-                if face.planned == nil {
-                    MacroMeter(
-                        letter: "kcal",
-                        title: "Kalorie",
-                        value: face.nutrition.kcal,
-                        target: face.targets.kcal,
-                        color: SCMacroPalette.calories,
-                        unit: "kilokalorii",
-                        accessibilityDetail: remainingDetail(face),
-                        animation: Self.animation
-                    )
-                    // Szerokość z podpisu, nie z podziału na cztery — patrz
-                    // komentarz typu. Tor pod spodem i tak wypełnia całą kolumnę.
-                    .fixedSize(horizontal: true, vertical: false)
-                    .matchedGeometryEffect(id: "kcal", in: morph)
-                    .transition(.opacity)
-                }
-
-                macroMeters(face)
-            }
-        }
-    }
-
-    /// „Zjedzone 1200 z 2100 kcal” · „w planie 1800” i tor kalorii na całą
-    /// szerokość pigułki — zjedzone pełnym kolorem, plan dnia blado pod nim
-    /// (`MacroProgressTrack.plannedProgress`, ta sama warstwa co dotąd).
-    private func eatenSummary(_ face: PlanDayGoalFace, planned: PlanDayNutrition) -> some View {
-        let eaten = face.nutrition.kcal
-        let target = face.targets.kcal
-        let progress = target > 0 ? Double(eaten) / Double(target) : 0
-        let plannedProgress: Double? = target > 0 && planned.kcal > eaten
-            ? Double(planned.kcal) / Double(target)
-            : nil
-
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                eatenText(face)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .layoutPriority(1)
-
-                Spacer(minLength: 4)
-
-                plannedText(planned.kcal)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-            .contentTransition(.numericText())
-
-            MacroProgressTrack(
-                progress: progress,
+        return HStack(alignment: .top, spacing: 8) {
+            MacroMeter(
+                letter: "kcal",
+                title: face.planned == nil ? "Kalorie" : "Zjedzone kalorie",
+                value: face.nutrition.kcal,
+                target: face.targets.kcal,
+                plannedValue: face.planned?.kcal,
                 color: SCMacroPalette.calories,
-                plannedProgress: plannedProgress,
-                height: 4,
+                unit: "kilokalorii",
+                accessibilityDetail: kcalDetail(face),
                 animation: Self.animation
             )
+            // Szerokość z podpisu, nie z podziału na cztery — patrz
+            // komentarz typu. Tor pod spodem i tak wypełnia całą kolumnę.
+            .fixedSize(horizontal: true, vertical: false)
+
+            macroMeters(face)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "Zjedzone: \(eaten) z \(target) kilokalorii, \(remainingDetail(face)), "
-                + (planned.kcal > 0 ? "w planie \(planned.kcal) kilokalorii" : "nic w planie")
-        )
     }
 
-    /// „Zjedzone 1200 z 2100 kcal” — jeden `Text`, żeby całość skalowała się
-    /// razem i nigdy nie ucinała liczby (ta sama zasada co `MacroMeter.label`).
-    private func eatenText(_ face: PlanDayGoalFace) -> Text {
-        let lead = Text("Zjedzone")
-            .font(.sc(size: summaryTextSize, weight: .bold))
-            .foregroundStyle(SCMacroPalette.calories)
-        let value = Text(verbatim: String(face.nutrition.kcal))
-            .font(.sc(size: summaryValueSize, weight: .bold).monospacedDigit())
-            .foregroundStyle(face.nutrition.kcal > face.targets.kcal ? SCMacroPalette.calories : Color.scLabel(scheme))
-        let goal = Text(verbatim: "z \(face.targets.kcal) kcal")
-            .font(.sc(size: summaryTextSize, weight: .semibold).monospacedDigit())
-            .foregroundStyle(Color.scMuted(scheme))
-        return Text("\(lead) \(value) \(goal)")
-    }
-
-    /// „w planie 1800” — ile stoi w planie TEGO dnia dla mnie. Dzień bez
-    /// planu mówi to słowami, a nie zerem.
-    private func plannedText(_ kcal: Int) -> Text {
-        guard kcal > 0 else {
-            return Text("nic w planie")
-                .font(.sc(size: summaryTextSize, weight: .semibold))
-                .foregroundStyle(Color.scMuted(scheme))
-        }
-        let lead = Text("w planie")
-            .font(.sc(size: summaryTextSize, weight: .semibold))
-            .foregroundStyle(Color.scMuted(scheme))
-        let value = Text(verbatim: String(kcal))
-            .font(.sc(size: summaryTextSize, weight: .bold).monospacedDigit())
-            .foregroundStyle(Color.scLabel(scheme))
-        return Text("\(lead) \(value)")
+    /// Dopowiedzenie dla VoiceOver: ile zostaje do celu, a na „Dziś” także
+    /// ile stoi w planie.
+    private func kcalDetail(_ face: PlanDayGoalFace) -> String {
+        guard let planned = face.planned else { return remainingDetail(face) }
+        return remainingDetail(face)
+            + (planned.kcal > 0 ? ", w planie \(planned.kcal) kilokalorii" : ", nic w planie")
     }
 
     /// „zostało 965 kilokalorii" albo „230 kilokalorii ponad cel" — to, co
