@@ -40,8 +40,9 @@ extension EnvironmentValues {
 ///   którą rysuje `NavigationMenu` nad wszystkimi zakładkami;
 /// - `keyboardCurve` — krzywa klawiatury dla wszystkiego, co jedzie z polem
 ///   nad klawiaturą (powitanie Asystenta);
-/// - `goalBarFaces` — co pokazują pigułki kcal Planu i Dziś; pigułka
-///   zakładki, na którą się weszło, zaczyna z twarzy poprzedniej.
+/// - `goalBarFaces` / `goalBarHandoff` — co pokazują pigułki kcal Planu
+///   i Pulpitu; pigułka zakładki, na którą się wchodzi, rysuje PIERWSZĄ
+///   klatkę z twarzą poprzedniej i od niej dojeżdża do swojej.
 @Observable
 final class SCTabBarChrome {
     /// Tytuł do kapsuły pod paskiem stanu (`SCCompactTitle`) dla zakładek,
@@ -52,6 +53,13 @@ final class SCTabBarChrome {
     /// liczby i układ. Czytana tylko w akcjach, nigdy w `body` — zapis nie
     /// przebudowuje menu.
     var goalBarFaces: [DashboardTab: PlanDayGoalFace] = [:]
+
+    /// Twarz, od której pigułka zakładki DOCELOWEJ rysuje się w chwili
+    /// przełączenia (Plan ↔ Pulpit). Ustawiana ZANIM zmieni się zakładka
+    /// (`NavigationMenu.prepareGoalBarHandoff`), więc pierwsza klatka nowej
+    /// zakładki to dokładnie pigułka poprzedniej — jeden komponent, który
+    /// tylko zmienia stan. Pigułka sama ją zdejmuje, ruchem.
+    var goalBarHandoff: [DashboardTab: PlanDayGoalFace] = [:]
 
     /// Krzywa klawiatury iOS — krzywa 7 z `UIKeyboardAnimationCurveUserInfoKey`
     /// nie ma publicznego odpowiednika; to jej znane przybliżenie Béziera.
@@ -107,7 +115,17 @@ struct NavigationMenu: View {
         let selected = session.dashboardTab
         let compactTitle = chrome.compactTitles[selected]
 
-        return TabView(selection: $session.dashboardTab) {
+        // Wybór przez wiązanie z przygotowaniem przejścia pigułki kcal —
+        // twarz musi stać w stanie, ZANIM zakładka się przełączy.
+        let selection = Binding<DashboardTab>(
+            get: { session.dashboardTab },
+            set: { tab in
+                prepareGoalBarHandoff(from: session.dashboardTab, to: tab)
+                session.dashboardTab = tab
+            }
+        )
+
+        return TabView(selection: selection) {
             Tab(value: DashboardTab.recipes) {
                 page(.recipes, isActive: selected == .recipes)
             } label: {
@@ -139,8 +157,11 @@ struct NavigationMenu: View {
                 tabLabel(.settings, MenuConstans.Settings.name, systemImage: MenuConstans.Settings.icon)
             }
         }
-        .onChange(of: selected) { _, tab in
+        .onChange(of: selected) { old, tab in
             bounces[tab, default: 0] += 1
+            // Przełączenie z kodu („Zaplanuj” na Pulpicie → Plan) omija
+            // wiązanie — tu przejście dochodzi chwilę później.
+            prepareGoalBarHandoff(from: old, to: tab)
         }
         // Pasek NIE zwija się przy przewijaniu (Rafał 6.10.2026). Zwinięty
         // rozjeżdżał się ze wstawkami nad nim (pasek szukania Przepisów,
@@ -169,6 +190,19 @@ struct NavigationMenu: View {
             .animation(.smooth(duration: 0.3), value: compactTitle == nil)
         }
         .environment(\.scTabBarChrome, chrome)
+    }
+
+    /// Pigułka kcal zakładki `to` zacznie od twarzy pigułki `from` — tylko
+    /// między Planem a Pulpitem i tylko raz na przejście.
+    private func prepareGoalBarHandoff(from: DashboardTab, to: DashboardTab) {
+        let tabs: Set<DashboardTab> = [.plan, .calendar]
+        guard from != to, tabs.contains(from), tabs.contains(to),
+              chrome.goalBarHandoff[to] == nil,
+              let face = chrome.goalBarFaces[from]
+        else { return }
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) { chrome.goalBarHandoff[to] = face }
     }
 
     /// Podpis zakładki z ikoną, która podskakuje przy wyborze (6.10.2026,
