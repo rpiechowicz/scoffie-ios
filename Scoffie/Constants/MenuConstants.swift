@@ -1,6 +1,6 @@
 struct MenuConstans {
-    /// Zakładka „Mój dzień” (6.10.2026; wcześniej tego dnia „Dziś”, dawniej
-    /// „Kalendarz”): to, co JA jem wczoraj, dziś i jutro — w odróżnieniu od
+    /// Zakładka „Pulpit” (6.10.2026 wieczór, Rafał; wcześniej tego dnia „Mój
+    /// dzień” i „Dziś”, dawniej „Kalendarz”): to, co JA jem wczoraj, dziś i jutro — w odróżnieniu od
     /// Planu, który jest całego domu. Typ zostaje `Calendar`, bo tak zakładkę
     /// nazywa `DashboardTab.calendar`. Nagłówek ekranu dalej mówi „Dziś” /
     /// „Wczoraj” / „Jutro”.
@@ -10,7 +10,7 @@ struct MenuConstans {
     /// systemu. `icon` (talerz ze sztućcami) zostaje dla miejsc, które biorą
     /// symbol systemowy.
     struct Calendar: MenuModel {
-        static let name: String = "Mój dzień"
+        static let name: String = "Pulpit"
         static let icon: String = "fork.knife.circle"
         /// `Assets.xcassets/ScoffieTabMark` — geometria z `SCScoffieMark.markPath`.
         static let image: String = "ScoffieTabMark"
