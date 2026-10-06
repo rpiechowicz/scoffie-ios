@@ -173,8 +173,8 @@ struct MealSlotsSheet: View {
         .sheet(item: $editing) { slot in
             editorSheet(slot)
                 // Jedna trzecia ekranu — nad nią dalej widać oś dnia.
-                // Z akcją pory („Wyłącz …”) pod kołem — wyżej niż 1/3.
-                .presentationDetents([MealSlot.optionalSlots.contains(slot) ? .height(380) : .fraction(1.0 / 3.0)])
+                // Pory dodatkowe mają nad kołem wiersz „W planie dnia” — wyżej niż 1/3.
+                .presentationDetents([MealSlot.optionalSlots.contains(slot) ? .height(390) : .fraction(1.0 / 3.0)])
                 .dashboardLiquidSheet(cornerRadius: 26)
         }
         .alert(
@@ -458,28 +458,28 @@ struct MealSlotsSheet: View {
                 saveTimes(schedule.setting(slot, toMinutes: nil))
             },
             onClose: { editing = nil },
-            action: editorAction(for: slot)
+            inPlan: inPlanToggle(for: slot)
         )
     }
 
-    /// „Wyłącz” przy włączonej porze dodatkowej, „Dodaj” przy wyłączonej,
-    /// w której zostały dania. Obowiązkowe — bez akcji.
-    private func editorAction(for slot: MealSlot) -> MealTimeEditorSheet.Action? {
+    /// Wiersz „W planie dnia” z przełącznikiem — tylko przy porach
+    /// dodatkowych (obowiązkowych nie da się wyłączyć). Wyłączenie zamyka
+    /// okienko, gdy kciuk przejedzie (oś pod spodem pokazuje skutek);
+    /// włączenie zostawia je otwarte, bo zwykle chce się od razu ustawić godzinę.
+    private func inPlanToggle(for slot: MealSlot) -> MealTimeEditorSheet.InPlan? {
         guard MealSlot.optionalSlots.contains(slot) else { return nil }
-        let isEnabled = configuration.isEnabled(slot)
-        return MealTimeEditorSheet.Action(
-            title: isEnabled ? "Wyłącz \(slot.accusativeName)" : "Dodaj \(slot.accusativeName)",
-            accessibilityLabel: isEnabled
-                ? "Wyłącz \(slot.accusativeName)"
-                : "Dodaj \(slot.accusativeName)",
-            isDestructive: isEnabled,
-            run: {
-                editing = nil
-                if isEnabled {
-                    disableFromEditor(slot)
-                } else {
+        return MealTimeEditorSheet.InPlan(
+            isOn: configuration.isEnabled(slot),
+            set: { isOn in
+                if isOn {
                     popCounts[slot, default: 0] += 1
                     toggle(slot, to: true)
+                } else {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(300))
+                        editing = nil
+                        disableFromEditor(slot)
+                    }
                 }
             }
         )
