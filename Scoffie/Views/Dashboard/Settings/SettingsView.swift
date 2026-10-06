@@ -58,7 +58,8 @@ struct SettingsView: View {
     @State private var showDietSheet = false
     @State private var showMealSlotsSheet = false
     @State private var showProfileSheet = false
-    @State private var showHelpSheet = false
+    /// „Pomoc” — strona wsparcia scoffie.app w Safari w aplikacji.
+    @State private var showSupportPage = false
     @State private var showCookidooSheet = false
     @State private var showLegalDocumentsSheet = false
     @State private var showHealthSheet = false
@@ -96,7 +97,6 @@ struct SettingsView: View {
     @State private var isCreatingInvitation = false
     @State private var showRenameHouseholdAlert = false
     @State private var renameDraft = ""
-    @State private var expandedFAQ: String? = nil
 
     private static let householdNameMinLength = 2
     private static let householdNameMaxLength = 50
@@ -109,171 +109,9 @@ struct SettingsView: View {
     private static let calorieGoalStep: Int = 50
     private static let calorieGoalDefault: Int = 2000
 
-    // Static FAQ content rendered by `helpSheet`. Grouped by topic so the
-    // user can jump straight to the area they care about; only one row is
-    // expanded at a time (`expandedFAQ` accordion state).
-    fileprivate static let faqSections: [FAQSection] = [
-        FAQSection(id: "plan", title: "Plan i kalendarz", items: [
-            FAQItem(
-                id: "plan-create",
-                question: "Jak ułożyć plan posiłków na tydzień?",
-                answer: "Wejdź w zakładkę Kalendarz, wybierz dzień i stuknij pusty slot — Śniadanie, Obiad lub Kolację. Otworzy się biblioteka przepisów, z której możesz wybrać danie. Powtórz dla pozostałych dni i posiłków."
-            ),
-            FAQItem(
-                id: "plan-change",
-                question: "Jak zmienić przepis dla danego dnia?",
-                answer: "Stuknij kartę przepisu w kalendarzu — otworzą się szczegóły. Aby podmienić go na inny, wróć do dnia, usuń obecny przepis i przypisz nowy z biblioteki."
-            ),
-            FAQItem(
-                id: "plan-past",
-                question: "Czy mogę edytować przeszłe dni?",
-                answer: "Nie. Plan z minionych dni jest archiwalny — możesz go tylko przeglądać. Dzisiejszy i przyszłe dni są w pełni edytowalne."
-            ),
-            FAQItem(
-                id: "plan-favorites",
-                question: "Co robi serduszko przy przepisie?",
-                answer: "Oznacza ulubione przepisy — łatwiej je później znaleźć w bibliotece (zakładka Przepisy) i AI częściej będzie je proponować jako sugestie."
-            )
-        ]),
-
-        FAQSection(id: "shopping", title: "Lista zakupów", items: [
-            FAQItem(
-                id: "shop-source",
-                question: "Skąd biorą się produkty na liście?",
-                answer: "Aplikacja zbiera składniki ze wszystkich przepisów przypisanych w kalendarzu na bieżący tydzień, sumuje powtarzające się produkty i grupuje je po działach sklepowych."
-            ),
-            FAQItem(
-                id: "shop-close",
-                question: "Co się dzieje, gdy odhaczę wszystko?",
-                answer: "Przycisk „Kupione” zmieni się w „Zamknij” — stuknij go, żeby zarchiwizować listę. Trafi do historii w tej samej zakładce; w każdej chwili możesz ją podejrzeć lub usunąć."
-            ),
-            FAQItem(
-                id: "shop-revision",
-                question: "Dodałem nowy przepis po zamknięciu listy. Co teraz?",
-                answer: "Aplikacja stworzy nową rewizję listy z brakującymi produktami. Zobaczysz ją jako „Lista 2” — działa identycznie jak pierwsza, ale zawiera tylko nowo wymagane składniki."
-            ),
-            FAQItem(
-                id: "shop-manual",
-                question: "Czy mogę dodawać produkty ręcznie?",
-                answer: "Aktualnie nie — lista jest w pełni generowana z planu. Funkcja ręcznego dodawania jest na liście rzeczy do zrobienia."
-            )
-        ]),
-
-        FAQSection(id: "household", title: "Gospodarstwo", items: [
-            FAQItem(
-                id: "house-create",
-                question: "Po co tworzyć gospodarstwo?",
-                answer: "Gospodarstwo to wspólna przestrzeń dla domowników — wszyscy widzą ten sam plan posiłków, listę zakupów i bibliotekę przepisów. Dzięki temu nie kupujecie tych samych rzeczy dwa razy."
-            ),
-            FAQItem(
-                id: "house-invite",
-                question: "Jak zaprosić domownika?",
-                answer: "Otwórz Ustawienia → Gospodarstwo i naciśnij „+” obok listy domowników. Aplikacja wygeneruje link zaproszeniowy — wyślij go bliskiemu dowolnym komunikatorem."
-            ),
-            FAQItem(
-                id: "house-shared",
-                question: "Czy każdy domownik widzi mój plan?",
-                answer: "Tak. Plan, lista zakupów i przepisy są wspólne dla wszystkich osób w gospodarstwie. Każdy może je edytować — zmiany pojawiają się u pozostałych w czasie rzeczywistym."
-            ),
-            FAQItem(
-                id: "house-leave",
-                question: "Jak opuścić gospodarstwo?",
-                answer: "W oknie gospodarstwa stuknij czerwony przycisk „Opuść gospodarstwo”. Stracisz dostęp do wspólnych danych, ale Twoje konto pozostanie aktywne."
-            )
-        ]),
-
-        FAQSection(id: "account", title: "Konto i dane", items: [
-            FAQItem(
-                id: "acc-sync",
-                question: "Czy moje dane są synchronizowane?",
-                answer: "Tak. Każda zmiana w planie, liście zakupów i przepisach jest zapisywana na serwerze i synchronizowana między urządzeniami w tym samym gospodarstwie."
-            ),
-            FAQItem(
-                id: "acc-photo",
-                question: "Skąd bierze się moje zdjęcie profilowe?",
-                answer: "Logując się przez Google przejmujemy zdjęcie z Twojego konta Google. Logując się przez Apple — Apple nie udostępnia zdjęć, więc używamy Twojego inicjału na terakotowym tle."
-            ),
-            FAQItem(
-                id: "acc-delete",
-                question: "Jak usunąć konto?",
-                answer: "W Ustawieniach, w sekcji profilu, stuknij „Usuń konto”. Konto i Twoje dane znikają od razu; wspólne przepisy i plan zostają domownikom. Możesz też napisać na support@scoffie.app z adresu przypisanego do konta."
-            ),
-            FAQItem(
-                id: "acc-export",
-                question: "Czy mogę pobrać swoje dane?",
-                answer: "Tak. Napisz na support@scoffie.app z adresu przypisanego do konta — odeślemy paczkę JSON z profilem, preferencjami, przepisami, posiłkami, krokami i rozmowami z asystentem. Szybciej: Ustawienia → Informacje → „Prywatność i regulamin” → „Pobierz moje dane” — paczka od razu trafia do arkusza udostępniania."
-            ),
-            FAQItem(
-                id: "acc-allergens",
-                question: "Jakie alergeny zna aplikacja?",
-                answer: "Wszystkie 14 alergenów z listy unijnej (gluten, mleko, jajka, orzechy, orzeszki ziemne, ryby, skorupiaki, mięczaki, soja, seler, gorczyca, sezam, łubin, siarczyny) oraz laktozę jako osobną nietolerancję. Ustawiasz je w profilu — od tej chwili ani asystent, ani ręczne wstawianie posiłku nie przepuści dania z takim składnikiem dla osoby, która go unika."
-            )
-        ]),
-
-        FAQSection(id: "assistant", title: "Asystent", items: [
-            FAQItem(
-                id: "ai-what",
-                question: "Co potrafi asystent?",
-                answer: "Układa cały tydzień albo jeden dzień pod Wasze cele, podmienia pojedyncze danie, dzieli jedno danie na porcje dla domowników o różnych celach, sprawdza, czego brakuje do białka, i składa listę zakupów. Zna Wasz katalog, alergeny i preferencje z profili."
-            ),
-            FAQItem(
-                id: "ai-approve",
-                question: "Czy asystent sam zmienia mój plan?",
-                answer: "Nie. Asystent proponuje, a Ty zatwierdzasz jednym przyciskiem w karcie. Po zapisie masz godzinę na „Cofnij”. Jeśli w międzyczasie ktoś w domu zmienił plan ręcznie, karta powie o tym i zapyta, czy zapisać mimo to."
-            ),
-            FAQItem(
-                id: "ai-limits",
-                question: "Skąd biorą się limity?",
-                answer: "Każda odpowiedź kosztuje. Limit wiadomości i limit zapisanych planów liczą się na gospodarstwo i odnawiają się w dniu odnowienia planu — kupiony 15 września wraca 15 października, a nie pierwszego. Ile zostało i kiedy wraca, widzisz w menu asystenta → Limity. Wyczerpany limit zapisów nie blokuje rozmowy."
-            ),
-            FAQItem(
-                id: "ai-data",
-                question: "Jakie dane trafiają do modelu?",
-                answer: "Plan tygodnia, przepisy, imiona domowników, ich preferencje, alergeny i cele kaloryczne — ale tylko osób, które wyraziły zgodę na asystenta. Wzrost, waga i płeć nigdy nie wychodzą poza aplikację. Rozmowy kasujemy po 90 dniach albo od razu, gdy usuniesz historię."
-            ),
-            FAQItem(
-                id: "ai-memory",
-                question: "Co asystent o nas pamięta?",
-                answer: "Krótkie notatki z rozmów — zwyczaje, niechęci, sprzęt w kuchni — do 30 naraz. Zobaczysz je i skasujesz w menu asystenta → „Co o Was pamięta”. Nie zapisuje niczego o wadze ani zdrowiu."
-            ),
-            FAQItem(
-                id: "ai-wrong",
-                question: "Asystent się pomylił. Co zrobić?",
-                answer: "Przytrzymaj odpowiedź i wybierz „Zgłoś odpowiedź” albo napisz na support@scoffie.app z datą i treścią. Asystent to program oparty na modelu językowym — może się mylić i nie zastępuje dietetyka ani lekarza."
-            )
-        ]),
-
-        FAQSection(id: "notifications", title: "Powiadomienia", items: [
-            FAQItem(
-                id: "notif-missing",
-                question: "Dlaczego nie dostaję powiadomień?",
-                answer: "Sprawdź dwie rzeczy: (1) główny przełącznik w Ustawienia → Powiadomienia w aplikacji, (2) uprawnienia w Ustawieniach iOS → Scoffie → Powiadomienia."
-            ),
-            FAQItem(
-                id: "notif-when",
-                question: "Kiedy wysyłane są przypomnienia?",
-                answer: "Doba ma trzy stałe miejsca i w każdym mieści się najwyżej jedno powiadomienie. Rano — przegląd dnia. Po południu — przekąska, jeśli jest w planie. Wieczorem jedno z czterech: niedokończone odhaczanie, zakupy przed jutrzejszym gotowaniem, jutro bez planu albo seria domkniętych dni. Do tego przypomnienia przy samych posiłkach: o gotowaniu tyle wcześniej, ile zajmuje danie, a przy daniach bez gotowania — o samej porze. Plan tygodniowy i lista zakupów odzywają się wtedy, gdy domownik skończy wprowadzać zmiany."
-            )
-        ]),
-
-        FAQSection(id: "other", title: "Pozostałe", items: [
-            FAQItem(
-                id: "other-slow",
-                question: "Aplikacja działa wolno",
-                answer: "Spróbuj wymusić jej zamknięcie (przeciągnięcie w górę w przeglądzie aplikacji) i otworzyć ponownie. Twoje dane są bezpiecznie zapisane na serwerze, więc nic nie zginie."
-            ),
-            FAQItem(
-                id: "other-idea",
-                question: "Mam pomysł na nową funkcję",
-                answer: "Świetnie! Napisz na support@scoffie.app — czytamy każdą wiadomość i wiele funkcji w aplikacji powstało właśnie z sugestii użytkowników."
-            ),
-            FAQItem(
-                id: "other-bug",
-                question: "Znalazłem błąd. Gdzie zgłosić?",
-                answer: "Wyślij krótki opis na support@scoffie.app — najlepiej z screenem i nazwą urządzenia. Postaramy się odpowiedzieć i naprawić problem jak najszybciej."
-            )
-        ])
-    ]
+    /// Strona wsparcia — scoffie-web `src/pages/support/index.astro`
+    /// (w menu strony „Pomoc”, `/support/`).
+    private static let supportPageURL = URL(string: "https://scoffie.app/support/")!
 
     private var hasHousehold: Bool {
         !persistedHouseholdName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -635,9 +473,18 @@ struct SettingsView: View {
                 .presentationDetents([.large])
                 .dashboardLiquidSheet()
             }
-            .sheet(isPresented: $showHelpSheet) {
-                helpSheet
-                    .dashboardLiquidSheet()
+            // Pomoc to strona wsparcia na scoffie.app (te same „Najczęstsze
+            // sprawy”, kontakt, zgłaszanie błędów i RODO) w Safari W APLIKACJI,
+            // w jednym arkuszu: zostaje się w Ustawieniach, „Zamknij” wraca na
+            // listę, a odnośniki „mailto:” otwierają Pocztę. Dawny arkusz
+            // z 28 pytaniami wpisanymi w kod starzał się szybciej niż aplikacja
+            // (planowanie przez Kalendarz, „nie da się dopisać produktów”,
+            // logowanie przez Google) — strona zmienia się bez wydania.
+            .sheet(isPresented: $showSupportPage) {
+                SCSafariView(url: Self.supportPageURL) {
+                    showSupportPage = false
+                }
+                .ignoresSafeArea()
             }
             .sheet(isPresented: $showCookidooSheet) {
                 CookidooIntegrationSheet {
@@ -834,7 +681,7 @@ struct SettingsView: View {
                     icon: "book.fill",
                     iconColor: SCPalette.terracotta,
                     title: "Pomoc i FAQ",
-                    action: { showHelpSheet = true }
+                    action: { showSupportPage = true }
                 )
 
                 // Strona recenzji w App Store, nie `requestReview()`: systemowa
@@ -2079,167 +1926,6 @@ struct SettingsView: View {
         }
     }
 
-    private var helpSheet: some View {
-        pinnedEditorialSheet {
-            EditorialSheetHeader(
-                eyebrow: "Wsparcie",
-                title: "Pomoc i FAQ",
-                icon: "book.fill"
-            ) {
-                showHelpSheet = false
-                expandedFAQ = nil
-            }
-        } content: {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Najczęściej zadawane pytania o planowanie posiłków, listę zakupów i wspólne gospodarstwo. Nie znalazłeś odpowiedzi? Napisz do nas.")
-                    .font(.system(size: 13.5, weight: .regular))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                ForEach(Self.faqSections) { section in
-                    faqSectionCard(section)
-                }
-
-                contactCard
-                    .padding(.top, 4)
-            }
-        }
-    }
-
-    private func faqSectionCard(_ section: FAQSection) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            EditorialSheetSectionLabel(title: section.title)
-
-            VStack(spacing: 0) {
-                ForEach(Array(section.items.enumerated()), id: \.element.id) { idx, item in
-                    faqRow(item, isLast: idx == section.items.count - 1)
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.scTileBg(scheme))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-    }
-
-    private func faqRow(_ item: FAQItem, isLast: Bool) -> some View {
-        let isExpanded = expandedFAQ == item.id
-
-        return VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.smooth(duration: 0.28)) {
-                    expandedFAQ = isExpanded ? nil : item.id
-                }
-            } label: {
-                HStack(alignment: .top, spacing: 12) {
-                    Text(item.question)
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .tracking(-0.2)
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .heavy))
-                        .foregroundStyle(
-                            isExpanded
-                                ? SCPalette.terracotta
-                                : Color.scFaint(scheme)
-                        )
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                        .frame(width: 22, height: 22)
-                        .background(
-                            Circle().fill(
-                                isExpanded
-                                    ? SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)
-                                    : Color.scChipBg(scheme)
-                            )
-                        )
-                        .padding(.top, 1)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(item.question)
-            .accessibilityHint(isExpanded ? "Stuknij, aby zwinąć odpowiedź" : "Stuknij, aby pokazać odpowiedź")
-
-            if isExpanded {
-                Text(item.answer)
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .move(edge: .top)),
-                        removal: .opacity
-                    ))
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if !isLast {
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-                    .padding(.leading, 16)
-            }
-        }
-    }
-
-    private var contactCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
-                EditorialSettingsTileIcon(icon: "envelope.fill", color: SCPalette.terracotta, size: 44, radius: 12)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Nadal masz pytanie?")
-                        .font(.system(size: 16, weight: .heavy))
-                        .tracking(-0.3)
-                        .foregroundStyle(Color.scLabel(scheme))
-                    Text("Czytamy każdą wiadomość. Odpowiadamy zwykle w ciągu kilku dni.")
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            if let url = URL(string: "mailto:support@scoffie.app?subject=Scoffie%20—%20Pytanie") {
-                Link(destination: url) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 12.5, weight: .heavy))
-                        Text("Napisz do nas")
-                            .font(.system(size: 14, weight: .bold))
-                            .tracking(-0.1)
-                    }
-                    .foregroundStyle(SCPalette.terracotta)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .scSoftCapsule()
-                }
-                .accessibilityLabel("Napisz do nas — support@scoffie.app")
-            }
-        }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-    }
-
     /// Treść arkusza gospodarstwa — domownicy, a bez domu karta zakładania.
     /// Zaproszenie i wyjście nie stoją tu, tylko w stopce arkusza.
     private var householdSheetContent: some View {
@@ -2282,7 +1968,7 @@ struct SettingsView: View {
     }
 
     /// Arkusz z nagłówkiem przypiętym NAD przewijaną treścią — dla arkuszy
-    /// dłuższych niż ekran (dieta, pomoc, gospodarstwo). Nagłówek wewnątrz
+    /// dłuższych niż ekran (dieta, gospodarstwo). Nagłówek wewnątrz
     /// `ScrollView` odjeżdżał razem z krzyżykiem; tu stoi, a treść gaśnie pod
     /// nim (`scScrollEdgeFade`), bez kreski — jak w szczegółach posiłku
     /// i w filtrach przepisów.
@@ -3074,20 +2760,6 @@ struct SettingsView: View {
             invitationLink = nil
         }
     }
-}
-
-// Static FAQ data model — lives at file scope so the `static let` lookup
-// table on `SettingsView` can reference it without ordering headaches.
-fileprivate struct FAQSection: Identifiable {
-    let id: String
-    let title: String
-    let items: [FAQItem]
-}
-
-fileprivate struct FAQItem: Identifiable, Equatable {
-    let id: String
-    let question: String
-    let answer: String
 }
 
 // Bell + heart rows in the design use `oklch(0.70 0.14 22)` — a warm coral
