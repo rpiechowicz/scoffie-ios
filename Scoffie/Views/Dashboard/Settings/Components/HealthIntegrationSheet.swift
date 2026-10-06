@@ -81,7 +81,7 @@ struct HealthIntegrationSheet: View {
                 store?.disable()
             }
         } message: {
-            Text("Pasek kroków zniknie z Kalendarza, a synchronizacja się zatrzyma. Zapisane dni zostają w statystykach, a uprawnienia w Zdrowiu możesz cofnąć w Ustawieniach systemu.")
+            Text("Pasek kroków zniknie z zakładki Dziś, a synchronizacja się zatrzyma. Zapisane dni zostają w statystykach, a uprawnienia w Zdrowiu możesz cofnąć w Ustawieniach systemu.")
         }
     }
 
@@ -95,7 +95,7 @@ struct HealthIntegrationSheet: View {
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.18 : 0.12)))
 
-            Text("Połącz aplikację ze Zdrowiem, aby widzieć dzienne kroki w Kalendarzu pod kaloriami i zbierać statystyki aktywności. Kroki są tylko odczytywane — aplikacja niczego nie zapisuje do Zdrowia.")
+            Text("Połącz aplikację ze Zdrowiem, aby widzieć dzienne kroki w zakładce Dziś pod kaloriami i zbierać statystyki aktywności. Kroki są tylko odczytywane — aplikacja niczego nie zapisuje do Zdrowia.")
                 .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -329,7 +329,7 @@ struct HealthIntegrationSheet: View {
                         Text("Dzienny cel")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Color.scLabel(scheme))
-                        Text("Pasek w Kalendarzu pokazuje postęp względem tej liczby.")
+                        Text("Pasek w zakładce Dziś pokazuje postęp względem tej liczby.")
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)

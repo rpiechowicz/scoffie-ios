@@ -154,10 +154,10 @@ final class SessionStore {
     /// serwer. Zamknięty ekran nie może tego przegapić.
     var subscriptionStore: SubscriptionStore?
     var datesViewModel = DatesViewModel()
-    /// Tydzień i dzień KALENDARZA — osobno od Planu (Rafał 4.10.2026: „date
-    /// component powinien mieć różne stany na planowaniu oraz na kalendarzu,
-    /// nie mogę tu przewijać i tam się zmienia”). `datesViewModel` zostaje
-    /// Planowi i jego arkuszom (Zakupy, „Dodaj do planu”, Asystent).
+    /// Dawny osobny tydzień Kalendarza (4.10.2026). Zakładka „Dziś” (6.10.2026)
+    /// nie ma już paska tygodnia — trzyma sama wczoraj · dziś · jutro i NIE
+    /// czyta tego modelu. Zostaje wyłącznie dlatego, że `NavigationMenu` wciąż
+    /// wstrzykuje go zakładce; do usunięcia razem z tym wstrzyknięciem.
     var calendarDatesViewModel = DatesViewModel()
     /// Zakładka dolnego menu. Tu, a nie w `NavigationMenu`, bo przełącza ją
     /// też asystent — skrót „Otwórz" po zapisaniu planu.
