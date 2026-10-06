@@ -124,9 +124,9 @@ struct AssistantView: View {
     @State private var reporting: AgentChatMessage?
     /// Odpowiedź, której przebieg („Myślałem 42 s ›”) jest otwarty.
     @State private var thinkingOf: AgentChatMessage?
-    /// Odpowiedź i kierunek oceny, do których piszemy podpowiedź („Co było
-    /// dobre?” / „Co nie zagrało?”).
-    @State private var suggesting: SuggestionTarget?
+    /// Odpowiedź, do której piszemy podpowiedź „Co nie zagrało?” (po kciuku
+    /// w dół albo z „⋯”).
+    @State private var suggesting: AgentChatMessage?
     /// Pytanie z odpowiedzią w aplikacji (lista zakupów, przepis) — karta
     /// nad polem zamiast tury (`AssistantAppShortcut`).
     @State private var appShortcut: AssistantAppShortcut?
@@ -365,11 +365,11 @@ struct AssistantView: View {
                 await store.report(messageId: message.id, reason: reason, comment: comment)
             }
         }
-        .sheet(item: $suggesting) { target in
-            AssistantSuggestionSheet(message: target.message, rating: target.rating) { tags, comment in
+        .sheet(item: $suggesting) { message in
+            AssistantSuggestionSheet(message: message) { tags, comment in
                 await store.suggest(
-                    messageId: target.message.id,
-                    rating: target.rating,
+                    messageId: message.id,
+                    rating: .down,
                     tags: tags,
                     comment: comment
                 )
@@ -1718,7 +1718,7 @@ struct AssistantView: View {
             onEdit: { beginEditing(message) },
             onReport: { reporting = message },
             onShowThinking: { thinkingOf = message },
-            onSuggest: { rating in suggesting = SuggestionTarget(message: message, rating: rating) },
+            onSuggest: { suggesting = message },
             onRate: { rating in
                 Task {
                     if let problem = await store.setFeedback(rating, for: message.id) {
@@ -1967,8 +1967,8 @@ private struct MessageBubble: View {
     let onReport: () -> Void
     /// „Myślałem 42 s ›” — przebieg tury w arkuszu.
     var onShowThinking: () -> Void = {}
-    /// Podpowiedź do oceny — kierunek z kciuka.
-    var onSuggest: (AgentFeedback) -> Void = { _ in }
+    /// Podpowiedź do kciuka w dół („Co nie zagrało?”).
+    var onSuggest: () -> Void = {}
     /// Kciuk pod odpowiedzią (`nil` = zdjęty).
     var onRate: (AgentFeedback?) -> Void = { _ in }
     /// Odpowiedź dopisała się do końca — sklep zdejmuje `reveal`.
@@ -2250,11 +2250,4 @@ private struct ChatSkeleton: View {
             if !isMine { Spacer(minLength: 40) }
         }
     }
-}
-
-/// Arkusz podpowiedzi: która odpowiedź i w którą stronę ocena.
-private struct SuggestionTarget: Identifiable {
-    let message: AgentChatMessage
-    let rating: AgentFeedback
-    var id: String { "\(message.id)-\(rating.rawValue)" }
 }

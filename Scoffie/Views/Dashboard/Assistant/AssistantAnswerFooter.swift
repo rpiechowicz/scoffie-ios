@@ -12,7 +12,7 @@ import SwiftUI
 /// się zaznaczyć, a „Kopiuj” zostaje pod przytrzymaniem dymka). Po prawej:
 /// kciuk w górę, kciuk w dół i „⋯” (udostępnij, zgłoś / popraw zgłoszenie —
 /// serwer trzyma JEDNO zgłoszenie na osobę i odpowiedź). Kciuk w dół otwiera
-/// arkusz „Co poprawić?” — PODPOWIEDŹ (powody + zdanie,
+/// półarkusz „Co nie zagrało?” — PODPOWIEDŹ (powody + zdanie,
 /// `AssistantSuggestionSheet`), a nie zgłoszenie: zgłoszenie to błąd,
 /// zagrożenie albo obraza i żyje w „⋯”, więc podpowiedź działa także przy
 /// odpowiedzi już zgłoszonej (27.09.2026). Bez „Zgłoszone — dzięki” („bez
@@ -21,8 +21,12 @@ import SwiftUI
 /// Runda 3 (27.09.2026, „przeskakuje, jak zmieniam like”): kciuk w dół SAM
 /// otwiera arkusz podpowiedzi — pigułka „Co poprawić?”, która wjeżdżała
 /// w pasek i przestawiała go (`ViewThatFits`), odpadła. Pasek ma zawsze ten
-/// sam układ; poprawić podpowiedź można z „⋯”. Prawa krawędź ma to samo
-/// wcięcie co lewa:
+/// sam układ; poprawić podpowiedź można z „⋯”.
+///
+/// 6.10.2026 („jak od Apple” — ocena bez formularza): kciuk w górę to SAM
+/// stan kciuka (szałwia), haptyka i „wybuch” kropek — ocena zapisuje się od
+/// razu i żaden arkusz się nie otwiera (dawne „Co było dobre?” po 0,55 s
+/// odpadło). Prawa krawędź ma to samo wcięcie co lewa:
 /// „Myślałem” stoi 28 pt od brzegu (kolumna tekstu), więc glif „⋯” też
 /// kończy się 28 pt od brzegu (`trailingInset` liczy zapas ramki ikony).
 ///
@@ -38,11 +42,11 @@ struct AssistantAnswerFooter: View {
     let onReport: () -> Void
     /// Otwiera przebieg tury; `nil` = sam podpis.
     var onShowThinking: (() -> Void)? = nil
-    /// Kciuk w dół ma już podpowiedź — wiersz „Co poprawić?” znika.
+    /// Kciuk w dół ma już podpowiedź — w „⋯” stoi „Popraw podpowiedź”.
     var hasSuggestion: Bool = false
-    /// Arkusz podpowiedzi dla kierunku oceny („Co było dobre?” / „Co nie
-    /// zagrało?”); `nil` = bez podpowiedzi.
-    var onSuggest: ((AgentFeedback) -> Void)? = nil
+    /// Półarkusz „Co nie zagrało?” — po kciuku w dół i z „⋯”; `nil` = bez
+    /// podpowiedzi.
+    var onSuggest: (() -> Void)? = nil
     /// Kciuki i „⋯” — tylko pod odpowiedzią modelu; potwierdzenie zapisu
     /// ma sam podpis (albo nic).
     var showsActions: Bool = true
@@ -50,9 +54,6 @@ struct AssistantAnswerFooter: View {
     @Environment(\.colorScheme) private var scheme
     /// Podbicie = kciuk w górę właśnie wstawiony — gra „wybuch” kropek.
     @State private var cheer = 0
-    /// Bilet odłożonego arkusza „Co było dobre?” — każde inne stuknięcie
-    /// w kciuki go unieważnia, więc zdjęty w porę 👍 arkusza nie otworzy.
-    @State private var suggestTicket = 0
 
     /// Kolumna tekstu odpowiedzi — patrz `AssistantVoice`.
     static let textInset: CGFloat = 28
@@ -134,21 +135,13 @@ struct AssistantAnswerFooter: View {
                 label: "Dobra odpowiedź",
                 bounce: feedback == .up
             ) {
-                suggestTicket += 1
+                // W górę = sama ocena: kciuk, kropki i haptyka, bez arkusza.
+                // Drugie stuknięcie zdejmuje ocenę.
                 if feedback == .up {
                     onRate(nil)
                 } else {
                     cheer += 1
                     onRate(.up)
-                    // Arkusz „Co było dobre?” po wybuchu kropek — inaczej
-                    // zasłoniłby animację w pierwszej klatce.
-                    if let onSuggest {
-                        let ticket = suggestTicket
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                            guard suggestTicket == ticket else { return }
-                            onSuggest(.up)
-                        }
-                    }
                 }
             }
             .overlay { ThumbCheer(trigger: cheer, tint: AssistantLook.sage(scheme)) }
@@ -162,15 +155,14 @@ struct AssistantAnswerFooter: View {
                 label: "Słaba odpowiedź",
                 bounce: feedback == .down
             ) {
-                // W dół = ocena od razu + arkusz „Co poprawić?” (podpowiedź
-                // nieobowiązkowa — zamknięcie zostawia sam kciuk). Drugie
-                // stuknięcie zdejmuje ocenę, jak przy kciuku w górę.
-                suggestTicket += 1
+                // W dół = ocena od razu + półarkusz „Co nie zagrało?”
+                // (podpowiedź nieobowiązkowa — krzyżyk zostawia sam kciuk).
+                // Drugie stuknięcie zdejmuje ocenę, jak przy kciuku w górę.
                 if feedback == .down {
                     onRate(nil)
                 } else {
                     onRate(.down)
-                    onSuggest?(.down)
+                    onSuggest?()
                 }
             }
             .accessibilityAddTraits(feedback == .down ? .isSelected : [])
@@ -181,12 +173,12 @@ struct AssistantAnswerFooter: View {
                         Label("Udostępnij", systemImage: "square.and.arrow.up")
                     }
                 }
-                if let feedback, let onSuggest {
-                    Button {
-                        onSuggest(feedback)
-                    } label: {
+                // Podpowiedź tylko do kciuka w dół — ten sam półarkusz,
+                // przy istniejącej podpowiedzi z wypełnionymi polami.
+                if feedback == .down, let onSuggest {
+                    Button(action: onSuggest) {
                         Label(
-                            hasSuggestion ? "Popraw podpowiedź" : (feedback == .up ? "Co było dobre?" : "Co nie zagrało?"),
+                            hasSuggestion ? "Popraw podpowiedź" : "Co nie zagrało?",
                             systemImage: "lightbulb"
                         )
                     }

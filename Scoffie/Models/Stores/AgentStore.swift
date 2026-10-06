@@ -310,8 +310,8 @@ final class AgentStore {
         }
     }
 
-    /// Ocena z podpowiedzią (powody + zdanie; w dół „co nie zagrało”, w górę
-    /// „co było dobre”). Oddaje
+    /// Ocena z podpowiedzią (powody + zdanie — „Co nie zagrało?” po kciuku
+    /// w dół; kciuk w górę od 6.10.2026 podpowiedzi nie zbiera). Oddaje
     /// komunikat błędu albo `nil`. Ekran zmienia się dopiero po odpowiedzi
     /// serwera — arkusz czeka na wynik i sam pokazuje błąd.
     func suggest(
