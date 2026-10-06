@@ -52,14 +52,16 @@ extension View {
 // MARK: - Rozmyta krawędź przewijania
 
 /// Pas, pod którym przewijana treść CHOWA SIĘ — rozmywa i gaśnie w tło
-/// strony — zamiast przejeżdżać ostro pod paskiem stanu, dolnym menu albo
-/// polem asystenta. Wzór: Telegram na iOS 26 (górny i dolny brzeg rozmowy).
+/// strony — zamiast przejeżdżać ostro pod paskiem stanu. Wzór: Telegram na
+/// iOS 26 (górny brzeg rozmowy).
 ///
-/// Własny, a nie systemowy `scrollEdgeEffectStyle` + `safeAreaBar`: zakładki
+/// Własny, a nie systemowy `scrollEdgeEffectStyle`, tylko u GÓRY: zakładki
 /// mają przewijanie pod górnym bezpiecznym obszarem (`ignoresSafeArea`,
-/// tytuł mierzony od krawędzi ekranu — `SCPageMetrics`), a własne paski
-/// stoją w `overlay`, więc systemowa krawędź nie miałaby się do czego
-/// przyczepić.
+/// tytuł mierzony od krawędzi ekranu — `SCPageMetrics`), więc systemowa
+/// krawędź nie miałaby się do czego przyczepić. Dół od 6.10.2026 jest
+/// systemowy: pasek zakładek (`TabView`) i wstawki nad nim (`safeAreaBar` —
+/// pole Asystenta, pasek szukania Przepisów, pigułka „Cel dnia”) mają
+/// natywny efekt krawędzi przewijania.
 ///
 /// Budowa: materiał (rozmycie tego, co pod spodem) + tło strony na wierzchu,
 /// oba pod maską, która gaśnie ku treści. W spoczynku pod pasem leży samo

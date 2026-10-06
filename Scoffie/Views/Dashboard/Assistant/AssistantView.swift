@@ -221,8 +221,15 @@ struct AssistantView: View {
                         // rozmowa przejeżdża POD nim i gaśnie w cieniu
                         // krawędzi, zamiast urywać się twardą linią na jego
                         // dolnym brzegu.
+                        //
+                        // Pole stoi nad systemowym paskiem zakładek (a przy
+                        // klawiaturze — nad nią) jako pasek bezpiecznego
+                        // obszaru: pod nim leży natywny efekt krawędzi
+                        // przewijania, jawnie miękki (`.automatic` z Xcode
+                        // Cloud wychodził jako `.hard`).
                         conversation
-                            .safeAreaInset(edge: .bottom, spacing: 0) { composer }
+                            .safeAreaBar(edge: .bottom, spacing: 0) { composer }
+                            .scrollEdgeEffectStyle(.soft, for: .bottom)
                             .safeAreaInset(edge: .top, spacing: 0) {
                                 header
                                     .background(alignment: .top) {
@@ -251,10 +258,6 @@ struct AssistantView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .animation(.easeOut(duration: 0.28), value: activeIntroStep == nil)
             .sensoryFeedback(.impact(flexibility: .soft), trigger: activeIntroStep)
-            // Miejsce pod własnym paskiem zakładek: pole wiadomości i stopka
-            // wprowadzenia siadają nad nim, a przy klawiaturze rezerwa
-            // schodzi do zera.
-            .scReservesTabBarSpace()
         }
         .task {
             await store.openIfNeeded()
@@ -1294,16 +1297,6 @@ struct AssistantView: View {
                 }
             }
         }
-        // Rozmowa chowa się pod polem i dolnym menu jak w Telegramie:
-        // rozmywa się i gaśnie w tło strony od 28 pt nad polem aż do
-        // krawędzi ekranu, także pod menu (`NavigationMenu.ownBottomEdge`).
-        // Wcześniej kryjący gradient — treść urywała się ścianą tła, a pole
-        // i menu nie miały nad czym być szkłem.
-        .background(alignment: .top) {
-            SCScrollEdgeBlur(edge: .bottom, solidFraction: 0.6)
-                .padding(.top, -28)
-                .ignoresSafeArea(.container, edges: .bottom)
-        }
         .animation(.easeInOut(duration: 0.2), value: editing != nil)
         .animation(.easeInOut(duration: 0.2), value: store.isLockedByTrialQuota)
         .animation(.easeInOut(duration: 0.2), value: isLockedByMonthlyQuota)
@@ -1395,7 +1388,7 @@ struct AssistantView: View {
             .animation(.easeOut(duration: 0.2), value: store.isSending)
         }
         // Ten sam margines co dolne menu — pole i pasek mają jedną szerokość.
-        .padding(.horizontal, SCFloatingTabBar.sideMargin)
+        .padding(.horizontal, SCPageMetrics.horizontal)
         .padding(.top, 8)
         .padding(.bottom, 8)
     }
@@ -1412,7 +1405,7 @@ struct AssistantView: View {
         )
         .background(RoundedRectangle(cornerRadius: AssistantCardMetrics.radius, style: .continuous).fill(AssistantLook.input(scheme)))
         // Ten sam margines co dolne menu — pole i pasek mają jedną szerokość.
-        .padding(.horizontal, SCFloatingTabBar.sideMargin)
+        .padding(.horizontal, SCPageMetrics.horizontal)
         .padding(.top, 8)
         .padding(.bottom, 8)
     }

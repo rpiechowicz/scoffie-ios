@@ -312,9 +312,6 @@ struct DayPager<Content: View>: View {
             // Każdy dzień zaczyna się od góry: przewinięty długi dzień
             // zostawiał przesunięcie krótkiemu i ten wjeżdżał z podskokiem.
             .id(Calendar.current.startOfDay(for: animatesSelectionChanges ? displayedDate : selectedDate))
-            // Strona dnia jest jedynym przewijaniem na Planie — to ona
-            // melduje kierunek, od którego zwija się dolne menu.
-            .scTracksTabBarCompaction()
             // Przewinięte kafle gasną pod paskiem dni zamiast chować się pod
             // kreską — ten sam cień, co pod nagłówkiem arkusza.
             .scScrollEdgeFade()

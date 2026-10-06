@@ -22,7 +22,6 @@ struct RecipesView: View {
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.scTabBarChrome) private var tabBarChrome
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Co dziesięć minut — wystarczy, żeby zestaw zmienił się najdalej dziesięć
@@ -306,9 +305,6 @@ struct RecipesView: View {
 
                 content
             }
-            // Miejsce pod własnym paskiem zakładek — musi być WEWNĄTRZ
-            // `NavigationStack`, patrz `scReservesTabBarSpace`.
-            .scReservesTabBarSpace()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -491,8 +487,6 @@ struct RecipesView: View {
         .scrollIndicators(.hidden)
         // Przewinięcie listy chowa klawiaturę — jak w Poczcie.
         .scrollDismissesKeyboard(.immediately)
-        // Kierunek przewijania steruje zwijaniem dolnego menu.
-        .scTracksTabBarCompaction()
         // Duży tytuł zjechał — pod paskiem stanu staje szklana kapsuła.
         .scReportsCompactTitle("Przepisy", for: .recipes)
         .ignoresSafeArea(.container, edges: .top)
@@ -523,9 +517,11 @@ struct RecipesView: View {
             if !active { scope = nil }
         }
         }
-        // Pasek szukania wchodzi bezpiecznym obszarem jak pigułka „Cel dnia”
-        // w Planie: lista przejeżdża pod szkłem, ale kończy się nad nim.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // Pasek szukania stoi nad systemowym paskiem zakładek (a przy
+        // klawiaturze — nad nią) jako pasek bezpiecznego obszaru: lista
+        // przejeżdża pod szkłem i kończy się nad nim, a pod paskiem leży
+        // natywny efekt krawędzi przewijania (jak w Poczcie na iOS 26).
+        .safeAreaBar(edge: .bottom, spacing: 0) {
             RecipesSearchBar(
                 text: $searchText,
                 activeFilterCount: filters.activeCount,
@@ -533,23 +529,11 @@ struct RecipesView: View {
                 onOpenFilters: { isFilterSheetPresented = true }
             )
             .padding(.horizontal, pageHorizontalPadding)
-            // Zwija się RAZEM z dolnym menu i tak jak ono (Rafał 4.10.2026:
-            // „navigation bar ładnie się zmniejsza, a filters bar już nie”):
-            // mniejszy i węższy o tyle, o ile menu, opada o jego spadek.
-            // Skala, nie inna wysokość — lista nad paskiem nie skacze.
-            .scaleEffect(tabBarChrome.isCompact ? 0.84 : 1, anchor: .bottom)
-            .offset(y: tabBarChrome.isCompact ? SCFloatingTabBar.compactionDrop : 0)
-            .animation(SCFloatingTabBar.compaction(reduceMotion: reduceMotion), value: tabBarChrome.isCompact)
             .padding(.bottom, 8)
-            .frame(maxWidth: .infinity)
-            // Treść chowa się pod paskiem i menu — rozmyty pas od 28 pt nad
-            // paskiem do krawędzi ekranu (`NavigationMenu.ownBottomEdge`).
-            .background(alignment: .top) {
-                SCScrollEdgeBlur(edge: .bottom, solidFraction: 0.6)
-                    .padding(.top, -28)
-                    .ignoresSafeArea(.container, edges: .bottom)
-            }
         }
+        // Miękki, jawnie — `.automatic` z Xcode Cloud wychodził jako `.hard`
+        // (kreska i kryjące tło, patrz `scSheetFooterEdge`).
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
     }
 
     private static let topAnchor = "recipes-top"

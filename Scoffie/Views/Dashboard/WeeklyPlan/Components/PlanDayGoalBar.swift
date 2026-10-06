@@ -109,12 +109,14 @@ struct PlanDayGoalBar: View {
 
     var body: some View {
         bar
-            // Plan i Kalendarz mają DWIE pigułki, a zakładki przenikają się
-            // przy przełączeniu. Na czystym szkle widać było podmianę jednej
+            // Plan i Kalendarz mają DWIE pigułki w tym samym miejscu nad
+            // paskiem zakładek. Na czystym szkle widać było podmianę jednej
             // pigułki na drugą (Rafał 4.10.2026: „powinno animowanie rosnąć,
             // a nie przełączać się”). Wchodząca pigułka startuje więc z liczb
             // wychodzącej i dojeżdża do swoich tą samą sprężyną co przy
             // zmianie dnia — czyta się jako JEDNA pigułka, której paski rosną.
+            // Zakładka budowana przy pierwszym wyborze (`TabView`) startuje
+            // już aktywna, więc pierwsze wejście pokazuje własne liczby.
             .onChange(of: isActiveTab) { _, active in
                 guard active else { return }
                 if let previous = chrome.goalSnapshot {
@@ -173,8 +175,9 @@ struct PlanDayGoalBar: View {
             // pigułka odpowiada dokładnie jak wiersz osi nad nią.
             // Czyste szkło, jak dolne menu (`scChromeGlass`). Tekst osi
             // przewijany pod pigułką przebijał przez nie ostro — dawniej gasiła
-            // go kryjąca warstwa tła w szkle (matowa plama), teraz rozmyty pas
-            // pod pigułką (`SCScrollEdgeBlur` w `WeeklyPlanView`).
+            // go kryjąca warstwa tła w szkle (matowa plama), teraz natywny
+            // efekt krawędzi przewijania pod pigułką (`safeAreaBar`
+            // w `WeeklyPlanView`).
             .scChromeGlass(in: .rect(cornerRadius: Self.cornerRadius), interactive: true)
             // Bez tego stuknięcie łapie się WYŁĄCZNIE na rysowanej treści:
             // na cyfrach, na literach i na kilku punktach pasków. Padding,
