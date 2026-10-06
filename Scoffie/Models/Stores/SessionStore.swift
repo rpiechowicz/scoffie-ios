@@ -2329,9 +2329,35 @@ final class SessionStore {
                 await self?.resumeCookingIfRequested()
                 await self?.prefetchCookScenarios()
             }
+            self.prepareUnbuiltTabs()
         }
         startupTask = task
         await task.value
+    }
+
+    /// To, co zakładki robiły same, gdy budowały się wszystkie pod loaderem.
+    ///
+    /// Systemowy `TabView` (od 6.10.2026) buduje zakładkę dopiero przy jej
+    /// pierwszym wyborze, a start pokazuje Kalendarz. Bez tego rozmowa
+    /// asystenta czekałaby na pierwsze wejście w zakładkę: tura, która biegła,
+    /// gdy aplikację zamknięto, nie dawałaby plakietki ani kapsuły „Asystent
+    /// odpowiedział”, a pula byłaby nieznana do pierwszego kliknięcia.
+    /// `AssistantView` woła to samo przy pierwszym wyborze — powtórka jest
+    /// bezpieczna (otwarta rozmowa tylko sprawdza świeżość, tura w biegu nie
+    /// jest śledzona drugi raz), a gdy zakładka Asystenta już stoi (start
+    /// z powiadomienia „Asystent odpowiedział”), robi to sama.
+    ///
+    /// Pula osobno od rozmowy: `openIfNeeded` czeka na koniec tury w biegu
+    /// (do kilku minut), a pula ma być znana od razu.
+    ///
+    /// Reszta zakładek nie potrzebuje niczego przed pierwszym wejściem:
+    /// tydzień, zakupy (plakietka koszyka), domownicy i zgody ładuje start
+    /// sesji, a cele domowników, link zaproszenia i stan widoków ładują
+    /// ekrany przy pierwszym wyborze (`.task`, `onChange(of:initial:)`).
+    private func prepareUnbuiltTabs() {
+        guard let agentStore, dashboardTab != .assistant else { return }
+        Task { _ = await agentStore.loadUsage() }
+        Task { await agentStore.openIfNeeded() }
     }
 
     private func runStartupWithTimeout() async {
