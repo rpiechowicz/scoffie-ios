@@ -25,13 +25,14 @@ import SwiftUI
 ///   „ZAMIENISZ” w stopce (danie w kaflach odpadło w rundzie 20 — „brzydkie”).
 ///   Lista wierszy z rundy 14 odpadła 24.09 — „nie do końca podoba mi się
 ///   design tego”.
-/// - **Dla kogo** — `PlanAudienceChips` (tylko w domu wieloosobowym).
-/// - **Porcje** — szklany przycisk z liczbą porcji OBOK „Dodaj do planu”,
-///   pod nim arkusz z tym samym zestawem co szczegóły posiłku (`SCPortionKit`),
-///   porcja każdej jedzącej osoby co 0,5. Dopóki lista domowników nie
-///   dojechała — w arkuszu jeden wiersz porcji łącznych.
-/// - **Stopka** (`scSheetFooter`, cień `SCEdgeShade`) — rolujące zdanie
-///   „Środa, 24 września · Obiad” i przycisk, którego tytuł też roluje.
+/// - **Porcje** — wprost w treści, pod porą (6.10.2026: bez trzeciego
+///   arkusza): ten sam zestaw co szczegóły posiłku (`SCPortionKit`), linia
+///   „Razem” i porcja każdej jedzącej osoby co 0,5. Dopóki lista domowników
+///   nie dojechała (albo przy dołączaniu do dania, które już stoi w porze) —
+///   jeden wiersz porcji łącznych.
+/// - **Stopka** (`scSheetFooter`) — rolujące zdanie „Środa, 24 września ·
+///   Obiad”, szklany „Dla kogo” (`PlanAudienceButton`, tylko w domu
+///   wieloosobowym) i przycisk, którego tytuł też roluje.
 ///
 /// Sekcje wjeżdżają kaskadą jak w szczegółach posiłku (`scReveal`). Na
 /// ekranie, na którym wszystko się mieści, lista nie odbija
@@ -105,8 +106,6 @@ struct AddToPlanSheet: View {
     /// nadążają za audytorium i nie lecą na serwer), punkt startowy porcji
     /// osób i porcje osób ruszone stepperem. Reguły w `AddToPlanPortions`.
     @State private var portions: AddToPlanPortions
-    /// Arkusz porcji spod przycisku obok „Dodaj do planu”.
-    @State private var isPortionsSheetPresented = false
     @State private var isSaving = false
     /// Kaskada sekcji (`scReveal`) — przestawiana w `.task` po klatce oddechu.
     @State private var hasAppeared = false
@@ -247,22 +246,22 @@ struct AddToPlanSheet: View {
                         slotSection(visibleSlots)
                             .scReveal(hasAppeared, order: 1)
 
-                        // Jednoosobowe gospodarstwo nie ma o czym decydować —
-                        // każdy posiłek i tak jest „Wspólne".
-                        // „Dla kogo” nie stoi już w przewijaniu — to szklany
+                        // „Dla kogo” nie stoi w przewijaniu — to szklany
                         // przycisk obok „Dodaj do planu” (`PlanAudienceButton`,
                         // Rafał 4.10.2026), jak w „Wybierz przepis”.
+                        // Jednoosobowe gospodarstwo go nie ma — każdy posiłek
+                        // i tak jest „Wspólne".
 
-                        // Porcje nie stoją już w przewijaniu — to szklany
-                        // przycisk obok „Dodaj do planu” z własnym arkuszem
-                        // (`portionsButton`, Rafał 4.10.2026).
+                        // Porcje wprost w treści (6.10.2026: bez arkusza na
+                        // arkuszu) — wiersze osób idą za „Dla kogo” na oczach.
+                        portionsSection
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 4)
                     .padding(.bottom, 16)
-                    // Lista domowników dojeżdża asynchronicznie — chipy mają
-                    // wjechać, a nie wskoczyć i zepchnąć porcje.
-                    .animation(.smooth(duration: 0.25), value: members.count > 1)
+                    // Lista domowników dojeżdża asynchronicznie — wiersz porcji
+                    // łącznych przechodzi w wiersze osób, a nie wskakuje.
+                    .animation(.smooth(duration: 0.25), value: members.count)
                 }
                 .scrollIndicators(.hidden)
                 // Gdy wszystko się mieści, lista stoi jak zwykły widok — bez
@@ -782,6 +781,20 @@ struct AddToPlanSheet: View {
 
     private func units(for memberId: String) -> Int { draft.units(for: memberId) }
 
+    /// Porcje wprost w treści arkusza, pod porą (6.10.2026, „jak od Apple”:
+    /// najwyżej jeden arkusz — dawniej szklany przycisk obok „Dodaj do planu”
+    /// otwierał TRZECI arkusz, nad szczegółami i tym). Ten sam zestaw co
+    /// porcje w szczegółach posiłku (`Components/SCPortionKit.swift`).
+    /// W treści, a nie na pchniętym ekranie: „Dla kogo” w stopce dokłada
+    /// i zdejmuje wiersze osób na oczach, a suma ponad 12 mówi o sobie tuż
+    /// nad wierszami (`SCPortionSummary`), zamiast kolorować przycisk.
+    private var portionsSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            EditorialSheetSectionLabel(title: "Porcje")
+            servingsSection
+        }
+    }
+
     @ViewBuilder
     private var servingsSection: some View {
         if showsPersonalPortions {
@@ -791,10 +804,8 @@ struct AddToPlanSheet: View {
         }
     }
 
-    /// Porcja każdej osoby co pół porcji — ten sam układ co arkusz porcji
-    /// w szczegółach posiłku (Rafał 4.10.2026: „zrób tak samo jak ten nasz
-    /// poprzedni sheet”): karta z garnkiem i liczbą do ugotowania, pod nią
-    /// lista osób z dużym stepperem (`Components/SCPortionKit.swift`).
+    /// Porcja każdej osoby co pół porcji: linia „Razem” i lista osób
+    /// z systemowym stepperem — jak w arkuszu porcji szczegółów posiłku.
     private var personalPortionsSection: some View {
         let ids = eaterIds
         let byId = Dictionary(members.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -855,10 +866,11 @@ struct AddToPlanSheet: View {
     }
 
     /// Porcje łączne w jednym wierszu — zanim lista domowników dojedzie
-    /// albo przy dołączaniu do dania, które już stoi w porze.
+    /// albo przy dołączaniu do dania, które już stoi w porze. „Razem”, bo
+    /// „Porcje” stoi już w etykiecie sekcji nad wierszem.
     private var totalServingsSection: some View {
         HStack(spacing: 12) {
-            Text("Porcje")
+            Text("Razem")
                 .font(.system(size: 15, weight: .semibold))
                 .tracking(-0.2)
                 .foregroundStyle(Color.scLabel(scheme))
@@ -938,8 +950,6 @@ struct AddToPlanSheet: View {
                 )
             }
 
-            portionsButton
-
             EditorialPrimaryActionButton(
                 title: ctaTitle,
                 icon: ctaIcon,
@@ -949,93 +959,6 @@ struct AddToPlanSheet: View {
             )
             .animation(.smooth(duration: 0.25), value: ctaTitle)
         }
-    }
-
-    /// Łączna liczba porcji pozycji — na przycisku i w nagłówku arkusza.
-    private var portionsTotalUnits: Int {
-        showsPersonalPortions
-            ? eaterIds.reduce(0) { $0 + units(for: $1) }
-            : portions.servings * PlanPortions.unitsPerServing
-    }
-
-    /// Porcje jako szklany przycisk OBOK „Dodaj do planu” (Rafał 4.10.2026:
-    /// „ten sam mechanizm porcji, tylko też jako sheet i button liquid nad
-    /// albo obok — może obok lepiej”): ikona osób i łączna liczba porcji,
-    /// stuknięcie = arkusz porcji (`portionsSheet`). Suma ponad 12 = liczba
-    /// w terakocie, a zapis czeka (`portionsOverLimit`).
-    private var portionsButton: some View {
-        let total = portionsTotalUnits
-        return Button {
-            isPortionsSheetPresented = true
-        } label: {
-            HStack(spacing: 7) {
-                // Porcje = kawałki całości (Rafał 4.10.2026: „ikona jest zła”;
-                // osoby mówi już przycisk „Dla kogo” obok).
-                Image(systemName: "chart.pie.fill")
-                    .font(.system(size: 13, weight: .bold))
-                Text(PlanPortions.label(units: total))
-                    .font(.system(size: 15, weight: .heavy))
-                    .monospacedDigit()
-                    .contentTransition(.numericText(value: Double(total)))
-                    .animation(SCMotion.textRoll, value: total)
-            }
-            .foregroundStyle(portionsOverLimit ? SCPalette.terracotta : Color.scLabel(scheme))
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
-            .scChromeGlass(in: Capsule(style: .continuous))
-            .contentShape(Capsule(style: .continuous))
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.94))
-        .disabled(isSaving)
-        .accessibilityLabel("Porcje: \(PlanPortions.spokenServings(units: total, plural: PolishPlural.servings))")
-        .accessibilityHint("Otwiera porcje domowników")
-        // Arkusz na samym przycisku — ten widok ma już swoje arkusze.
-        .sheet(isPresented: $isPortionsSheetPresented) {
-            portionsSheet
-        }
-    }
-
-    /// Arkusz porcji: ten sam zestaw, co w szczegółach posiłku
-    /// (`SCPortionSummary` + lista osób) — zmiany idą prosto do tego arkusza
-    /// („Gotowe” tylko zamyka). Przed listą domowników albo przy dołączaniu
-    /// do dania w porze — jeden wiersz porcji łącznych.
-    private var portionsSheet: some View {
-        ZStack {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    EditorialSheetHeader(
-                        eyebrow: "Porcje",
-                        title: "Kto ile je",
-                        icon: "person.2.fill",
-                        accent: SCPalette.butter,
-                        subtitle: recipe.name,
-                        onClose: { isPortionsSheetPresented = false }
-                    )
-
-                    servingsSection
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 16)
-            }
-            .scrollIndicators(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
-            .scSheetFooter {
-                EditorialPrimaryActionButton(
-                    title: "Gotowe",
-                    icon: "checkmark",
-                    isEnabled: !portionsOverLimit
-                ) {
-                    isPortionsSheetPresented = false
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationContentInteraction(.resizes)
-        .dashboardLiquidSheet()
     }
 
     /// „Środa, 24 września · Obiad”. Dopisek „dla całego domu”, gdy ten sam
