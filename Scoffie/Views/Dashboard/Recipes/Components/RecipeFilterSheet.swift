@@ -201,6 +201,8 @@ struct RecipeFilterSheet: View {
                         if let category = sectionCategory {
                             dishSection(category)
                             tasteSection(category)
+                        } else {
+                            cuisineSection
                         }
                         timeSection
                         listSection(sectionCategory)
@@ -330,6 +332,26 @@ struct RecipeFilterSheet: View {
         }
     }
 
+    // MARK: - Kuchnia (filtry globalne)
+
+    /// Filtry wszystkich przepisów (wariant G1, 6.10.2026): rodzaj dania
+    /// i smak należą do kategorii, więc na górę idzie kuchnia — 8 kółek ze
+    /// zdjęciem typowego dania, ten sam klocek co rodzaj dania w kategorii.
+    private var cuisineSection: some View {
+        RecipeFilterSection(title: "Kuchnia", top: 6) {
+            RecipeFacetPhotoGrid(
+                options: RecipeCuisine.allCases.map { RecipeFacetOption(id: $0.rawValue, title: $0.title) },
+                accent: SCPalette.sage,
+                icon: "globe.europe.africa.fill",
+                isOn: { id in RecipeCuisine(rawValue: id).map { filters.cuisines.contains($0) } ?? false },
+                cover: { id in RecipeCuisine(rawValue: id).flatMap { covers.cuisines[$0] } },
+                onToggle: { id in
+                    if let cuisine = RecipeCuisine(rawValue: id) { filters.toggle(cuisine: cuisine) }
+                }
+            )
+        }
+    }
+
     /// Ikona wiersza aspektu — rodzaj dania bierze ikonę kategorii.
     static func facetIcon(_ kind: RecipeFacetKind, in category: RecipesCategory) -> String {
         switch kind {
@@ -439,6 +461,8 @@ struct RecipeFilterSheet: View {
                 .sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
                 .map(\.chipTitle)
         let more = filters.traits.count + filters.cuisines.count + filters.moments.count
+        let traits = RecipeTraitFilter.allCases.filter { filters.traits.contains($0) }.map(\.title)
+        let moments = RecipeMoment.allCases.filter { filters.moments.contains($0) }.map(\.title)
 
         // Bez etykiety nad kartą — „Więcej” dublowało wiersz „Więcej filtrów”,
         // a lista czyta się sama (jak w podglądzie uzgodnionym 6.10.2026).
@@ -491,13 +515,33 @@ struct RecipeFilterSheet: View {
                 accent: SCPalette.rose
             ) { openPane = .exclude }
             RecipeFilterListDivider()
-            RecipeFilterListButtonRow(
-                icon: "sparkles",
-                title: "Więcej filtrów",
-                value: more > 0 ? "Wybrane: \(more)" : "Cechy, kuchnia…",
-                isActive: more > 0,
-                accent: SCPalette.lavender
-            ) { openPane = .more }
+            if category != nil {
+                RecipeFilterListButtonRow(
+                    icon: "sparkles",
+                    title: "Więcej filtrów",
+                    value: more > 0 ? "Wybrane: \(more)" : "Cechy, kuchnia…",
+                    isActive: more > 0,
+                    accent: SCPalette.lavender
+                ) { openPane = .more }
+            } else {
+                // Globalnie kuchnia stoi na górze, więc zostają dwie grupy —
+                // bez pośredniego „Więcej filtrów”.
+                RecipeFilterListButtonRow(
+                    icon: "calendar",
+                    title: "Okazje i sezon",
+                    value: Self.summary(moments),
+                    isActive: !moments.isEmpty,
+                    accent: SCPalette.rose
+                ) { openPane = .moments }
+                RecipeFilterListDivider()
+                RecipeFilterListButtonRow(
+                    icon: "sparkles",
+                    title: "Cechy",
+                    value: Self.summary(traits),
+                    isActive: !traits.isEmpty,
+                    accent: SCPalette.indigo
+                ) { openPane = .traits }
+            }
         }
         .padding(.top, 24)
     }

@@ -237,56 +237,110 @@ struct RecipeFilterListDivider: View {
 
 // MARK: - Przełącznik w kolorze
 
-/// „Dowolny · 15 min · 30 min · 45 min” — przełącznik segmentów, w którym
-/// wybrany segment świeci kolorem akcentu i przejeżdża do nowego miejsca.
+/// „Dowolny · 15 min · 30 min · 45 min” — przełącznik w stylu Liquid Glass
+/// z iOS 26 (wariant L2, Rafał 6.10.2026: „ładniej, w iOS liquid”): tor
+/// w kształcie kapsuły i JEDNA szklana soczewka w kolorze akcentu, która
+/// przepływa sprężyną do stukniętej opcji i lekko się przy tym rozciąga.
 /// Własny, a nie systemowy `.segmented`: systemowy nie daje koloru
-/// zaznaczenia, a szary był „za smutny” (Rafał 6.10.2026).
+/// zaznaczenia, a szary był „za smutny”.
 struct RecipeFilterSegment<Value: Hashable>: View {
     let choices: [RecipeFilterChoice<Value>]
     @Binding var selection: Value
     var accent: Color = SCPalette.terracotta
 
-    @Namespace private var lens
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Szerokość toru — z niej szerokość i miejsce soczewki.
+    @State private var width: CGFloat = 0
+    /// Licznik przeskoków soczewki — każdy gra jedno „rozciągnięcie”.
+    @State private var squish = 0
+
+    private static var height: CGFloat { 42 }
+    private static var inset: CGFloat { 3 }
+
+    /// Przeskok soczewki: sprężyna z lekkim dobiciem, jak systemowy
+    /// przełącznik iOS 26; przy „Ogranicz ruch” samo płynne przejście.
+    private var slide: Animation {
+        reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.74)
+    }
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(Array(choices.enumerated()), id: \.offset) { _, choice in
-                let isOn = choice.value == selection
-                Button {
-                    withAnimation(.smooth(duration: 0.26)) { selection = choice.value }
-                } label: {
-                    Text(choice.title)
-                        .font(.sc(size: 14, weight: .semibold))
-                        .foregroundStyle(isOn ? accent : Color.scMuted(scheme))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 36)
-                        .background {
-                            if isOn {
-                                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                    .fill(accent.opacity(scheme == .dark ? 0.2 : 0.15))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                            .strokeBorder(accent.opacity(0.45), lineWidth: 1)
-                                    )
-                                    .matchedGeometryEffect(id: "lens", in: lens)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(isOn ? .isSelected : [])
-            }
-        }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+        let count = max(choices.count, 1)
+        let index = choices.firstIndex { $0.value == selection } ?? 0
+        let lensWidth = max(0, (width - Self.inset * 2) / CGFloat(count))
+
+        ZStack(alignment: .leading) {
+            // Tor — kapsuła na płasko, z cienką obwódką.
+            Capsule()
                 .fill(Color.scBarTrack(scheme))
-        )
+                .overlay(Capsule().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+
+            // Soczewka — JEDNA, przesuwana (nie wstawiana od nowa przy każdym
+            // wyborze), ze szkła w kolorze akcentu. Pod przyciskami i bez
+            // dotyku: szkło w etykiecie przycisku potrafiło łapać stuknięcia
+            // (patrz `scChromeGlass`).
+            Color.clear
+                .frame(width: lensWidth, height: Self.height - Self.inset * 2)
+                .scChromeGlass(
+                    in: Capsule(),
+                    tint: accent.opacity(scheme == .dark ? 0.42 : 0.32)
+                )
+                .keyframeAnimator(initialValue: LensSquish(), trigger: squish) { lens, frame in
+                    lens.scaleEffect(x: frame.x, y: frame.y)
+                } keyframes: { _ in
+                    KeyframeTrack(\.x) {
+                        MoveKeyframe(1)
+                        CubicKeyframe(1.14, duration: 0.12)
+                        CubicKeyframe(0.97, duration: 0.15)
+                        CubicKeyframe(1, duration: 0.16)
+                    }
+                    KeyframeTrack(\.y) {
+                        MoveKeyframe(1)
+                        CubicKeyframe(0.86, duration: 0.12)
+                        CubicKeyframe(1.04, duration: 0.15)
+                        CubicKeyframe(1, duration: 0.16)
+                    }
+                }
+                .offset(x: Self.inset + lensWidth * CGFloat(index))
+                .opacity(width > 0 ? 1 : 0)
+                .allowsHitTesting(false)
+
+            HStack(spacing: 0) {
+                ForEach(Array(choices.enumerated()), id: \.offset) { _, choice in
+                    let isOn = choice.value == selection
+                    Button {
+                        guard choice.value != selection else { return }
+                        if !reduceMotion { squish += 1 }
+                        selection = choice.value
+                    } label: {
+                        Text(choice.title)
+                            .font(.sc(size: 14, weight: isOn ? .bold : .semibold))
+                            .foregroundStyle(isOn ? accent : Color.scMuted(scheme))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: Self.height)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(isOn ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal, Self.inset)
+        }
+        .frame(height: Self.height)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .animation(slide, value: index)
         .sensoryFeedback(.selection, trigger: selection)
     }
+}
+
+/// Rozciągnięcie soczewki przy przeskoku — wszerz i spłaszczenie, potem
+/// lekkie odbicie i spoczynek.
+private struct LensSquish {
+    var x: CGFloat = 1
+    var y: CGFloat = 1
 }
 
 // MARK: - Zdjęcia rodzaju dania
