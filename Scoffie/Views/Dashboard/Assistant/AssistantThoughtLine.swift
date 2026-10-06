@@ -197,6 +197,17 @@ struct AssistantThoughtLine: View {
                         .padding(.leading, Self.iconColumn + Self.iconGap)
                         .padding(.top, 2)
                         .transition(.opacity)
+                        // Zgoda na powiadomienia W KONTEKŚCIE (6.10.2026):
+                        // „wrócę z odpowiedzią” to dokładnie to, o czym mówi
+                        // powiadomienie z serwera, gdy tura skończy się w tle.
+                        // Pyta raz — po decyzji systemu nic się już nie dzieje.
+                        .task {
+                            #if DEBUG
+                            // Zrzuty ekranów debug: bez okien systemu.
+                            if AssistantOptionsDebugScreen.requested != nil { return }
+                            #endif
+                            await NotificationPermission.requestIfNotAsked()
+                        }
                 }
             }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.4), value: status)
