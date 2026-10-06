@@ -410,7 +410,10 @@ struct AssistantView: View {
             mode: headerMode,
             onNewConversation: { Task { await store.startNewConversation() } },
             accessory: quotaPips,
-            markMood: store.isSending ? .thinking : .idle,
+            // W trakcie tury znak w nagłówku tylko nasłuchuje: kręci się
+            // JEDEN łuk — w wierszu „myślę” w rozmowie. Dwa obracające się
+            // elementy naraz to dekoracja, nie informacja (6.10.2026).
+            markMood: store.isSending ? .attentive : .idle,
             markCheer: answerCheer
         ) {
             // Wprowadzenie stoi bez nagłówka, ale krok „Zgoda” bez magazynu
@@ -1079,8 +1082,8 @@ struct AssistantView: View {
                     scroll(proxy, to: Self.tailAnchor, anchor: .bottom)
                 } else if old < store.messages.count, followsAnswer,
                           let last = store.messages.last, last.author == .assistant {
-                    // Gotowa odpowiedź ma już całe miejsce w układzie (pisze
-                    // się w nim), więc jej początek idzie pod górną krawędź —
+                    // Gotowa odpowiedź ma już całe miejsce w układzie (stoi
+                    // w nim od pierwszej klatki), więc jej początek idzie pod górną krawędź —
                     // `scrollTo` i tak zatrzyma się na końcu treści, gdy
                     // odpowiedź jest krótka. Ten sam widok, co szkic
                     // (`anchorID`), więc to ruch w dół, nie przeskok.
@@ -1979,18 +1982,24 @@ private struct MessageBubble: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Wiadomość przyszła w tej sesji (a nie z historii) — karta wyboru
-    /// otwiera wtedy arkusz sama. `reveal` znika po dopisaniu tekstu,
-    /// czyli zanim karta się pokaże, więc zapamiętujemy go przy wejściu.
+    /// otwiera wtedy arkusz sama. `reveal` znika zaraz po odsłonięciu tekstu
+    /// (przy odpowiedzi, która przyszła cała — w pierwszej chwili), więc
+    /// zapamiętujemy go przy wejściu.
     /// Szkic i gotowa odpowiedź to jeden widok, więc wejście szkicu też się
     /// liczy.
     @State private var arrivedLive = false
 
-    /// Czy tekst jeszcze się pisze — reszta (karta, pasek akcji) czeka pod
-    /// nim i wchodzi dopiero po ostatnim znaku. Szkic pisze się zawsze.
+    /// Czy tekst jeszcze się dopisuje — reszta (karta, pasek akcji) czeka pod
+    /// nim i wchodzi dopiero po ostatnim znaku. Szkic pisze się zawsze;
+    /// gotowa odpowiedź tylko wtedy, gdy domyka szkic, który już był na
+    /// ekranie (≤ 0,6 s). Odpowiedź, która przyszła cała (`whole`), stoi od
+    /// razu RAZEM z kartą — jedno przenikanie, karta nie czeka.
     private var isRevealing: Bool {
         guard message.author == .assistant else { return false }
         if message.isDraft { return true }
-        return message.reveal != nil && !message.text.isEmpty && message.card?.replacesText != true
+        guard let reveal = message.reveal, !message.text.isEmpty,
+              message.card?.replacesText != true else { return false }
+        return !reveal.startsComplete(total: message.text.count)
     }
 
     /// Jawna właściwość zamiast `reduceMotion ? nil : …` w argumencie (SE-0418).
