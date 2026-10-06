@@ -341,7 +341,9 @@ struct CookAlarmView: View {
 
     /// „Gotowe” — kończy POKAZYWANY timer (i idzie krok dalej, gdy stoimy na
     /// jego kroku); przy kilku dzwoniących ekran zostaje następnemu.
-    /// Pełny kolor timera — jedyna kryjąca kontrolka ekranu.
+    /// Pełny kolor timera — jedyna kryjąca kontrolka ekranu, jak „Zatrzymaj”
+    /// w Zegarze iOS (decyzja 6.10.2026: zostaje pełny, nie „soft”); pismo
+    /// z `CookTimerAccent.ink`, żeby czytało się na każdym z siedmiu kolorów.
     private var doneButton: some View {
         Button { onDone(item.id) } label: {
             HStack(spacing: 8) {
@@ -351,7 +353,7 @@ struct CookAlarmView: View {
                     .cookText(SCCook.Typography.buttonQuiet)
                     .lineLimit(1)
             }
-            .foregroundStyle(Color.scPageBase(scheme))
+            .foregroundStyle(item.accent.ink(scheme))
             .frame(maxWidth: .infinity)
             .frame(height: SCCook.Height.alarmDone)
             .scChromeGlass(in: Capsule(), tint: color)
