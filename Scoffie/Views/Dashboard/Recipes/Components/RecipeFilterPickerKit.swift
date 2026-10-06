@@ -92,15 +92,17 @@ struct RecipeFilterRowIcon: View {
     }
 }
 
-/// Jedna opcja wyboru „jedno z kilku” — czas, trudność, smak.
+/// Jedna opcja wyboru „jedno z kilku” — czas, trudność, kalorie.
 struct RecipeFilterChoice<Value: Hashable> {
     let value: Value
     let title: String
 }
 
-/// Tytuł wiersza i — po prawej — bieżąca wartość. Pierwsza opcja wyboru to
-/// „dowolna”: wtedy wartość stoi szaro, wybrana — w kolorze akcentu.
-private struct RecipeFilterRowLabel: View {
+/// Wiersz listy filtrów jak w Ustawieniach iOS (6.10.2026, Rafał: „prościej,
+/// ale nie smutno”): pełny kolorowy kafelek ikony, tytuł i — po prawej —
+/// wartość. Wybrana wartość stoi w kapsułce w kolorze wiersza, „dowolna”
+/// szaro, bez kapsułki — od razu widać, co działa.
+struct RecipeFilterListRowLabel: View {
     let icon: String
     let title: String
     let value: String
@@ -112,34 +114,55 @@ private struct RecipeFilterRowLabel: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            RecipeFilterRowIcon(icon: icon, accent: accent)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(accent)
+                .frame(width: 30, height: 30)
+                .overlay(
+                    Image(systemName: icon)
+                        .font(.sc(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                )
 
             Text(title)
                 .font(.sc(size: 15, weight: .semibold))
                 .tracking(-0.3)
                 .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
+                .layoutPriority(1)
 
             Spacer(minLength: 8)
 
-            Text(value)
-                .font(.sc(size: 15, weight: isActive ? .semibold : .regular))
-                .foregroundStyle(isActive ? accent : Color.scMuted(scheme))
-                .lineLimit(1)
-                .contentTransition(.interpolate)
+            Group {
+                if isActive {
+                    Text(value)
+                        .font(.sc(size: 13.5, weight: .bold))
+                        .foregroundStyle(accent)
+                        .padding(.horizontal, 10)
+                        .frame(height: 26)
+                        .background(Capsule().fill(accent.opacity(scheme == .dark ? 0.18 : 0.14)))
+                } else {
+                    Text(value)
+                        .font(.sc(size: 15))
+                        .foregroundStyle(Color.scMuted(scheme))
+                }
+            }
+            .lineLimit(1)
+            .truncationMode(.tail)
 
             Image(systemName: trailingIcon)
                 .font(.sc(size: 11, weight: .bold))
                 .foregroundStyle(Color.scFaint(scheme))
         }
-        .padding(12)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 52)
         .contentShape(Rectangle())
+        .animation(.smooth(duration: 0.22), value: isActive)
     }
 }
 
-/// Wiersz „jedno z kilku” (czas, trudność): stuknięcie = systemowe menu
-/// z opcjami, wartość po prawej jak w Ustawieniach iOS.
-struct RecipeFilterMenuRow<Value: Hashable>: View {
+/// Wiersz „jedno z kilku” (trudność, kalorie): stuknięcie = systemowe menu
+/// z opcjami. Pierwsza opcja to „dowolna”.
+struct RecipeFilterListMenuRow<Value: Hashable>: View {
     let icon: String
     let title: String
     let choices: [RecipeFilterChoice<Value>]
@@ -157,7 +180,7 @@ struct RecipeFilterMenuRow<Value: Hashable>: View {
                 }
             }
         } label: {
-            RecipeFilterRowLabel(
+            RecipeFilterListRowLabel(
                 icon: icon,
                 title: title,
                 value: currentTitle,
@@ -167,15 +190,14 @@ struct RecipeFilterMenuRow<Value: Hashable>: View {
             )
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))
-        .animation(.smooth(duration: 0.22), value: selection)
         .sensoryFeedback(.selection, trigger: selection)
         .accessibilityLabel(title)
         .accessibilityValue(currentTitle)
     }
 }
 
-/// Wiersz z wartością, który WPYCHA podstronę (kalorie: wykres na podstronie).
-struct RecipeFilterValueRow: View {
+/// Wiersz, który WPYCHA podstronę (dieta, składniki, „Więcej filtrów”).
+struct RecipeFilterListButtonRow: View {
     let icon: String
     let title: String
     let value: String
@@ -185,7 +207,7 @@ struct RecipeFilterValueRow: View {
 
     var body: some View {
         Button(action: action) {
-            RecipeFilterRowLabel(
+            RecipeFilterListRowLabel(
                 icon: icon,
                 title: title,
                 value: value,
@@ -195,45 +217,212 @@ struct RecipeFilterValueRow: View {
             )
         }
         .buttonStyle(PlanPressStyle(scale: 0.985))
-        .animation(.smooth(duration: 0.22), value: value)
         .accessibilityLabel(title)
         .accessibilityValue(value)
         .accessibilityHint("Otwiera wybór")
     }
 }
 
-/// Wiersz z systemowym przełącznikiem segmentów — krótki wybór, który
-/// mieści się w wierszu (smak: każdy · słodki · słony).
-struct RecipeFilterSegmentRow<Value: Hashable>: View {
-    let icon: String
-    let title: String
+/// Kreska między wierszami listy — od tekstu, nie od kafelka ikony.
+struct RecipeFilterListDivider: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.scTileStroke(scheme))
+            .frame(height: 1)
+            .padding(.leading, 54)
+    }
+}
+
+// MARK: - Przełącznik w kolorze
+
+/// „Dowolny · 15 min · 30 min · 45 min” — przełącznik segmentów, w którym
+/// wybrany segment świeci kolorem akcentu i przejeżdża do nowego miejsca.
+/// Własny, a nie systemowy `.segmented`: systemowy nie daje koloru
+/// zaznaczenia, a szary był „za smutny” (Rafał 6.10.2026).
+struct RecipeFilterSegment<Value: Hashable>: View {
     let choices: [RecipeFilterChoice<Value>]
     @Binding var selection: Value
     var accent: Color = SCPalette.terracotta
 
+    @Namespace private var lens
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(spacing: 12) {
-            RecipeFilterRowIcon(icon: icon, accent: accent)
-
-            Text(title)
-                .font(.sc(size: 15, weight: .semibold))
-                .tracking(-0.3)
-                .foregroundStyle(Color.scLabel(scheme))
-                .lineLimit(1)
-
-            Spacer(minLength: 8)
-
-            Picker(title, selection: $selection) {
-                ForEach(Array(choices.enumerated()), id: \.offset) { _, choice in
-                    Text(choice.title).tag(choice.value)
+        HStack(spacing: 2) {
+            ForEach(Array(choices.enumerated()), id: \.offset) { _, choice in
+                let isOn = choice.value == selection
+                Button {
+                    withAnimation(.smooth(duration: 0.26)) { selection = choice.value }
+                } label: {
+                    Text(choice.title)
+                        .font(.sc(size: 14, weight: .semibold))
+                        .foregroundStyle(isOn ? accent : Color.scMuted(scheme))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 36)
+                        .background {
+                            if isOn {
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(accent.opacity(scheme == .dark ? 0.2 : 0.15))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                            .strokeBorder(accent.opacity(0.45), lineWidth: 1)
+                                    )
+                                    .matchedGeometryEffect(id: "lens", in: lens)
+                            }
+                        }
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isOn ? .isSelected : [])
             }
-            .pickerStyle(.segmented)
-            .fixedSize()
         }
-        .padding(12)
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.scBarTrack(scheme))
+        )
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+}
+
+// MARK: - Zdjęcia rodzaju dania
+
+/// Rodzaj dania jako kółka ze zdjęciem dania i podpisem — NA STAŁE, bez
+/// przewijania w bok: do pięciu w jednym rzędzie, więcej — rzędy po cztery
+/// (Rafał 6.10.2026: „góra mi pasuje”). W obrębie aspektu opcje łączą się
+/// przez LUB, jak wszędzie w filtrach kategorii.
+struct RecipeFacetPhotoGrid: View {
+    let options: [RecipeFacetOption]
+    let accent: Color
+    /// Glif zdjęcia, gdy żaden przepis z tą opcją nie ma zdjęcia.
+    let icon: String
+    let isOn: (String) -> Bool
+    let cover: (String) -> Recipe?
+    let onToggle: (String) -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    private static let photo: CGFloat = 56
+
+    private var columns: [GridItem] {
+        let count = options.count <= 5 ? max(options.count, 1) : 4
+        return Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: count)
+    }
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .center, spacing: 14) {
+            ForEach(options) { option in
+                let selected = isOn(option.id)
+                Button {
+                    withAnimation(.smooth(duration: 0.2)) { onToggle(option.id) }
+                } label: {
+                    VStack(spacing: 6) {
+                        RecipeFilterCoverThumb(recipe: cover(option.id), icon: icon, accent: accent)
+                            .frame(width: Self.photo, height: Self.photo)
+                            .clipShape(Circle())
+                            .overlay(Circle().strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+                            .padding(4)
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(accent, lineWidth: 2.5)
+                                    .opacity(selected ? 1 : 0)
+                            )
+                            .overlay(alignment: .bottomTrailing) {
+                                Image(systemName: "checkmark")
+                                    .font(.sc(size: 10, weight: .heavy))
+                                    .foregroundStyle(Color.scPageBase(scheme))
+                                    .frame(width: 20, height: 20)
+                                    .background(Circle().fill(accent))
+                                    .scaleEffect(selected ? 1 : 0.4)
+                                    .opacity(selected ? 1 : 0)
+                            }
+
+                        Text(option.title)
+                            .font(.sc(size: 11, weight: .semibold))
+                            .foregroundStyle(selected ? Color.scLabel(scheme) : Color.scMuted(scheme))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.9)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PlanPressStyle(scale: 0.95))
+                .accessibilityLabel(option.title)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .sensoryFeedback(.selection, trigger: options.filter { isOn($0.id) }.map(\.id))
+    }
+}
+
+// MARK: - Smak
+
+/// Smak jako dwa kafle ze zdjęciem dania z tej kategorii (wariant S2 ze
+/// zdjęciem, Rafał 6.10.2026). Jeden wybór albo żaden: drugie stuknięcie
+/// odznacza, a nic nie zaznaczone = każdy smak.
+struct RecipeTasteTiles: View {
+    let options: [RecipeFacetOption]
+    let selection: String?
+    let cover: (String) -> Recipe?
+    let onSelect: (String?) -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    /// Słodkie w różu, słone w szałwii — te same kolory w kafelku i w kapsułce.
+    static func accent(for option: String) -> Color {
+        option == "sweet" ? SCPalette.rose : SCPalette.sage
+    }
+
+    static func icon(for option: String) -> String {
+        option == "sweet" ? "birthday.cake.fill" : "frying.pan.fill"
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(options) { option in
+                let isOn = selection == option.id
+                let accent = Self.accent(for: option.id)
+                Button {
+                    withAnimation(.smooth(duration: 0.22)) { onSelect(isOn ? nil : option.id) }
+                } label: {
+                    HStack(spacing: 10) {
+                        RecipeFilterCoverThumb(recipe: cover(option.id), icon: Self.icon(for: option.id), accent: accent)
+                            .frame(width: 38, height: 38)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                        Text(option.title)
+                            .font(.sc(size: 15, weight: .bold))
+                            .tracking(-0.2)
+                            .foregroundStyle(isOn ? accent : Color.scLabel(scheme))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.leading, 7)
+                    .padding(.trailing, 10)
+                    .frame(height: 52)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(isOn ? accent.opacity(scheme == .dark ? 0.18 : 0.14) : Color.scTileBg(scheme))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(isOn ? accent.opacity(0.5) : Color.scTileStroke(scheme), lineWidth: 1)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(PlanPressStyle(scale: 0.97))
+                .accessibilityLabel(option.title)
+                .accessibilityAddTraits(isOn ? .isSelected : [])
+            }
+        }
         .sensoryFeedback(.selection, trigger: selection)
     }
 }
