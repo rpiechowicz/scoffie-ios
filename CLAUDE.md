@@ -127,7 +127,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   prosi raz o zgodę na powiadomienia.
 - **Ustawienia**: zgoda na powiadomienia NIGDY przy starcie — `NotificationPermission.requestIfNotAsked()` w kontekście:
   Ustawienia → Powiadomienia („Włącz powiadomienia” / „Wyłączone w ustawieniach iOS” + „Otwórz ustawienia”), po wysłaniu
-  zaproszenia domownika (`SCShareSheet(message:)`, `completed`) i przy „Możesz wyjść” u Asystenta; wiersz i arkusz
+  zaproszenia domownika (`SCShareSheet(message:)`, `completed`), po dołączeniu z zaproszenia (pulpit odsłonięty,
+  `asksNotificationsOnReveal`), przy „Możesz wyjść” u Asystenta i po PIERWSZYM daniu zapisanym w planie
+  (`NotificationPermission.requestAfterPlanning`: „Wybierz przepis” — nowe danie — i „Dodaj do planu”; tam PRZED toastem,
+  żeby okno systemu nie zjadło czasu na „Cofnij”); wiersz i arkusz
   czytają stan przy wejściu, otwarciu i powrocie na wierzch; przełączniki = systemowe `Toggle`. Push w arkuszach:
   Dieta → Alergeny (`AllergenSelectionField(onEdit:)`, `AllergenPickerSheet(isPushed:)`; w kreatorze dalej arkusz),
   Prywatność → Polityka / Regulamin / Pobierz moje dane (`LegalDocumentPage`, `DataExportPage`), Asystent i plan →
