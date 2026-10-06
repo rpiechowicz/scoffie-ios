@@ -97,6 +97,10 @@ struct NavigationMenu: View {
     /// Stan wspólny zakładek. Żyje tu, bo menu jest jedynym miejscem, które
     /// przeżywa przełączanie zakładek.
     @State private var chrome = SCTabBarChrome()
+    /// Licznik wejść na każdą zakładkę — ikona podskakuje przy KAŻDYM wyborze
+    /// (`symbolEffect` z `value:` gra przy zmianie wartości), a nie przy
+    /// odejściu z zakładki.
+    @State private var bounces: [DashboardTab: Int] = [:]
 
     var body: some View {
         @Bindable var session = sessionStore
@@ -104,24 +108,39 @@ struct NavigationMenu: View {
         let compactTitle = chrome.compactTitles[selected]
 
         return TabView(selection: $session.dashboardTab) {
-            Tab(MenuConstans.Recipes.name, systemImage: MenuConstans.Recipes.icon, value: DashboardTab.recipes) {
+            Tab(value: DashboardTab.recipes) {
                 page(.recipes, isActive: selected == .recipes)
+            } label: {
+                tabLabel(.recipes, MenuConstans.Recipes.name, systemImage: MenuConstans.Recipes.icon)
             }
-            Tab(MenuConstans.Plan.name, systemImage: MenuConstans.Plan.icon, value: DashboardTab.plan) {
+            Tab(value: DashboardTab.plan) {
                 page(.plan, isActive: selected == .plan)
+            } label: {
+                tabLabel(.plan, MenuConstans.Plan.name, systemImage: MenuConstans.Plan.icon)
             }
-            Tab(MenuConstans.Calendar.name, systemImage: MenuConstans.Calendar.icon, value: DashboardTab.calendar) {
+            // Znak Scoffie zamiast symbolu systemu — własny obrazek nie ma
+            // efektów symboli, więc ta jedna ikona nie podskakuje.
+            Tab(value: DashboardTab.calendar) {
                 page(.calendar, isActive: selected == .calendar)
+            } label: {
+                Label(MenuConstans.Calendar.name, image: MenuConstans.Calendar.image)
             }
             // Odpowiedź potrafi dojść, gdy użytkownik ogląda plan — bez tej
             // plakietki musiałby sam wracać i sprawdzać, czy już jest.
-            Tab(MenuConstans.Assistant.name, systemImage: MenuConstans.Assistant.icon, value: DashboardTab.assistant) {
+            Tab(value: DashboardTab.assistant) {
                 page(.assistant, isActive: selected == .assistant)
+            } label: {
+                tabLabel(.assistant, MenuConstans.Assistant.name, systemImage: MenuConstans.Assistant.icon)
             }
             .badge(sessionStore.agentStore?.unseenAnswers ?? 0)
-            Tab(MenuConstans.Settings.name, systemImage: MenuConstans.Settings.icon, value: DashboardTab.settings) {
+            Tab(value: DashboardTab.settings) {
                 page(.settings, isActive: selected == .settings)
+            } label: {
+                tabLabel(.settings, MenuConstans.Settings.name, systemImage: MenuConstans.Settings.icon)
             }
+        }
+        .onChange(of: selected) { _, tab in
+            bounces[tab, default: 0] += 1
         }
         // Pasek NIE zwija się przy przewijaniu (Rafał 6.10.2026). Zwinięty
         // rozjeżdżał się ze wstawkami nad nim (pasek szukania Przepisów,
@@ -150,6 +169,18 @@ struct NavigationMenu: View {
             .animation(.smooth(duration: 0.3), value: compactTitle == nil)
         }
         .environment(\.scTabBarChrome, chrome)
+    }
+
+    /// Podpis zakładki z ikoną, która podskakuje przy wyborze (6.10.2026,
+    /// Rafał: „mała animacja na ikony w nav, jak zmieniam strony”). Systemowy
+    /// pasek może efektu nie pokazać — wtedy zostaje sama soczewka szkła.
+    private func tabLabel(_ tab: DashboardTab, _ title: String, systemImage: String) -> some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: systemImage)
+                .symbolEffect(.bounce.down, options: .nonRepeating, value: bounces[tab, default: 0])
+        }
     }
 
     private func page(_ tab: DashboardTab, isActive: Bool) -> some View {
