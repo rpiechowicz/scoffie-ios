@@ -25,7 +25,10 @@ import SwiftUI
 //   jest zbyt duży”); ten sam układ, tylko w skali połowy ekranu.
 //
 // - `leading` — własny widok w miejscu kafelka (zdjęcie dania w „Dodaj do
-//   planu”);
+//   planu”, awatar w „Twoich danych”);
+// - `detail` — krótka linijka POD tytułem, w kolumnie tekstu obok kafelka
+//   (e-mail pod imieniem w „Twoich danych”); `subtitle` stoi niżej, pod
+//   całym rzędem;
 // - pusty `eyebrow` — bez wiersza nad tytułem (arkusze Zakupów mają eyebrow
 //   własnym wierszem pod nagłówkiem).
 //
@@ -46,6 +49,8 @@ struct EditorialSheetHeader<Accessory: View>: View {
     /// Jak podtytuł zmienia treść. Domyślnie rolują cyfry („3 z 4”);
     /// podtytuł z imieniem woli przenikanie, bo rolowanie przetacza litery.
     let subtitleTransition: ContentTransition
+    /// Linijka pod tytułem, obok kafelka (e-mail w „Twoich danych”).
+    let detail: String?
     let compact: Bool
     /// Własny widok w miejscu kafelka z ikoną (zdjęcie dania).
     let leading: AnyView?
@@ -59,6 +64,7 @@ struct EditorialSheetHeader<Accessory: View>: View {
         accent: Color = SCPalette.terracotta,
         subtitle: String? = nil,
         subtitleTransition: ContentTransition = .numericText(),
+        detail: String? = nil,
         compact: Bool = false,
         leading: AnyView? = nil,
         onClose: @escaping () -> Void,
@@ -70,6 +76,7 @@ struct EditorialSheetHeader<Accessory: View>: View {
         self.accent = accent
         self.subtitle = subtitle
         self.subtitleTransition = subtitleTransition
+        self.detail = detail
         self.compact = compact
         self.leading = leading
         self.onClose = onClose
@@ -110,6 +117,14 @@ struct EditorialSheetHeader<Accessory: View>: View {
                             .minimumScaleFactor(compact ? 0.8 : 0.85)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
+
+                        if let detail {
+                            Text(detail)
+                                .font(.sc(size: 13))
+                                .foregroundStyle(Color.scMuted(scheme))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -142,6 +157,7 @@ extension EditorialSheetHeader where Accessory == EmptyView {
         accent: Color = SCPalette.terracotta,
         subtitle: String? = nil,
         subtitleTransition: ContentTransition = .numericText(),
+        detail: String? = nil,
         compact: Bool = false,
         leading: AnyView? = nil,
         onClose: @escaping () -> Void
@@ -153,6 +169,7 @@ extension EditorialSheetHeader where Accessory == EmptyView {
             accent: accent,
             subtitle: subtitle,
             subtitleTransition: subtitleTransition,
+            detail: detail,
             compact: compact,
             leading: leading,
             onClose: onClose,

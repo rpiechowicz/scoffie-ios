@@ -331,8 +331,8 @@ struct RecipeFilterSegment<Value: Hashable>: View {
 }
 
 /// Rozciągnięcie soczewki przy przeskoku — wszerz i spłaszczenie, potem
-/// lekkie odbicie i spoczynek.
-private struct LensSquish {
+/// lekkie odbicie i spoczynek. Wspólne z kaflami `SCIconTilePicker`.
+struct LensSquish {
     var x: CGFloat = 1
     var y: CGFloat = 1
 }
