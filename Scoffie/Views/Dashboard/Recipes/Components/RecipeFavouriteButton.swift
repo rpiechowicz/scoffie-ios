@@ -83,7 +83,7 @@ struct RecipeFavouriteButton: View {
                 toggle()
             } label: {
                 Image(systemName: shown ? "heart.fill" : "heart")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .foregroundStyle(shown ? SCPalette.terracotta : Color.white.opacity(0.95))
                     // W górę, jak w szczegółach: stary glif odjeżdża do góry,
                     // nowy wjeżdża od dołu.

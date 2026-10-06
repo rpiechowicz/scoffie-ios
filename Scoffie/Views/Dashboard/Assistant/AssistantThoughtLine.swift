@@ -184,7 +184,7 @@ struct AssistantThoughtLine: View {
 
                 if isStopping {
                     Text("Nic nie zmieniłem w planie.")
-                        .font(.system(size: 13.5))
+                        .font(.sc(size: 13.5))
                         .foregroundStyle(AssistantLook.muted(scheme))
                         .padding(.leading, Self.iconColumn + Self.iconGap)
                         .transition(.opacity)
@@ -192,11 +192,22 @@ struct AssistantThoughtLine: View {
 
                 if showsPatience, !isStopping {
                     Text("Możesz wyjść — wrócę z odpowiedzią.")
-                        .font(.system(size: 12.5))
+                        .font(.sc(size: 12.5))
                         .foregroundStyle(AssistantLook.faint(scheme))
                         .padding(.leading, Self.iconColumn + Self.iconGap)
                         .padding(.top, 2)
                         .transition(.opacity)
+                        // Zgoda na powiadomienia W KONTEKŚCIE (6.10.2026):
+                        // „wrócę z odpowiedzią” to dokładnie to, o czym mówi
+                        // powiadomienie z serwera, gdy tura skończy się w tle.
+                        // Pyta raz — po decyzji systemu nic się już nie dzieje.
+                        .task {
+                            #if DEBUG
+                            // Zrzuty ekranów debug: bez okien systemu.
+                            if AssistantOptionsDebugScreen.requested != nil { return }
+                            #endif
+                            await NotificationPermission.requestIfNotAsked()
+                        }
                 }
             }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : .smooth(duration: 0.4), value: status)
@@ -227,7 +238,7 @@ struct AssistantThoughtLine: View {
             if !isStopping {
                 // Sekundy rolują się jak czas w szczegółach posiłku.
                 SCRollingNumber(value: Int(t), unit: "s")
-                    .font(.system(size: 12.5))
+                    .font(.sc(size: 12.5))
                     .foregroundStyle(AssistantLook.faint(scheme))
                     .fixedSize()
                     .accessibilityHidden(true)
@@ -258,11 +269,11 @@ struct AssistantThoughtLine: View {
     private func doneRow(_ step: DoneStep, isOldest: Bool) -> some View {
         HStack(alignment: .center, spacing: Self.iconGap) {
             Image(systemName: "checkmark")
-                .font(.system(size: 10, weight: .bold))
+                .font(.sc(size: 10, weight: .bold))
                 .foregroundStyle(step.wrote ? AssistantLook.sage(scheme) : AssistantLook.terra(scheme).opacity(0.75))
                 .frame(width: Self.iconColumn, height: Self.iconColumn)
             Text(step.label)
-                .font(.system(size: 13.5))
+                .font(.sc(size: 13.5))
                 .foregroundStyle(AssistantLook.muted(scheme))
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -289,13 +300,13 @@ struct AssistantThoughtLine: View {
     private func statusText(t: TimeInterval) -> some View {
         if isStopping {
             Text(status)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.sc(size: 15, weight: .semibold))
                 .tracking(-0.3)
                 .foregroundStyle(AssistantLook.muted(scheme))
                 .lineLimit(1)
         } else if reduceMotion {
             Text(status)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.sc(size: 15, weight: .semibold))
                 .tracking(-0.3)
                 .foregroundStyle(phaseColor)
                 .lineLimit(1)
@@ -303,7 +314,7 @@ struct AssistantThoughtLine: View {
             let phase = t.truncatingRemainder(dividingBy: 2.6) / 2.6
             let p = 1.2 - phase * 2.4
             Text(status)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.sc(size: 15, weight: .semibold))
                 .tracking(-0.3)
                 .lineLimit(1)
                 .foregroundStyle(
@@ -349,7 +360,7 @@ struct AssistantThoughtLine: View {
                                 .fill(AssistantLook.ink(scheme).opacity(0.35))
                                 .frame(width: 4, height: 4)
                             Text(step.label)
-                                .font(.system(size: 13))
+                                .font(.sc(size: 13))
                                 .foregroundStyle(AssistantLook.faint(scheme))
                                 .lineLimit(2)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -366,13 +377,13 @@ struct AssistantThoughtLine: View {
     private var thoughtHead: some View {
         HStack(spacing: 2) {
             Text(settledLabel)
-                .font(.system(size: 12.5, weight: .medium))
+                .font(.sc(size: 12.5, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(AssistantLook.faint(scheme))
                 .lineLimit(1)
             if hasTrace {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .foregroundStyle(AssistantLook.faint(scheme))
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     .animation(.easeOut(duration: 0.2), value: isExpanded)

@@ -15,7 +15,7 @@ struct SCWeekTodayButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "arrow.uturn.backward")
-                .font(.system(size: 10, weight: .bold))
+                .font(.sc(size: 10, weight: .bold))
                 .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 26, height: 26)
                 // Szkło w tincie terakoty (Liquid Glass runda 2, 4.10.2026)

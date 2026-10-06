@@ -79,7 +79,7 @@ struct PlanWhoBadge: View {
 
     private var sharedBadge: some View {
         Image(systemName: "house.fill")
-            .font(.system(size: size * 0.5, weight: .bold))
+            .font(.sc(size: size * 0.5, weight: .bold))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
             .background(

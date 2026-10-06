@@ -92,7 +92,7 @@ struct RecipeCarouselCard: View {
 
     private var heartBadge: some View {
         Image(systemName: recipe.favourite ? "heart.fill" : "heart")
-            .font(.system(size: 11, weight: .bold))
+            .font(.sc(size: 11, weight: .bold))
             .foregroundStyle(recipe.favourite ? Color.pink : Color.white)
             .frame(width: 28, height: 28)
             .background(Color.black.opacity(colorScheme == .dark ? 0.38 : 0.34), in: Circle())
@@ -136,7 +136,7 @@ struct RecipeCarouselCard: View {
             )
 
             Image(systemName: RecipesConstants.icon(for: recipe.category))
-                .font(.system(size: 40, weight: .semibold))
+                .font(.sc(size: 40, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.9))
         }
     }
@@ -150,9 +150,9 @@ struct RecipeOverlayMetricBadge: View {
     var body: some View {
         HStack(spacing: size == .compact ? 4 : 5) {
             Image(systemName: icon)
-                .font(.system(size: size == .compact ? 10 : 11, weight: .semibold))
+                .font(.sc(size: size == .compact ? 10 : 11, weight: .semibold))
             Text(text)
-                .font(.system(size: size == .compact ? 10 : 11, weight: .semibold))
+                .font(.sc(size: size == .compact ? 10 : 11, weight: .semibold))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)

@@ -42,7 +42,7 @@ struct EditorialSettingsSectionHeader: View {
 
     var body: some View {
         Text(title.uppercased())
-            .font(.system(size: 10.5, weight: .bold))
+            .font(.sc(size: 10.5, weight: .bold))
             .tracking(1.4)
             .foregroundStyle(Color.scFaint(scheme))
             .frame(maxWidth: .infinity, alignment: .leading)

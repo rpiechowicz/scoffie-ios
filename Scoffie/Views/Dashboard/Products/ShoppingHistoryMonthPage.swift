@@ -9,20 +9,16 @@ import SwiftUI
 // To jest celowe: w tej aplikacji pionowa linia z kropkami zawsze znaczy
 // „czas idzie w dół”, i historia zakupów nie ma powodu mówić tego inaczej.
 //
-// Arkusz stoi NA arkuszu Zakupów i sam otwiera nad sobą arkusz z listą —
-// cofanie zdejmuje po jednym poziomie, tak jak strzałka w lewym górnym rogu.
-struct ShoppingHistoryMonthSheet: View {
+// Ekran wepchnięty w arkusz Zakupów (historia → miesiąc → lista), z systemowym
+// paskiem: „wstecz” zdejmuje po jednym poziomie. Listę otwiera `ProductsView`
+// (`ShoppingHistoryRoute.archive`) — ten ekran tylko oddaje stuknięcie.
+struct ShoppingHistoryMonthPage: View {
     let month: ShoppingHistoryMonth
-    /// Produkty zamkniętej listy — z magazynu, żeby arkusz nie musiał znać
-    /// reguły „druga rewizja pokazuje tylko to, co dołożyła”.
-    var itemsForArchive: (String) -> [ShoppingItem]
-    var dishSummary: (ShoppingItem) -> String? = { _ in nil }
+    var onOpenArchive: (ShoppingHistoryEntry) -> Void
     var onDelete: ((ShoppingHistoryEntry) -> Void)?
-    var onClose: () -> Void
 
     @Environment(\.colorScheme) private var scheme
 
-    @State private var openedArchiveId: String?
     /// Lista wskazana do skasowania z menu kontekstowego wiersza.
     @State private var pendingDelete: ShoppingHistoryEntry?
 
@@ -30,40 +26,20 @@ struct ShoppingHistoryMonthSheet: View {
         "\(PolishPlural.lists(month.listCount)) · \(PolishPlural.products(month.productCount))"
     }
 
-    /// Otwarty wpis wyszukiwany po id przy każdym rysowaniu — dzięki temu
-    /// usunięcie listy z arkusza nad spodem zamyka go samo, zamiast zostawiać
-    /// otwarty ekran czegoś, czego już nie ma.
-    private var openedEntryBinding: Binding<ShoppingHistoryEntry?> {
-        Binding(
-            get: {
-                guard let openedArchiveId else { return nil }
-                return month.entries.first { $0.archiveId == openedArchiveId }
-            },
-            set: { openedArchiveId = $0?.archiveId }
-        )
-    }
-
     var body: some View {
-        ZStack {
-            SCPageBackground(scheme: scheme)
-                .ignoresSafeArea()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ShoppingEyebrowRow(eyebrow: "Historia · \(month.year)", meta: meta)
+                    .padding(.top, 8)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    ShoppingSheetHeader(title: month.name, icon: "calendar", onClose: onClose)
-
-                    ShoppingEyebrowRow(eyebrow: "Historia · \(month.year)", meta: meta)
-                        .padding(.top, 20)
-
-                    weeks
-                        .padding(.top, 4)
-                }
-                .padding(.horizontal, SCPageMetrics.horizontal)
-                .padding(.top, 18)
-                .padding(.bottom, SCPageMetrics.bottom)
+                weeks
+                    .padding(.top, 4)
             }
-            .scrollIndicators(.hidden)
+            .padding(.horizontal, SCPageMetrics.horizontal)
+            .padding(.bottom, SCPageMetrics.bottom)
         }
+        .scrollIndicators(.hidden)
+        .scPushedPage(month.name)
         .alert("Usunąć listę z historii?", isPresented: pendingDeleteBinding) {
             Button("Anuluj", role: .cancel) { pendingDelete = nil }
             Button("Usuń", role: .destructive) {
@@ -72,21 +48,6 @@ struct ShoppingHistoryMonthSheet: View {
             }
         } message: {
             Text("Ta operacja usunie zapisany wpis historyczny dla tego tygodnia.")
-        }
-        .sheet(item: openedEntryBinding) { entry in
-            ShoppingArchiveSheet(
-                entry: entry,
-                items: itemsForArchive(entry.archiveId),
-                weekRange: weekRange(for: entry),
-                dishSummary: dishSummaryAction(for: entry),
-                // Skasowanie z arkusza listy nie zamyka go ręcznie: wpis
-                // znika z miesiąca, `openedEntryBinding` przestaje go
-                // znajdować i arkusz schodzi sam.
-                onDelete: archiveDeleteAction(for: entry),
-                onClose: { openedArchiveId = nil }
-            )
-            .presentationDetents([.large])
-            .dashboardLiquidSheet()
         }
     }
 
@@ -97,18 +58,6 @@ struct ShoppingHistoryMonthSheet: View {
         )
     }
 
-    /// Dania pod nazwą produktu tylko dla OGLĄDANEGO tygodnia.
-    ///
-    /// Indeks dań jest zbudowany z planu tego jednego tygodnia, więc przy
-    /// liście sprzed miesiąca dopisałby „Pomidorom” dzisiejszą zupę — danie,
-    /// którego wtedy nie było. `isCurrent` na tygodniu znaczy dokładnie
-    /// „to jest tydzień oglądany na Planie”, więc pytamy o to jego.
-    private func dishSummaryAction(for entry: ShoppingHistoryEntry) -> (ShoppingItem) -> String? {
-        let week = month.weeks.first { $0.weekStart == entry.weekStart }
-        guard week?.isCurrent == true else { return { _ in nil } }
-        return dishSummary
-    }
-
     /// Jawne funkcje zamiast `cond ? nil : domknięcie` w argumencie.
     /// Warunek z `nil` po jednej stronie i wnioskowanym typem po drugiej daje
     /// dwa równorzędne rozwiązania (SE-0418), a kompilator zgłasza to
@@ -116,17 +65,6 @@ struct ShoppingHistoryMonthSheet: View {
     private func rowDeleteAction(for entry: ShoppingHistoryEntry) -> (() -> Void)? {
         guard onDelete != nil else { return nil }
         return { pendingDelete = entry }
-    }
-
-    /// Arkusz listy potwierdza kasowanie SAM (ma własny alert nad sobą), więc
-    /// dostaje akcję, która kasuje wprost.
-    private func archiveDeleteAction(for entry: ShoppingHistoryEntry) -> (() -> Void)? {
-        guard let onDelete else { return nil }
-        return { onDelete(entry) }
-    }
-
-    private func weekRange(for entry: ShoppingHistoryEntry) -> String {
-        month.weeks.first { $0.weekStart == entry.weekStart }?.rangeLabel ?? ""
     }
 
     // MARK: - Szyna tygodni
@@ -151,7 +89,7 @@ struct ShoppingHistoryMonthSheet: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(weekEyebrow(week))
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.sc(size: 11, weight: .bold))
                     .tracking(1.1)
                     .foregroundStyle(week.isCurrent ? SCPalette.terracotta : Color.scFaint(scheme))
                     .lineLimit(1)
@@ -163,7 +101,7 @@ struct ShoppingHistoryMonthSheet: View {
                     ShoppingHistoryListRow(
                         entry: entry,
                         isLast: isLastWeek && index == week.entries.count - 1,
-                        onOpen: { openedArchiveId = entry.archiveId },
+                        onOpen: { onOpenArchive(entry) },
                         onDelete: rowDeleteAction(for: entry)
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))

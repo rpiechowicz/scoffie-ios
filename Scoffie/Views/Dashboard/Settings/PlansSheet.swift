@@ -14,11 +14,17 @@ import SwiftUI
 /// planu, bo cena przy zakupie to wymóg App Store 3.1.2, a nazwa oszczędza
 /// spojrzenia z powrotem na listę.
 ///
-/// Wjeżdża NA „Asystent i plan" (albo z linijki „Zobacz plany" w rozmowie)
-/// i sam się zamyka po udanym zakupie — arkusz pod spodem odświeża stan.
+/// Dwa wejścia: z „Asystent i plan" wjeżdża jako kolejny ekran TEGO arkusza
+/// (`isPushed`, systemowy pasek z „wstecz” — bez arkusza na arkuszu), z linijki
+/// „Zobacz plany" w rozmowie jest samodzielnym arkuszem. Po udanym zakupie
+/// sam schodzi (`dismiss` = zamknięcie arkusza albo powrót o ekran), a ekran
+/// pod spodem odświeża stan. Regulamin i polityka to w obu przypadkach push.
 struct PlansSheet: View {
-    /// Po zakupie PRZYJĘTYM przez serwer — arkusz pod spodem przeładowuje
-    /// stan, zanim ten się zamknie.
+    /// Ekran wepchnięty w stos „Asystent i plan” — bez własnego
+    /// `NavigationStack` i nagłówka z krzyżykiem, z paskiem systemu.
+    var isPushed: Bool = false
+    /// Po zakupie PRZYJĘTYM przez serwer — ekran pod spodem przeładowuje
+    /// stan, zanim ten zejdzie.
     var onPurchased: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
@@ -41,63 +47,20 @@ struct PlansSheet: View {
         sessionStore.subscriptionStore ?? fallbackSubscriptions
     }
 
+    private static let subtitle = "Pula wspólna dla całego domu, odnawia się co miesiąc."
+
     var body: some View {
-        NavigationStack {
-            // Ten sam szkielet co arkusze asystenta (eyebrow · tytuł · X,
-            // stopka nad gradientem). Bez `GeometryReader`: pierwszy przebieg
-            // układu dostawał szerokość zero i treść rysowała się „od boku”,
-            // zanim arkusz dojechał na miejsce.
-            AssistantSheetScaffold(
-                eyebrow: "Plany · miesięcznie",
-                title: "Wybierz plan",
-                subtitle: "Pula wspólna dla całego domu, odnawia się co miesiąc.",
-                // Plany to plany Asystenta — jego glif, jak wiersz
-                // „Asystent i plan” w Ustawieniach.
-                icon: MenuConstans.Assistant.icon,
-                onClose: { dismiss() },
-                footer: { footer }
-            ) {
-                // Trzy kafle do wyboru, jedna karta szczegółów: przy
-                // zmianie planu liczby i paski przeliczają się w miejscu,
-                // zamiast kazać porównywać trzy karty po kawałku.
-                currentStatus
-                    .padding(.top, 14)
-
-                HStack(spacing: 8) {
-                    ForEach(SubscriptionCatalog.all) { plan in
-                        PlanTile(
-                            plan: plan,
-                            price: price(for: plan),
-                            isSelected: plan.id == selected.id,
-                            isCurrent: plan.id == currentPlan?.id,
-                            isSuggested: plan.id == suggestedPlan?.id && plan.id != currentPlan?.id
-                        ) {
-                            select(plan)
-                        }
-                    }
+        Group {
+            if isPushed {
+                screen
+            } else {
+                NavigationStack {
+                    screen
                 }
-                .padding(.top, 12)
-
-                PlanDetailCard(
-                    plan: selected,
-                    price: price(for: selected),
-                    isCurrent: selected.id == currentPlan?.id,
-                    suggestion: selected.id == suggestedPlan?.id && selected.id != currentPlan?.id
-                        ? suggestionText
-                        : nil
-                )
-                .padding(.top, 10)
+                .presentationDragIndicator(.visible)
             }
-            .toolbar(.hidden, for: .navigationBar)
         }
-        .presentationDragIndicator(.visible)
         .sensoryFeedback(.selection, trigger: selected.id)
-        .sheet(isPresented: $showTerms) {
-            LegalDocumentSheet(title: "Regulamin") { TermsOfServiceContent() }
-        }
-        .sheet(isPresented: $showPrivacy) {
-            LegalDocumentSheet(title: "Polityka prywatności", icon: "hand.raised.fill", accent: SCPalette.indigo) { PrivacyPolicyContent() }
-        }
         .onAppear {
             // Na wejściu: plan polecany dla domu, a gdy go nie ma — obecny.
             // To jest ZAZNACZENIE kafla, nie stan zakupu. W `onAppear` i bez
@@ -119,6 +82,94 @@ struct PlansSheet: View {
             await subscriptions.refreshState()
             await subscriptions.loadProducts()
         }
+    }
+
+    /// Układ z dokumentami prawnymi jako ekranami stosu (push) — w obu
+    /// wejściach, bo w obu ten ekran stoi w `NavigationStack`.
+    private var screen: some View {
+        layout
+            .navigationDestination(isPresented: $showTerms) {
+                LegalDocumentPage(title: "Regulamin") { TermsOfServiceContent() }
+            }
+            .navigationDestination(isPresented: $showPrivacy) {
+                LegalDocumentPage(title: "Polityka prywatności") { PrivacyPolicyContent() }
+            }
+    }
+
+    @ViewBuilder
+    private var layout: some View {
+        if isPushed {
+            // Ekran w stosie „Asystent i plan”: tytuł w pasku systemu,
+            // zdanie o puli nad treścią, ta sama stopka z zakupem.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(Self.subtitle)
+                        .font(.sc(size: 13.5))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8)
+
+                    planContent
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+            }
+            .scrollIndicators(.hidden)
+            .scSheetFooter(horizontalPadding: 16) { footer }
+            .scPushedPage("Wybierz plan")
+        } else {
+            // Ten sam szkielet co arkusze asystenta (eyebrow · tytuł · X,
+            // stopka nad gradientem). Bez `GeometryReader`: pierwszy przebieg
+            // układu dostawał szerokość zero i treść rysowała się „od boku”,
+            // zanim arkusz dojechał na miejsce.
+            AssistantSheetScaffold(
+                eyebrow: "Plany · miesięcznie",
+                title: "Wybierz plan",
+                subtitle: Self.subtitle,
+                // Plany to plany Asystenta — jego glif, jak wiersz
+                // „Asystent i plan” w Ustawieniach.
+                icon: MenuConstans.Assistant.icon,
+                onClose: { dismiss() },
+                footer: { footer }
+            ) {
+                planContent
+            }
+            .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    /// Trzy kafle do wyboru, jedna karta szczegółów: przy zmianie planu
+    /// liczby i paski przeliczają się w miejscu, zamiast kazać porównywać
+    /// trzy karty po kawałku.
+    @ViewBuilder
+    private var planContent: some View {
+        currentStatus
+            .padding(.top, 14)
+
+        HStack(spacing: 8) {
+            ForEach(SubscriptionCatalog.all) { plan in
+                PlanTile(
+                    plan: plan,
+                    price: price(for: plan),
+                    isSelected: plan.id == selected.id,
+                    isCurrent: plan.id == currentPlan?.id,
+                    isSuggested: plan.id == suggestedPlan?.id && plan.id != currentPlan?.id
+                ) {
+                    select(plan)
+                }
+            }
+        }
+        .padding(.top, 12)
+
+        PlanDetailCard(
+            plan: selected,
+            price: price(for: selected),
+            isCurrent: selected.id == currentPlan?.id,
+            suggestion: selected.id == suggestedPlan?.id && selected.id != currentPlan?.id
+                ? suggestionText
+                : nil
+        )
+        .padding(.top, 10)
     }
 
     // MARK: - Dom
@@ -160,17 +211,17 @@ struct PlansSheet: View {
 
         return HStack(spacing: 12) {
             Image(systemName: plan == nil ? "circle.dashed" : "checkmark.seal.fill")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.sc(size: 18, weight: .semibold))
                 .foregroundStyle(plan == nil ? Color.scMuted(scheme) : SCPalette.sage)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(plan.map { "Twój plan: \($0.name)" } ?? "Nie masz jeszcze planu")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.sc(size: 15, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(Color.scLabel(scheme))
                 Text(currentStatusDetail(plan: plan, usage: usage))
-                    .font(.system(size: 12.5))
+                    .font(.sc(size: 12.5))
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -236,7 +287,7 @@ struct PlansSheet: View {
             // szukać przewijaniem.
             if let notice {
                 Text(notice)
-                    .font(.system(size: 12.5))
+                    .font(.sc(size: 12.5))
                     .lineSpacing(2)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Color.scMuted(scheme))
@@ -258,7 +309,7 @@ struct PlansSheet: View {
             // pieniędzy widać było okres, automatyczne odnawianie, miejsce
             // rezygnacji oraz regulamin i politykę prywatności.
             Text(Self.renewalTerms)
-                .font(.system(size: 11.5))
+                .font(.sc(size: 11.5))
                 .lineSpacing(2)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Color.scFaint(scheme))
@@ -373,7 +424,7 @@ struct PlanTile: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .top, spacing: 6) {
                     Text(plan.name)
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.sc(size: 15, weight: .bold))
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(1)
@@ -384,12 +435,12 @@ struct PlanTile: View {
                     SCRadioMark(isOn: isSelected, size: 18)
                 }
                 Text(plan.seatsLabel)
-                    .font(.system(size: 11.5))
+                    .font(.sc(size: 11.5))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(price)
-                    .font(.system(size: 14.5, weight: .bold))
+                    .font(.sc(size: 14.5, weight: .bold))
                     .tracking(-0.3)
                     .monospacedDigit()
                     .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(scheme))
@@ -427,12 +478,12 @@ struct PlanTile: View {
     private var tag: some View {
         if isCurrent {
             Label("Twój plan", systemImage: "checkmark.seal.fill")
-                .font(.system(size: 10.5, weight: .bold))
+                .font(.sc(size: 10.5, weight: .bold))
                 .labelStyle(PlanTagLabelStyle())
                 .foregroundStyle(SCPalette.sage)
         } else if isSuggested {
             Label("Polecany", systemImage: "sparkles")
-                .font(.system(size: 10.5, weight: .bold))
+                .font(.sc(size: 10.5, weight: .bold))
                 .labelStyle(PlanTagLabelStyle())
                 .foregroundStyle(SCPalette.terracotta)
         } else {
@@ -452,7 +503,7 @@ private struct PlanTagLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 3) {
             configuration.icon
-                .font(.system(size: 9, weight: .bold))
+                .font(.sc(size: 9, weight: .bold))
             configuration.title
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -497,7 +548,7 @@ struct PlanDetailCard: View {
                 .overlay(alignment: .top) { rule }
 
                 Text(plan.audience)
-                    .font(.system(size: 13))
+                    .font(.sc(size: 13))
                     .lineSpacing(2)
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -534,26 +585,26 @@ struct PlanDetailCard: View {
                             .foregroundStyle(SCPalette.terracotta.opacity(0.75))
                     }
                 }
-                .font(.system(size: 10.5, weight: .bold))
+                .font(.sc(size: 10.5, weight: .bold))
                 .tracking(1.1)
                 .foregroundStyle(SCPalette.terracotta)
                 .lineLimit(1)
                 .contentTransition(.opacity)
                 Text(plan.seatsLabel)
-                    .font(.system(size: 13))
+                    .font(.sc(size: 13))
                     .foregroundStyle(Color.scMuted(scheme))
                     .contentTransition(.opacity)
             }
             Spacer(minLength: 8)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(price)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.sc(size: 22, weight: .bold))
                     .tracking(-0.6)
                     .monospacedDigit()
                     .foregroundStyle(Color.scLabel(scheme))
                     .contentTransition(.numericText())
                 Text("/ mies.")
-                    .font(.system(size: 12))
+                    .font(.sc(size: 12))
                     .foregroundStyle(Color.scFaint(scheme))
             }
             .lineLimit(1)
@@ -566,17 +617,17 @@ struct PlanDetailCard: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(label)
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.sc(size: 13.5, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
                 Spacer(minLength: 0)
                 Text("ok. \(Self.perWeek(value)) \(noun) w tygodniu")
-                    .font(.system(size: 12))
+                    .font(.sc(size: 12))
                     .monospacedDigit()
                     .foregroundStyle(Color.scFaint(scheme))
                     .contentTransition(.numericText())
                     .lineLimit(1)
                 Text("\(value)")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.sc(size: 18, weight: .bold))
                     .tracking(-0.4)
                     .monospacedDigit()
                     .foregroundStyle(Color.scLabel(scheme))
@@ -601,13 +652,13 @@ struct PlanDetailCard: View {
     private func included(_ text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 9) {
             Image(systemName: "checkmark")
-                .font(.system(size: 9, weight: .heavy))
+                .font(.sc(size: 9, weight: .heavy))
                 .foregroundStyle(SCPalette.sage)
                 .frame(width: 18, height: 18)
                 .background(Circle().fill(Color.scSageTint(scheme)))
                 .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
             Text(text)
-                .font(.system(size: 13))
+                .font(.sc(size: 13))
                 .lineSpacing(2)
                 .foregroundStyle(Color.scLabel(scheme))
                 .fixedSize(horizontal: false, vertical: true)

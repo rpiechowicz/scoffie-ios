@@ -26,7 +26,7 @@ struct RecipeNoResultsView: View {
     var body: some View {
         VStack(spacing: 0) {
             Image(systemName: icon)
-                .font(.system(size: 28, weight: .semibold))
+                .font(.sc(size: 28, weight: .semibold))
                 .foregroundStyle(accent)
                 .symbolEffect(.bounce, value: bounce)
                 .frame(width: 76, height: 76)
@@ -34,7 +34,7 @@ struct RecipeNoResultsView: View {
                 .shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.06), radius: 10, x: 0, y: 4)
 
             Text(title)
-                .font(.system(size: 20, weight: .bold))
+                .font(.sc(size: 20, weight: .bold))
                 .tracking(-0.4)
                 .foregroundStyle(Color.scLabel(scheme))
                 .multilineTextAlignment(.center)
@@ -42,7 +42,7 @@ struct RecipeNoResultsView: View {
                 .padding(.top, 18)
 
             Text(message)
-                .font(.system(size: 14.5))
+                .font(.sc(size: 14.5))
                 .foregroundStyle(Color.scMuted(scheme))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -73,9 +73,9 @@ struct RecipeNoResultsView: View {
         Button(action: action.run) {
             HStack(spacing: 7) {
                 Image(systemName: action.icon)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.sc(size: 13, weight: .bold))
                 Text(action.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.sc(size: 15, weight: .semibold))
                     .lineLimit(1)
             }
             .foregroundStyle(isPrimary ? SCPalette.terracotta : Color.scLabel(scheme))

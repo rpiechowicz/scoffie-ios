@@ -38,7 +38,7 @@ struct CookWelcomeContent: View {
 
                 if let subtitle = recipe.subtitle {
                     Text(subtitle)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.sc(size: 16, weight: .semibold))
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 2)
@@ -88,7 +88,7 @@ struct CookWelcomeContent: View {
             metaItem(icon: "chart.bar.fill", text: recipe.difficultyText, counts: false)
             metaItem(icon: "list.bullet", text: "\(count) \(PolishPlural.form(count, one: "krok", few: "kroki", many: "kroków"))", counts: true)
         }
-        .font(.system(size: 14, weight: .semibold))
+        .font(.sc(size: 14, weight: .semibold))
         .foregroundStyle(Color.scMuted(scheme))
         // Wąski ekran: rząd maleje, zamiast ucinać słowa.
         .lineLimit(1)
@@ -98,7 +98,7 @@ struct CookWelcomeContent: View {
     private func metaItem(icon: String, text: String, counts: Bool) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
             if counts {
                 SCCountingText(text, loadAnimation: .easeOut(duration: 0.9).delay(0.2))
             } else {
@@ -168,10 +168,10 @@ struct CookWelcomeFooter: View {
                 drawerIcon(kind)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(drawerTitle(kind))
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.sc(size: 14, weight: .bold))
                         .foregroundStyle(Color.scLabel(scheme))
                     Text(summary)
-                        .font(.system(size: 12))
+                        .font(.sc(size: 12))
                         .foregroundStyle(Color.scMuted(scheme))
                         // Porcje w podpisie Składników rolują.
                         .contentTransition(.numericText())
@@ -217,7 +217,7 @@ struct CookWelcomeFooter: View {
     private func drawerIcon(_ kind: CookWelcomeDrawer) -> some View {
         let accent = kind == .ingredients ? SCPalette.terracotta : SCPalette.butter
         return Image(systemName: kind == .ingredients ? "basket" : "lightbulb")
-            .font(.system(size: 14, weight: .semibold))
+            .font(.sc(size: 14, weight: .semibold))
             .foregroundStyle(accent)
             .frame(width: 32, height: 32)
             .background(Circle().fill(accent.opacity(scheme == .dark ? 0.16 : 0.12)))
@@ -229,11 +229,11 @@ struct CookWelcomeFooter: View {
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Gotujesz \(CookPortionsText.accusative(session.portions))")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.sc(size: 16, weight: .bold))
                     .foregroundStyle(Color.scLabel(scheme))
                     .contentTransition(.numericText(value: session.portions))
                 Text(servingsCaption)
-                    .font(.system(size: 13))
+                    .font(.sc(size: 13))
                     .foregroundStyle(Color.scMuted(scheme))
                     .contentTransition(.numericText())
             }
@@ -291,7 +291,7 @@ struct CookPortionStepper: View {
         HStack(spacing: 0) {
             stepButton("minus", enabled: canDecrement, label: "Mniej porcji") { onChange(value - CookSession.portionStep) }
             Text(CookPortionsText.number(value))
-                .font(.system(size: 16, weight: .heavy))
+                .font(.sc(size: 16, weight: .heavy))
                 .monospacedDigit()
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(minWidth: 34)
@@ -316,7 +316,7 @@ struct CookPortionStepper: View {
     private func stepButton(_ systemName: String, enabled: Bool, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 13, weight: .bold))
+                .font(.sc(size: 13, weight: .bold))
                 .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 40, height: 36)
                 .contentShape(Rectangle())
@@ -360,14 +360,14 @@ struct CookPrimaryButton: View {
             HStack(spacing: 8) {
                 if let leadingIcon {
                     Image(systemName: leadingIcon)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.sc(size: 16, weight: .bold))
                 }
                 Text(title)
                     .cookText(style)
                     .lineLimit(1)
                 if let trailingIcon {
                     Image(systemName: trailingIcon)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.sc(size: 16, weight: .bold))
                 }
             }
             .foregroundStyle(accent)
@@ -430,10 +430,10 @@ struct CookWelcomeDrawerSheet: View {
                         ForEach(Array(session.scenario.tips.enumerated()), id: \.offset) { offset, tip in
                             HStack(alignment: .firstTextBaseline, spacing: 10) {
                                 Image(systemName: "lightbulb")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.sc(size: 14, weight: .semibold))
                                     .foregroundStyle(SCPalette.butter)
                                 Text(tip)
-                                    .font(.system(size: 16))
+                                    .font(.sc(size: 16))
                                     .lineSpacing(4)
                                     .foregroundStyle(SCCook.Palette.body(scheme))
                                     .fixedSize(horizontal: false, vertical: true)
@@ -463,11 +463,11 @@ struct CookWelcomeDrawerSheet: View {
     private func ingredientRow(_ line: CookIngredientLine) -> some View {
         HStack(spacing: 12) {
             Text(line.name)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.sc(size: 16, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(line.amountText)
-                .font(.system(size: 16, weight: .bold))
+                .font(.sc(size: 16, weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(Color.scLabel(scheme))
         }

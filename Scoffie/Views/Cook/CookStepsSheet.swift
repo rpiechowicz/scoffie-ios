@@ -38,7 +38,7 @@ struct CookStepsSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     SCStepProgress(step: session.stepIndex + 1, total: session.stepCount)
                     Text(summary)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.sc(size: 12, weight: .semibold))
                         .foregroundStyle(SCCook.Palette.caption(scheme))
                 }
             }
@@ -165,11 +165,11 @@ private struct CookStepListRow: View {
             if let section {
                 HStack(spacing: 8) {
                     Text(section.title)
-                        .font(.system(size: 10.5, weight: .bold))
+                        .font(.sc(size: 10.5, weight: .bold))
                         .tracking(1.4)
                         .foregroundStyle(SCPalette.sage)
                     Text("\(section.count)")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.sc(size: 11, weight: .bold))
                         .monospacedDigit()
                         .foregroundStyle(SCCook.Palette.caption(scheme))
                 }
@@ -229,18 +229,18 @@ private struct CookStepListRow: View {
         switch phase {
         case .done:
             Text(step.title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.sc(size: 15, weight: .semibold))
                 .foregroundStyle(SCCook.Palette.caption(scheme))
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .current:
             VStack(alignment: .leading, spacing: 8) {
                 Text(step.title)
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.sc(size: 18, weight: .bold))
                     .foregroundStyle(Color.scLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                 Text(session.package.body(for: step, portions: session.portions))
-                    .font(.system(size: 15))
+                    .font(.sc(size: 15))
                     .lineSpacing(3)
                     .foregroundStyle(SCCook.Palette.body(scheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -251,11 +251,11 @@ private struct CookStepListRow: View {
         case .upcoming:
             VStack(alignment: .leading, spacing: 6) {
                 Text(step.title)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.sc(size: 16, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                 Text(session.package.body(for: step, portions: session.portions))
-                    .font(.system(size: 14))
+                    .font(.sc(size: 14))
                     .lineSpacing(2)
                     .foregroundStyle(SCCook.Palette.caption(scheme))
                     .lineLimit(2)
@@ -296,7 +296,7 @@ private struct CookStepListRow: View {
         switch phase {
         case .done:
             Image(systemName: "checkmark")
-                .font(.system(size: 12, weight: .heavy))
+                .font(.sc(size: 12, weight: .heavy))
                 .foregroundStyle(SCPalette.sage)
                 .frame(width: badge, height: badge)
                 .background(Circle().fill(SCPalette.sage.opacity(scheme == .dark ? 0.2 : 0.14)))

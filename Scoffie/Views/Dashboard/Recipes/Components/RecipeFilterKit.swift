@@ -1,6 +1,7 @@
 import SwiftUI
 
-// Klocki arkusza „Filtry”, filtrów kategorii i arkuszy wykluczania składników.
+// Klocki arkusza „Filtry”, jego podstron (wykluczanie składników, „Więcej
+// filtrów”) i filtrów wyboru przepisu do planu.
 // Źródło: Claude Design, projekt 43b605d0-…, „Scoffie - Przepisy v3 -
 // Filtry.html” → `components/filtry-final.jsx` (+ `rf-kit.jsx`, `rf2-kit.jsx`),
 // dalej przerobione po uwagach Rafała (23.09.2026): wykres kalorii bez
@@ -28,7 +29,7 @@ struct RecipeFilterSection<Trailing: View, Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title.uppercased())
-                    .font(.system(size: 10.5, weight: .bold))
+                    .font(.sc(size: 10.5, weight: .bold))
                     .tracking(1.4)
                     .foregroundStyle(Color.scFaint(scheme))
                     .lineLimit(1)
@@ -36,7 +37,7 @@ struct RecipeFilterSection<Trailing: View, Content: View>: View {
                 Spacer(minLength: 8)
 
                 trailing()
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.sc(size: 13, weight: .medium))
                     .tracking(-0.1)
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
@@ -58,7 +59,7 @@ extension RecipeFilterSection where Trailing == EmptyView {
 
 // MARK: - Nagłówek arkusza filtrów
 
-/// Nagłówek „Filtrów” i filtrów kategorii: wspólny nagłówek arkusza
+/// Nagłówek arkusza „Filtry”: wspólny nagłówek arkusza
 /// (`EditorialSheetHeader` z kafelkiem w tincie akcentu i zdaniem o zasięgu)
 /// i „Wyczyść” obok krzyżyka.
 ///
@@ -79,8 +80,8 @@ struct RecipeFilterHeader: View {
     let onClear: () -> Void
     /// „Dopasowane do Ciebie” jako sama ikona obok krzyżyka (Rafał 4.10.2026:
     /// „ten button dałbym gdzieś indziej, może sama ikona obok X”): różdżka,
-    /// włączona = szkło w tincie szałwii. `nil` = bez przełącznika (filtry
-    /// kategorii, profil bez diety i celu).
+    /// włączona = szkło w tincie szałwii. `nil` = bez przełącznika (profil
+    /// bez diety i celu).
     var fitIsOn: Bool? = nil
     var onToggleFit: () -> Void = {}
     let onClose: () -> Void
@@ -153,17 +154,17 @@ struct RecipeFilterMenuTile<Value: Hashable>: View {
                     .frame(width: 30, height: 30)
                     .overlay(
                         Image(systemName: icon)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.sc(size: 13, weight: .semibold))
                             .foregroundStyle(isActive ? SCPalette.terracotta : Color.scMuted(scheme))
                     )
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title.uppercased())
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.sc(size: 10, weight: .bold))
                         .tracking(1)
                         .foregroundStyle(Color.scFaint(scheme))
                     Text(currentTitle)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .tracking(-0.3)
                         .foregroundStyle(isActive ? SCPalette.terracotta : Color.scLabel(scheme))
                         .lineLimit(1)
@@ -173,7 +174,7 @@ struct RecipeFilterMenuTile<Value: Hashable>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 10.5, weight: .bold))
+                    .font(.sc(size: 10.5, weight: .bold))
                     .foregroundStyle(Color.scFaint(scheme))
             }
             .padding(.horizontal, 12)
@@ -296,9 +297,80 @@ struct RecipeFilterCoverThumb: View {
         ZStack {
             accent.opacity(scheme == .dark ? 0.16 : 0.12)
             Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.sc(size: 18, weight: .semibold))
                 .foregroundStyle(accent)
         }
+    }
+}
+
+/// Jeden aspekt kategorii (rodzaj dania, smak, mięso…) jako sekcja kafelków
+/// z liczbą „ile zostanie” — sekcja kategorii w „Filtrach” i filtry wyboru
+/// przepisu do planu. Wybór i liczby podaje wołający, więc ta sama sekcja
+/// pisze do `RecipeFilterOptions.categoryFilters` albo do własnego filtra
+/// wyboru do planu. W obrębie aspektu opcje łączą się przez LUB — przy
+/// dwóch zaznaczonych etykieta mówi to, zanim ktoś zdziwi się, że liczba
+/// urosła.
+struct RecipeFacetTilesSection: View {
+    let facet: RecipeFacet
+    /// Etykieta sekcji — „Obiady · Rodzaj dania” albo sam aspekt.
+    let title: String
+    var top: CGFloat = 24
+    let accent: Color
+    /// Glif kafelka bez zdjęcia.
+    let icon: String
+    let isOn: (String) -> Bool
+    let count: (String) -> Int
+    let cover: (String) -> Recipe?
+    let onToggle: (String) -> Void
+
+    var body: some View {
+        let picked = facet.options.filter { isOn($0.id) }.count
+
+        RecipeFilterSection(title: title, top: top) {
+            if picked > 1 {
+                Text("dowolna z zaznaczonych")
+                    .transition(.opacity)
+            }
+        } content: {
+            RecipeFilterTileGrid(items: facet.options) { option in
+                RecipeFilterOptionTile(
+                    title: option.title,
+                    count: count(option.id),
+                    mark: isOn(option.id) ? .on : .off,
+                    accent: accent,
+                    cover: cover(option.id),
+                    icon: icon
+                ) {
+                    withAnimation(.smooth(duration: 0.18)) { onToggle(option.id) }
+                }
+            }
+        }
+        .animation(.smooth(duration: 0.2), value: picked > 1)
+    }
+}
+
+/// Jeden pasek pod liczbą w stopce filtrów — ile z puli zostaje (zakres
+/// jednej kategorii, ulubione, wybór do planu). Bez zakresu stopka „Filtrów”
+/// pokazuje cztery paski kategorii.
+struct RecipeFilterProgressBar: View {
+    let count: Int
+    let total: Int
+    var accent: Color = SCPalette.terracotta
+
+    var body: some View {
+        GeometryReader { proxy in
+            Capsule(style: .continuous)
+                .fill(accent.opacity(0.2))
+                .overlay(alignment: .leading) {
+                    Capsule(style: .continuous)
+                        .fill(accent)
+                        .frame(width: total == 0 || count == 0
+                               ? 0
+                               : max(5, proxy.size.width * CGFloat(min(count, total)) / CGFloat(total)))
+                }
+        }
+        .frame(height: 5)
+        .animation(.smooth(duration: 0.3), value: count)
     }
 }
 
@@ -506,16 +578,16 @@ struct RecipeFilterKcalChart: View {
                         // Wartość czyta VoiceOver z wykresu — tu byłaby drugi raz.
                         Group {
                             Text("do")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.sc(size: 13, weight: .medium))
                                 .foregroundStyle(Color.scMuted(scheme))
                             Text(verbatim: "\(value)")
-                                .font(.system(size: 26, weight: .heavy))
+                                .font(.sc(size: 26, weight: .heavy))
                                 .tracking(-0.6)
                                 .monospacedDigit()
                                 .foregroundStyle(Color.scLabel(scheme))
                                 .contentTransition(.numericText(value: Double(value)))
                             Text("kcal")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.sc(size: 13, weight: .medium))
                                 .foregroundStyle(Color.scMuted(scheme))
                         }
                         .accessibilityHidden(true)
@@ -528,7 +600,7 @@ struct RecipeFilterKcalChart: View {
                     .transition(.opacity)
                 } else {
                     Text("Bez limitu")
-                        .font(.system(size: 22, weight: .heavy))
+                        .font(.sc(size: 22, weight: .heavy))
                         .tracking(-0.5)
                         .foregroundStyle(Color.scLabel(scheme))
                         .accessibilityHidden(true)
@@ -553,7 +625,7 @@ struct RecipeFilterKcalChart: View {
             set(nil)
         } label: {
             Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.sc(size: 17, weight: .semibold))
                 .foregroundStyle(Color.scFaint(scheme))
                 .frame(width: 30, height: 30)
                 .contentShape(Circle())
@@ -568,9 +640,9 @@ struct RecipeFilterKcalChart: View {
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: "scope")
-                    .font(.system(size: 11.5, weight: .bold))
+                    .font(.sc(size: 11.5, weight: .bold))
                 Text("Do celu")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .tracking(-0.1)
             }
             .foregroundStyle(SCPalette.sage)
@@ -805,7 +877,7 @@ struct RecipeFilterKcalChart: View {
         ZStack(alignment: .topLeading) {
             ForEach(axisMarks(width: width)) { mark in
                 Text(verbatim: mark.text)
-                    .font(.system(size: 11, weight: mark.isGoal ? .semibold : .regular))
+                    .font(.sc(size: 11, weight: mark.isGoal ? .semibold : .regular))
                     .monospacedDigit()
                     .foregroundStyle(mark.isGoal ? SCPalette.sage : Color.scFaint(scheme))
                     .fixedSize()
@@ -863,54 +935,25 @@ struct RecipeFilterKcalChart: View {
 
 // MARK: - Akcje stopki i nagłówka
 
-/// Akcja w stopce obok liczników — wariant „soft” zwężony do treści.
-/// Pełną szerokość w stopce bierze `EditorialPrimaryActionButton`.
+/// Akcja w stopce obok liczników — wariant „soft” zwężony do treści
+/// („Gotowe” w Filtrach i na ich podstronach). Pełną szerokość w stopce
+/// bierze `EditorialPrimaryActionButton`. Wariant z samą lupą („Pokaż”)
+/// zniknął z filtrami na żywo (6.10.2026).
 struct RecipeFilterFooterButton: View {
     let title: String
     var trailingIcon: String? = "chevron.right"
-    /// Sam glif w szklanym krążku 44 pt, słowo tylko dla VoiceOver — „Pokaż”
-    /// w filtrach (Rafał 4.10.2026: „button dalej na sheet filtrów daj samą
-    /// ikonę”).
-    var iconOnly: Bool = false
-    var isEnabled: Bool = true
     let action: () -> Void
 
     var body: some View {
-        if iconOnly {
-            iconButton
-        } else {
-            labeledButton
-        }
-    }
-
-    private var iconButton: some View {
-        Button(action: action) {
-            Image(systemName: trailingIcon ?? "arrow.right")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(SCPalette.terracotta)
-                // 44 pt (było 50 — Rafał 4.10.2026: „nieproporcjonalnie
-                // większy od reszty”): wysokość przycisków stopek obok.
-                .frame(width: 44, height: 44)
-                .scSoftSurface(Circle())
-                .contentShape(Circle())
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.94))
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.45)
-        .animation(.smooth(duration: 0.18), value: isEnabled)
-        .accessibilityLabel(title)
-    }
-
-    private var labeledButton: some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 15.5, weight: .semibold))
+                    .font(.sc(size: 15.5, weight: .semibold))
                     .tracking(-0.3)
                     .lineLimit(1)
                 if let trailingIcon {
                     Image(systemName: trailingIcon)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.sc(size: 12, weight: .bold))
                 }
             }
             .foregroundStyle(SCPalette.terracotta)
@@ -920,9 +963,6 @@ struct RecipeFilterFooterButton: View {
             .contentShape(Capsule(style: .continuous))
         }
         .buttonStyle(PlanPressStyle(scale: 0.96))
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.45)
-        .animation(.smooth(duration: 0.18), value: isEnabled)
     }
 }
 
@@ -940,7 +980,7 @@ struct RecipeFilterClearButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "arrow.counterclockwise")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.sc(size: 14, weight: .semibold))
                 .foregroundStyle(SCPalette.terracotta)
                 // Rozmiar krzyżyka obok (`SCSheetIconLabel.size`).
                 .frame(width: SCSheetIconLabel.size, height: SCSheetIconLabel.size)
@@ -977,17 +1017,17 @@ struct RecipeFilterExclusionChip: View {
         HStack(spacing: small ? 4 : 6) {
             if locked {
                 Image(systemName: "lock.fill")
-                    .font(.system(size: small ? 8.5 : 9.5, weight: .bold))
+                    .font(.sc(size: small ? 8.5 : 9.5, weight: .bold))
                     .foregroundStyle(tint)
             }
             Text(title)
-                .font(.system(size: small ? 12.5 : 13, weight: .semibold))
+                .font(.sc(size: small ? 12.5 : 13, weight: .semibold))
                 .tracking(-0.2)
                 .foregroundStyle(Color.scLabel(scheme))
                 .lineLimit(1)
             if !locked && !small {
                 Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .heavy))
+                    .font(.sc(size: 8, weight: .heavy))
                     .foregroundStyle(tint)
             }
         }
@@ -1010,7 +1050,7 @@ struct RecipeFilterMoreChip: View {
 
     var body: some View {
         Text(label)
-            .font(.system(size: small ? 12.5 : 13, weight: .semibold))
+            .font(.sc(size: small ? 12.5 : 13, weight: .semibold))
             .monospacedDigit()
             .foregroundStyle(Color.scMuted(scheme))
             .padding(.horizontal, small ? 8 : 11)
@@ -1031,10 +1071,10 @@ struct RecipeFilterCountBadge: View {
         HStack(spacing: 3) {
             if locked {
                 Image(systemName: "lock.fill")
-                    .font(.system(size: 8.5, weight: .bold))
+                    .font(.sc(size: 8.5, weight: .bold))
             }
             Text(verbatim: "\(count)")
-                .font(.system(size: 12, weight: .heavy))
+                .font(.sc(size: 12, weight: .heavy))
                 .monospacedDigit()
                 .contentTransition(.numericText(value: Double(count)))
         }
@@ -1161,12 +1201,12 @@ struct RecipeExclusionPill: View {
             HStack(spacing: 6) {
                 if isExcluded {
                     Image(systemName: "nosign")
-                        .font(.system(size: compact ? 11 : 12, weight: .bold))
+                        .font(.sc(size: compact ? 11 : 12, weight: .bold))
                         .transition(.scale(scale: 0.5).combined(with: .opacity))
                 }
 
                 titleText
-                    .font(.system(size: compact ? 13.5 : 14.5, weight: isExcluded ? .semibold : .medium))
+                    .font(.sc(size: compact ? 13.5 : 14.5, weight: isExcluded ? .semibold : .medium))
                     .tracking(-0.2)
                     .lineLimit(1)
 
@@ -1177,7 +1217,7 @@ struct RecipeExclusionPill: View {
 
                 if let disclosure {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.sc(size: 10, weight: .bold))
                         .foregroundStyle(isExcluded ? SCPalette.terracotta.opacity(0.8) : Color.scFaint(scheme))
                         .rotationEffect(.degrees(disclosure == .expanded ? 180 : 0))
                         .padding(.trailing, -2)
@@ -1338,9 +1378,9 @@ struct RecipeExclusionDepartmentLabel: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: ProductConstants.departmentIcon(for: department))
-                .font(.system(size: 11, weight: .bold))
+                .font(.sc(size: 11, weight: .bold))
             Text(department.uppercased())
-                .font(.system(size: 10.5, weight: .bold))
+                .font(.sc(size: 10.5, weight: .bold))
                 .tracking(1.2)
                 .lineLimit(1)
         }

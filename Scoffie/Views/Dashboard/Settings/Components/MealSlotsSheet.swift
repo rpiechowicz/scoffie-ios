@@ -96,7 +96,7 @@ struct MealSlotsSheet: View {
                         saveStatus
 
                         Text("Wyłączony posiłek znika z planu, ale zaplanowane dania w nim zostają.")
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.sc(size: 12, weight: .regular))
                             .foregroundStyle(Color.scFaint(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 6)
@@ -148,12 +148,12 @@ struct MealSlotsSheet: View {
             Text("Dzień w planie ma teraz ")
                 .foregroundStyle(Color.scMuted(scheme))
             + Text("\(count) \(Self.mealsPlural(count))")
-                .font(.system(size: 13.5, weight: .semibold))
+                .font(.sc(size: 13.5, weight: .semibold))
                 .foregroundStyle(Color.scLabel(scheme))
             + Text(". Śniadanie, obiad i kolację jecie zawsze — resztę dokładacie tutaj.")
                 .foregroundStyle(Color.scMuted(scheme))
         )
-        .font(.system(size: 13.5, weight: .regular))
+        .font(.sc(size: 13.5, weight: .regular))
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 6)
@@ -176,13 +176,13 @@ struct MealSlotsSheet: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(MealSlot.core.map(\.title).joined(separator: " · "))
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.sc(size: 13.5, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
 
                 Text("Zawsze w planie — na nich stoi lista zakupów.")
-                    .font(.system(size: 11.5, weight: .regular))
+                    .font(.sc(size: 11.5, weight: .regular))
                     .foregroundStyle(Color.scFaint(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -219,12 +219,12 @@ struct MealSlotsSheet: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(slot.title)
-                        .font(.system(size: 17, weight: .heavy))
+                        .font(.sc(size: 17, weight: .heavy))
                         .tracking(-0.3)
                         .foregroundStyle(isEnabled ? Color.scLabel(scheme) : Color.scMuted(scheme))
 
                     Text(slot.settingsSubtitle)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.sc(size: 12, weight: .regular))
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -233,7 +233,7 @@ struct MealSlotsSheet: View {
                     // wyłączony slot, w którym zostało jedzenie.
                     if !isEnabled, planned > 0 {
                         Text("W tym tygodniu stoją tu \(planned) \(Self.mealsPlural(planned))")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.sc(size: 11, weight: .medium))
                             .foregroundStyle(Color.scFaint(scheme))
                     }
                 }
@@ -305,7 +305,7 @@ struct MealSlotsSheet: View {
                 Button("Przywróć domyślne godziny") {
                     saveTimes(.default)
                 }
-                .font(.system(size: 12, weight: .semibold))
+                .font(.sc(size: 12, weight: .semibold))
                 .foregroundStyle(SCPalette.terracotta)
                 .padding(.horizontal, 6)
             }
@@ -331,13 +331,13 @@ struct MealSlotsSheet: View {
     private var introCard: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "person.2.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(SCPalette.sage)
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(SCPalette.sage.opacity(scheme == .dark ? 0.18 : 0.12)))
 
             Text("Lista posiłków jest wspólna dla całego gospodarstwa — plan tygodnia i lista zakupów są jedne dla wszystkich domowników.")
-                .font(.system(size: 13, weight: .regular))
+                .font(.sc(size: 13, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)

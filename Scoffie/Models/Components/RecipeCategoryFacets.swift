@@ -1,8 +1,9 @@
 import Foundation
 
-// Filtry „tylko w tej kategorii” — arkusz otwierany przyciskiem obok
-// krzyżyka w liście kategorii (Śniadania, Obiady, …). Każda kategoria ma
-// swoje aspekty: śniadanie wybiera się po smaku i rodzaju dania, obiad po
+// Filtry „tylko w tej kategorii” — sekcja kategorii w arkuszu „Filtry” na
+// Przepisach (ekran kategorii albo jej zakładka w wynikach) i filtry wyboru
+// przepisu do planu (`RecipePlanFilterPage`). Każda kategoria ma swoje
+// aspekty: śniadanie wybiera się po smaku i rodzaju dania, obiad po
 // rodzaju dania i mięsie, przekąskę po smaku, rodzaju i porze.
 //
 // Rodzaj dania, kuchnia, okazje i pory roku przychodzą od katalogu 1000
@@ -35,11 +36,6 @@ enum RecipeFacetKind: String, Hashable, CaseIterable {
     var hidesEmptyOptions: Bool { self == .cuisine || self == .moment }
 }
 
-/// Półarkusz aspektu w filtrach kategorii (`sheet(item:)`).
-extension RecipeFacetKind: Identifiable {
-    var id: String { rawValue }
-}
-
 struct RecipeFacetOption: Identifiable, Hashable {
     let id: String
     let title: String
@@ -55,7 +51,7 @@ struct RecipeFacet: Identifiable {
 
 // MARK: - Wybór w jednej kategorii
 
-/// Zaznaczone opcje w arkuszu filtrów kategorii. W obrębie aspektu opcje
+/// Zaznaczone opcje aspektów jednej kategorii. W obrębie aspektu opcje
 /// łączą się przez LUB („zupy albo makarony”), między aspektami — przez I
 /// („zupy z drobiem”). Tak działa każdy sklep z filtrami i tego oczekuje
 /// ręka: druga zaznaczona opcja w tym samym rzędzie POSZERZA wynik.
@@ -64,7 +60,8 @@ struct RecipeCategoryFilter: Equatable {
 
     var isActive: Bool { picks.values.contains { !$0.isEmpty } }
 
-    /// Liczba zaznaczonych opcji — plakietka na przycisku filtrów kategorii.
+    /// Liczba zaznaczonych opcji — plakietka na strzałce sekcji Przepisów
+    /// i na przycisku filtrów wyboru do planu.
     var activeCount: Int { picks.values.reduce(0) { $0 + $1.count } }
 
     func contains(_ option: String, in kind: RecipeFacetKind) -> Bool {

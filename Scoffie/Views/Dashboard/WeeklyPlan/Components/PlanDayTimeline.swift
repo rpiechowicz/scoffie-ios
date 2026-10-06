@@ -395,7 +395,7 @@ struct PlanTimelineRow: View {
         Button { pagerGate.ifNotSwiping(onAddVariant) } label: {
             HStack(spacing: 6) {
                 Image(systemName: "person.badge.plus")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.sc(size: 12, weight: .bold))
 
                 Text("Osobne danie dla kogoś")
                     .scFont(13, weight: .semibold, relativeTo: .footnote)
@@ -605,7 +605,7 @@ struct PlanTimelineDish: View {
             PlanDiagonalHatch(color: .white.opacity(0.07))
 
             Image(systemName: slot.icon)
-                .font(.system(size: isAlternative ? 20 : 24, weight: .light))
+                .font(.sc(size: isAlternative ? 20 : 24, weight: .light))
                 .foregroundStyle(.white.opacity(0.85))
         }
     }
@@ -744,7 +744,7 @@ struct PlanTimelineEmptyRow: View {
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         return HStack(alignment: .center, spacing: 12) {
             Image(systemName: slot.icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.sc(size: 14, weight: .semibold))
                 .foregroundStyle(slot.cozyAccent.opacity(isEditable ? 1 : 0.6))
                 .frame(width: 35, height: 35)
                 .background(Circle().fill(slot.cozyAccent.opacity(scheme == .dark ? 0.16 : 0.12)))
@@ -761,7 +761,7 @@ struct PlanTimelineEmptyRow: View {
 
             if isEditable {
                 Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .foregroundStyle(slot.cozyAccent)
                     .frame(width: 35, height: 35)
                     .scChromeGlass(in: Circle(), tint: slot.cozyAccent.opacity(scheme == .dark ? 0.3 : 0.22))
@@ -842,7 +842,7 @@ struct PlanTimelineAddRow: View {
         HStack(alignment: .center, spacing: 12) {
             // Płaski tint, nie szkło — patrz opis typu.
             Image(systemName: "plus")
-                .font(.system(size: 14, weight: .bold))
+                .font(.sc(size: 14, weight: .bold))
                 .foregroundStyle(SCPalette.terracotta)
                 .frame(width: 30, height: 30)
                 .background(

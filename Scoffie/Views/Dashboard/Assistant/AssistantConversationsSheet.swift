@@ -80,10 +80,10 @@ struct AssistantConversationsSheet: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.sc(size: 16, weight: .semibold))
                 .foregroundStyle(AssistantLook.faint(scheme))
             TextField("Szukaj w rozmowach", text: $query)
-                .font(.system(size: 16))
+                .font(.sc(size: 16))
                 .tracking(-0.2)
                 .foregroundStyle(AssistantLook.ink(scheme))
                 .focused($isSearchFocused)
@@ -94,7 +94,7 @@ struct AssistantConversationsSheet: View {
                     query = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
+                        .font(.sc(size: 15))
                         .foregroundStyle(AssistantLook.faint(scheme))
                 }
                 .buttonStyle(.plain)
@@ -191,7 +191,7 @@ struct AssistantConversationsSheet: View {
                     VStack(alignment: .trailing, spacing: 6) {
                         if let stamp = Self.stamp(conversation) {
                             Text(stamp)
-                                .font(.system(size: 12.5))
+                                .font(.sc(size: 12.5))
                                 .monospacedDigit()
                                 .foregroundStyle(AssistantLook.faint(scheme))
                         }
@@ -228,12 +228,12 @@ struct AssistantConversationsSheet: View {
                 .accessibilityHidden(true)
 
             Text("Nie ma jeszcze żadnej rozmowy")
-                .font(.system(size: 17, weight: .bold))
+                .font(.sc(size: 17, weight: .bold))
                 .tracking(-0.3)
                 .foregroundStyle(AssistantLook.ink(scheme))
 
             Text("Zapytaj asystenta o plan tygodnia — rozmowa zapisze się tutaj i będzie można do niej wrócić.")
-                .font(.system(size: 14))
+                .font(.sc(size: 14))
                 .lineSpacing(4)
                 .foregroundStyle(AssistantLook.muted(scheme))
                 .multilineTextAlignment(.center)
@@ -248,10 +248,10 @@ struct AssistantConversationsSheet: View {
     private var noResults: some View {
         VStack(spacing: 6) {
             Text("Nic nie pasuje do „\(query)”")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.sc(size: 15, weight: .semibold))
                 .foregroundStyle(AssistantLook.ink(scheme))
             Text("Szukam w tytułach i ostatnich wiadomościach.")
-                .font(.system(size: 13))
+                .font(.sc(size: 13))
                 .foregroundStyle(AssistantLook.muted(scheme))
         }
         .frame(maxWidth: .infinity)

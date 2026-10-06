@@ -54,6 +54,35 @@ private struct PreviewCanvas<Content: View>: View {
     }
 }
 
+#Preview("Przegląd propozycji — tydzień, dwie osoby") {
+    AssistantProposalReviewSheet(
+        review: ProposalReview(week: AssistantPreviewFixtures.planWeek, image: { _ in nil }),
+        status: .pending,
+        applyTitle: "Dodaj do planu",
+        isBusy: false,
+        members: AssistantPreviewFixtures.members,
+        me: "u1",
+        onSwap: { _ in },
+        onApply: {},
+        onRegenerate: {},
+        onCompose: {}
+    )
+}
+
+#Preview("Przegląd propozycji — dzień, zapisany") {
+    AssistantProposalReviewSheet(
+        review: ProposalReview(day: AssistantPreviewFixtures.planDay, image: { _ in nil }),
+        status: .applied,
+        applyTitle: nil,
+        isBusy: false,
+        members: [],
+        me: nil,
+        onApply: {},
+        onOpenPlan: {},
+        onCompose: {}
+    )
+}
+
 #Preview("OPTIONS + CLARIFY") {
     PreviewCanvas {
         AssistantOptionsCard(card: AssistantPreviewFixtures.options, onAsk: { _ in })

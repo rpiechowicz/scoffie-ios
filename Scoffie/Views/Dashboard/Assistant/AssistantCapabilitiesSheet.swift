@@ -82,7 +82,7 @@ struct AssistantCapabilitiesSheet: View {
                     ZStack {
                         Circle().fill(AssistantLook.terraTint(scheme))
                         Image(systemName: "arrow.up")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.sc(size: 14, weight: .bold))
                             .foregroundStyle(AssistantLook.terra(scheme))
                     }
                     .frame(width: 30, height: 30)

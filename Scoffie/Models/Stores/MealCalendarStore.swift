@@ -87,6 +87,14 @@ class MealCalendarStore {
         plan(for: date).meals(for: slot)
     }
 
+    /// Czy tydzień był w tej sesji pobierany z serwera (albo właśnie się
+    /// pobiera). Sąsiedni tydzień bywa pusty tylko dlatego, że nikt go
+    /// jeszcze nie wczytał — szybkie „Jutro · Obiad” w niedzielę nie może
+    /// wtedy uznać pory za wolną (`RecipeQuickPlan`).
+    func hasLoadedWeek(_ weekStart: String) -> Bool {
+        weekLoadGeneration[weekStart] != nil
+    }
+
     func allRecipes(for dates: [Date]) -> [Recipe] {
         dates.flatMap { plan(for: $0).allRecipes }
     }

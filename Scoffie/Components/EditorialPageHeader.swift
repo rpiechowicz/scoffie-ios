@@ -52,7 +52,7 @@ struct EditorialPageHeader<Trailing: View>: View {
 
     private func titleText(size: CGFloat, allowsScaling: Bool = false) -> some View {
         Text(title)
-            .font(.system(size: size, weight: .heavy))
+            .font(.sc(size: size, weight: .heavy))
             .tracking(-0.5)
             .foregroundStyle(Color.scLabel(scheme))
             .lineLimit(1)

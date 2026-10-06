@@ -19,7 +19,7 @@ struct Headers: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 34, weight: .bold, design: .default))
+                        .font(.sc(size: 34, weight: .bold, design: .default))
                     
                     Text(subtitle)
                         .font(.subheadline)

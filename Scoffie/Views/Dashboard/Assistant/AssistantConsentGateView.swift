@@ -201,7 +201,7 @@ struct AssistantConsentGateView: View {
         // (sekcja 6, link niżej) — na ekranie asystent występuje
         // jako Scoffie, bez nazw modeli i firm trzecich.
         Text("Asystent to program — może się mylić i nie zastępuje dietetyka ani lekarza. Zgodę cofniesz w każdej chwili w menu asystenta.")
-            .font(.system(size: 12.5))
+            .font(.sc(size: 12.5))
             .lineSpacing(3)
             .foregroundStyle(AssistantLook.faint(scheme))
             .fixedSize(horizontal: false, vertical: true)
@@ -213,9 +213,9 @@ struct AssistantConsentGateView: View {
         } label: {
             HStack(spacing: 5) {
                 Text("Polityka prywatności, sekcja 6")
-                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
+                Image(systemName: "chevron.right").font(.sc(size: 10, weight: .bold))
             }
-            .font(.system(size: 13.5, weight: .semibold))
+            .font(.sc(size: 13.5, weight: .semibold))
             .foregroundStyle(AssistantLook.terra(scheme))
         }
         .buttonStyle(.plain)
@@ -230,14 +230,14 @@ struct AssistantConsentGateView: View {
     private var underageNotice: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "person.crop.circle.badge.exclamationmark")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.sc(size: 16, weight: .semibold))
                 .foregroundStyle(SCPalette.terracotta)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Asystent jest dostępny od 16 lat")
-                    .font(.system(size: 14.5, weight: .semibold))
+                    .font(.sc(size: 14.5, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
                 Text("Według roku urodzenia w Twoim profilu to jeszcze nie ten wiek. Jeśli rok jest błędny, popraw go w Ustawieniach → Profil i wróć tutaj.")
-                    .font(.system(size: 12.5))
+                    .font(.sc(size: 12.5))
                     .lineSpacing(2)
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -259,7 +259,7 @@ struct AssistantConsentGateView: View {
         let done = isGranted ? 2 : (currentDraft.confirmsAge ? 1 : 0) + (currentDraft.confirmsData ? 1 : 0)
         let complete = done == 2
         return Text(isGranted ? "Zapisane" : "\(done) z 2")
-            .font(.system(size: 12, weight: complete ? .bold : .semibold))
+            .font(.sc(size: 12, weight: complete ? .bold : .semibold))
             .monospacedDigit()
             .foregroundStyle(complete ? AssistantLook.sage(scheme) : AssistantLook.faint(scheme))
             .contentTransition(.numericText(value: Double(done)))
@@ -274,10 +274,10 @@ struct AssistantConsentGateView: View {
             SCHeaderIconWell(icon: "checkmark.shield.fill", accent: SCPalette.sage, size: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Zgoda włączona")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.sc(size: 15, weight: .bold))
                     .foregroundStyle(AssistantLook.sage(scheme))
                 Text("Wersja \(LegalDocMeta.version) z \(LegalDocMeta.effectiveDate)")
-                    .font(.system(size: 12.5))
+                    .font(.sc(size: 12.5))
                     .foregroundStyle(AssistantLook.muted(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -296,7 +296,7 @@ struct AssistantConsentGateView: View {
         AssistantGroup {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Co wysyłamy do modelu")
-                    .font(.system(size: 10.5, weight: .bold))
+                    .font(.sc(size: 10.5, weight: .bold))
                     .tracking(1.4)
                     .textCase(.uppercase)
                     .foregroundStyle(AssistantLook.sage(scheme))
@@ -308,7 +308,7 @@ struct AssistantConsentGateView: View {
                                 .frame(width: 6, height: 6)
                                 .padding(.top, 7)
                             Text(item)
-                                .font(.system(size: 14.5))
+                                .font(.sc(size: 14.5))
                                 .tracking(-0.2)
                                 .lineSpacing(2)
                                 .foregroundStyle(AssistantLook.ink(scheme))
@@ -323,12 +323,12 @@ struct AssistantConsentGateView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text("Czego nie wysyłamy")
-                    .font(.system(size: 10.5, weight: .bold))
+                    .font(.sc(size: 10.5, weight: .bold))
                     .tracking(1.4)
                     .textCase(.uppercase)
                     .foregroundStyle(AssistantLook.faint(scheme))
                 Text(Self.notSentItems.joined(separator: " · "))
-                    .font(.system(size: 13.5))
+                    .font(.sc(size: 13.5))
                     .lineSpacing(3)
                     .foregroundStyle(AssistantLook.muted(scheme))
                     .fixedSize(horizontal: false, vertical: true)

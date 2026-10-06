@@ -132,7 +132,7 @@ struct PlanAudienceChips: View {
                 avatar
 
                 Text(title)
-                    .font(.system(size: 13, weight: isOn ? .bold : .semibold))
+                    .font(.sc(size: 13, weight: isOn ? .bold : .semibold))
                     .foregroundStyle(isOn ? Color.scLabel(scheme) : Color.scMuted(scheme))
                     .lineLimit(1)
             }
@@ -149,7 +149,7 @@ struct PlanAudienceChips: View {
 
     private var houseGlyph: some View {
         Image(systemName: "house.fill")
-            .font(.system(size: 10, weight: .bold))
+            .font(.sc(size: 10, weight: .bold))
             .foregroundStyle(.white)
             .frame(width: 20, height: 20)
             .background(
@@ -226,7 +226,7 @@ private struct PlanAudienceChipsPreviewHost: View {
                 PlanAudienceChips(members: members, selection: $selection)
 
                 Text("Jedzących: \(PlanAudienceChips.eaterCount(selection, memberCount: members.count))")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.sc(size: 12, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(Color.scMuted(scheme))
             }

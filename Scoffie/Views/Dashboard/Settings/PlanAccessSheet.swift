@@ -14,8 +14,10 @@ import SwiftUI
 /// jedna sprawa i jedno miejsce, a nie dwa ekrany z tymi samymi liczbami.
 ///
 /// Odpowiada na „co mam?": stan, pula i jeden wiersz wejścia do planów.
-/// Wybór planu ma własny arkusz (`PlansSheet`), który wjeżdża NA ten —
-/// karuzela chowała dwa z trzech planów i kazała porównywać ceny kawałkami.
+/// Wybór planu (`PlansSheet`) wjeżdża jako kolejny ekran TEGO arkusza (push
+/// z systemowym „wstecz”), tak samo regulamin i polityka — bez arkuszy na
+/// arkuszu. Karuzela chowała dwa z trzech planów i kazała porównywać ceny
+/// kawałkami.
 ///
 /// Cztery stany, ta sama kolejność w każdym (plakietka → zużycie → reszta),
 /// żeby powrót na ekran nie wymagał ponownego czytania:
@@ -36,7 +38,7 @@ struct PlanAccessSheet: View {
     /// niczego nie kupi. Normalnie używamy tego z `SessionStore`, bo tylko on
     /// żyje wystarczająco długo, żeby złapać odnowienie subskrypcji.
     @State private var fallbackSubscriptions = SubscriptionStore()
-    /// „Wybierz plan" — arkusz wyboru NA tym arkuszu, nie zamiast niego.
+    /// „Wybierz plan" — ekran wyboru wepchnięty w stos tego arkusza.
     @State private var showsPlans = false
     @State private var showTerms = false
     @State private var showPrivacy = false
@@ -71,19 +73,21 @@ struct PlanAccessSheet: View {
                     .animation(.smooth(duration: 0.3), value: usage)
             }
             .toolbar(.hidden, for: .navigationBar)
+            // Plany i dokumenty to kolejne ekrany TEGO arkusza (push), nie
+            // arkusze na arkuszu. Wewnątrz stosu, na jego pierwszym ekranie.
+            .navigationDestination(isPresented: $showsPlans) {
+                PlansSheet(isPushed: true, onPurchased: {
+                    Task { usage = await sessionStore.agentStore?.loadUsage() }
+                })
+            }
+            .navigationDestination(isPresented: $showTerms) {
+                LegalDocumentPage(title: "Regulamin") { TermsOfServiceContent() }
+            }
+            .navigationDestination(isPresented: $showPrivacy) {
+                LegalDocumentPage(title: "Polityka prywatności") { PrivacyPolicyContent() }
+            }
         }
         .presentationDragIndicator(.visible)
-        .sheet(isPresented: $showsPlans) {
-            PlansSheet(onPurchased: {
-                Task { usage = await sessionStore.agentStore?.loadUsage() }
-            })
-        }
-        .sheet(isPresented: $showTerms) {
-            LegalDocumentSheet(title: "Regulamin") { TermsOfServiceContent() }
-        }
-        .sheet(isPresented: $showPrivacy) {
-            LegalDocumentSheet(title: "Polityka prywatności", icon: "hand.raised.fill", accent: SCPalette.indigo) { PrivacyPolicyContent() }
-        }
         .onChange(of: subscriptions.state) { _, _ in
             // TRANSAKCJA POTRAFI DOJŚĆ, GDY ARKUSZ JEST OTWARTY: odnowienie,
             // zatwierdzone „Poproś o zakup", zgłoszenie ponowione po powrocie
@@ -112,7 +116,7 @@ struct PlanAccessSheet: View {
                         // Próba to NIE plan — mówimy to wprost, obok
                         // plakietki, i że się nie odnawia.
                         Text("bez planu, jednorazowo")
-                            .font(.system(size: 14))
+                            .font(.sc(size: 14))
                             .foregroundStyle(AssistantLook.muted(scheme))
                             .lineLimit(1)
                     }
@@ -135,7 +139,7 @@ struct PlanAccessSheet: View {
                 .padding(.top, 64)
         } else {
             Text("Nie udało się pobrać stanu planu. Spróbuj ponownie za chwilę.")
-                .font(.system(size: 14))
+                .font(.sc(size: 14))
                 .foregroundStyle(Color.scMuted(scheme))
                 .padding(.top, 24)
         }
@@ -195,10 +199,10 @@ struct PlanAccessSheet: View {
 
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "info.circle")
-                    .font(.system(size: 15, weight: .regular))
+                    .font(.sc(size: 15, weight: .regular))
                     .foregroundStyle(AssistantLook.faint(scheme))
                 Text("Liczy się każda wysłana wiadomość i każde „Dodaj do planu”. Oglądanie propozycji jest darmowe.")
-                    .font(.system(size: 13.5))
+                    .font(.sc(size: 13.5))
                     .lineSpacing(3)
                     .foregroundStyle(AssistantLook.muted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -215,7 +219,7 @@ struct PlanAccessSheet: View {
         // Zdanie o SKUTKU, nie o sprzedaży: zdejmuje lęk („stracę plany?"),
         // zamiast go budować.
         Text("Kiedy pula się skończy, rozmowy i zapisane plany zostają w aplikacji. Nowe wiadomości wracają z planem.")
-            .font(.system(size: 14))
+            .font(.sc(size: 14))
             .lineSpacing(4)
             .foregroundStyle(AssistantLook.muted(scheme))
             .fixedSize(horizontal: false, vertical: true)
@@ -240,11 +244,11 @@ struct PlanAccessSheet: View {
             )
             VStack(spacing: 2) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.sc(size: 14, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(AssistantLook.ink(scheme))
                 Text("\(quota.used) z \(quota.limit) użyte")
-                    .font(.system(size: 12.5))
+                    .font(.sc(size: 12.5))
                     .monospacedDigit()
                     .foregroundStyle(AssistantLook.faint(scheme))
             }
@@ -307,7 +311,7 @@ struct PlanAccessSheet: View {
         VStack(spacing: 10) {
             if let notice {
                 Text(notice)
-                    .font(.system(size: 12.5))
+                    .font(.sc(size: 12.5))
                     .lineSpacing(2)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Color.scMuted(scheme))
@@ -352,7 +356,7 @@ struct PlanAccessSheet: View {
         // o nich dopiero wtedy, gdy asystent przestaje odpowiadać.
         if let line = subscriptionStatusLine {
             Text(line)
-                .font(.system(size: 12.5))
+                .font(.sc(size: 12.5))
                 .lineSpacing(2)
                 .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -369,15 +373,15 @@ struct PlanAccessSheet: View {
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Zarządzaj subskrypcją")
-                            .font(.system(size: 15.5, weight: .semibold))
+                            .font(.sc(size: 15.5, weight: .semibold))
                             .foregroundStyle(SCPalette.terracotta)
                         Text("Otworzy się w Ustawieniach iOS")
-                            .font(.system(size: 12.5))
+                            .font(.sc(size: 12.5))
                             .foregroundStyle(Color.scFaint(scheme))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     Image(systemName: "arrow.up.right")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.sc(size: 12, weight: .bold))
                         .foregroundStyle(Color.scFaint(scheme))
                 }
                 .padding(.horizontal, 16)
@@ -459,10 +463,10 @@ struct PlanAccessSheet: View {
                 payerAvatar(usage.payerName ?? "?")
                 VStack(alignment: .leading, spacing: 2) {
                     Text(usage.payerName ?? "Ktoś z domu")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .foregroundStyle(Color.scLabel(scheme))
                     Text(payerSubtitle(usage))
-                        .font(.system(size: 12.5))
+                        .font(.sc(size: 12.5))
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
                 }
@@ -474,7 +478,7 @@ struct PlanAccessSheet: View {
             // Najważniejsze zdanie na tym ekranie dla domownika: NIE musisz
             // nic kupować. Bez niego widok wygląda jak zapowiedź opłaty.
             Text("Pula jest wspólna — masz do niej pełny dostęp i nie musisz nic dokupować.")
-                .font(.system(size: 13.5))
+                .font(.sc(size: 13.5))
                 .lineSpacing(3)
                 .foregroundStyle(Color.scMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -507,7 +511,7 @@ struct PlanAccessSheet: View {
                     .fill(Color.scSageTint(scheme))
                     .overlay(
                         Text(String(name.prefix(1)).uppercased())
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.sc(size: 15, weight: .bold))
                             .foregroundStyle(SCPalette.sage)
                     )
                     .frame(width: 38, height: 38)
@@ -523,11 +527,11 @@ struct PlanAccessSheet: View {
 
         HStack(alignment: .top, spacing: 11) {
             Image(systemName: "person.2.fill")
-                .font(.system(size: 14))
+                .font(.sc(size: 14))
                 .foregroundStyle(SCPalette.indigo)
                 .padding(.top, 1)
             Text("Dostęp do asystenta jest nadany przez Scoffie. Nic nie płacisz w aplikacji.")
-                .font(.system(size: 13.5))
+                .font(.sc(size: 13.5))
                 .lineSpacing(3)
                 .foregroundStyle(Color.scLabel(scheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -572,7 +576,7 @@ struct PlanAccessSheet: View {
         }
 
         Text("Pula odnawia się \(usage.resetsAt.map(Self.resetLabel) ?? "przy kolejnej opłacie").")
-            .font(.system(size: 13))
+            .font(.sc(size: 13))
             .foregroundStyle(Color.scFaint(scheme))
             .padding(.horizontal, 4)
             .padding(.top, 11)
@@ -591,7 +595,7 @@ struct PlanBadge: View {
 
     var body: some View {
         Text(label)
-            .font(.system(size: 12, weight: .bold))
+            .font(.sc(size: 12, weight: .bold))
             .tracking(0.3)
             .foregroundStyle(color)
             .padding(.horizontal, 10)
@@ -613,7 +617,7 @@ struct PlanSectionLabel: View {
 
     var body: some View {
         Text(text.uppercased())
-            .font(.system(size: 10.5, weight: .bold))
+            .font(.sc(size: 10.5, weight: .bold))
             .tracking(1.4)
             .foregroundStyle(Color.scFaint(scheme))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -662,7 +666,7 @@ struct PlanLegalLinks: View {
             .disabled(isRestoring)
         }
         .buttonStyle(.plain)
-        .font(.system(size: 13.5, weight: .semibold))
+        .font(.sc(size: 13.5, weight: .semibold))
         .foregroundStyle(AssistantLook.terra(scheme))
         .frame(maxWidth: .infinity)
         .frame(minHeight: 28)
@@ -703,11 +707,11 @@ struct PlanRing: View {
                 .rotationEffect(.degrees(-90))
             VStack(spacing: 1) {
                 CountingNumber(target: remaining)
-                    .font(.system(size: size > 88 ? 26 : 24, weight: .bold))
+                    .font(.sc(size: size > 88 ? 26 : 24, weight: .bold))
                     .tracking(-0.6)
                     .foregroundStyle(AssistantLook.ink(scheme))
                 Text("ZOSTAŁO")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.sc(size: 10, weight: .bold))
                     .tracking(0.6)
                     .foregroundStyle(AssistantLook.faint(scheme))
             }
@@ -738,17 +742,17 @@ struct PlanUsageCard: View {
                 PlanRing(remaining: quota.remaining, limit: quota.limit, color: color)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(eyebrow.uppercased())
-                        .font(.system(size: 10.5, weight: .bold))
+                        .font(.sc(size: 10.5, weight: .bold))
                         .tracking(1.1)
                         .foregroundStyle(color)
                     Text("\(quota.used) z \(quota.limit) w tym okresie")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.sc(size: 16, weight: .bold))
                         .tracking(-0.35)
                         .monospacedDigit()
                         .foregroundStyle(Color.scLabel(scheme))
                     if let detail {
                         Text(detail)
-                            .font(.system(size: 12.5))
+                            .font(.sc(size: 12.5))
                             .lineSpacing(2)
                             .foregroundStyle(Color.scMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
@@ -793,13 +797,13 @@ struct PlanMemberBar: View {
                     .fill(color.opacity(0.15))
                     .overlay(
                         Text(String(member.displayName.prefix(1)).uppercased())
-                            .font(.system(size: 10.5, weight: .bold))
+                            .font(.sc(size: 10.5, weight: .bold))
                             .foregroundStyle(color)
                     )
                     .frame(width: 20, height: 20)
             }
             Text(HouseholdMemberStyle.shortName(member.displayName))
-                .font(.system(size: 12.5))
+                .font(.sc(size: 12.5))
                 .foregroundStyle(Color.scLabel(scheme))
                 .frame(width: 58, alignment: .leading)
                 .lineLimit(1)
@@ -813,7 +817,7 @@ struct PlanMemberBar: View {
             }
             .frame(height: 4)
             Text("\(member.messages)")
-                .font(.system(size: 12.5, weight: .semibold))
+                .font(.sc(size: 12.5, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(Color.scMuted(scheme))
                 .frame(width: 22, alignment: .trailing)

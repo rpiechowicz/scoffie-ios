@@ -236,16 +236,16 @@ struct CookExitSheet: View {
         return Button(action: action) {
             VStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.sc(size: 20, weight: .bold))
                     .foregroundStyle(tint)
                     .frame(width: SCCook.Size.exitTileIcon, height: SCCook.Size.exitTileIcon)
                     .background(Circle().fill(tint.opacity(0.16)))
                 VStack(spacing: 2) {
                     Text(title)
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.sc(size: 17, weight: .bold))
                         .foregroundStyle(Color.scLabel(scheme))
                     Text(caption)
-                        .font(.system(size: 13))
+                        .font(.sc(size: 13))
                         .foregroundStyle(Color.scMuted(scheme))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)

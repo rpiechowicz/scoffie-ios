@@ -22,11 +22,11 @@ struct AuthActionsView: View {
                             .controlSize(.small)
                     } else {
                         Image(systemName: "apple.logo")
-                            .font(.system(size: 18, weight: .medium))
+                            .font(.sc(size: 18, weight: .medium))
                     }
 
                     Text(isLoading ? "Logowanie…" : "Zaloguj się przez Apple")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.sc(size: 17, weight: .semibold))
                 }
                 .foregroundStyle(fgColor)
                 .frame(maxWidth: .infinity)

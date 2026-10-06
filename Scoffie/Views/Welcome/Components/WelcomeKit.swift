@@ -95,10 +95,10 @@ struct WelcomeOptionRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.sc(size: 15, weight: .semibold))
                         .foregroundStyle(Color.scLabel(colorScheme))
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.sc(size: 12))
                         .foregroundStyle(Color.scMuted(colorScheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }

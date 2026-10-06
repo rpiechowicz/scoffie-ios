@@ -123,11 +123,6 @@ enum PlanChangeNotificationService {
     private static var pendingBatches: [String: (count: Int, lastEventAt: Date)] = [:]
     private static let pendingBatchesLock = NSLock()
 
-    static func requestAuthorizationIfNeeded() {
-        let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
-    }
-
     /// Zmiana planu zrobiona przez innego domownika.
     ///
     /// Nie rysuje nic, gdy backend wysyła pushe — inaczej ta sama informacja

@@ -84,6 +84,13 @@ enum AssistantPreviewFixtures {
         return card
     }
 
+    /// Dom dwóch osób — `u1` je w wzorcu tygodnia sałatkę sam, więc przegląd
+    /// propozycji pokazuje przy niej „dla kogo” i filtr osób.
+    static let members: [HouseholdMemberSnapshot] = [
+        HouseholdMemberSnapshot(id: "u1", displayName: "Rafał", email: nil, avatarUrl: nil, avatarColor: 0, role: "OWNER"),
+        HouseholdMemberSnapshot(id: "u2", displayName: "Ania", email: nil, avatarUrl: nil, avatarColor: 3, role: "MEMBER"),
+    ]
+
     // MARK: - Briefingi
 
     /// Dzień briefingu z podanymi porami; `filled` = które mają danie.

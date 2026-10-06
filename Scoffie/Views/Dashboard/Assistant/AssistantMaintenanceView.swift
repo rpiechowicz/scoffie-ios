@@ -48,14 +48,14 @@ struct AssistantMaintenanceView: View {
                 .modifier(MaintenanceStep(revealed: revealed, delay: 0, reduceMotion: reduceMotion))
 
             Text("PRACE SERWISOWE")
-                .font(.system(size: 10.5, weight: .bold))
+                .font(.sc(size: 10.5, weight: .bold))
                 .tracking(1.4)
                 .foregroundStyle(AssistantLook.terra(scheme))
                 .padding(.top, 18)
                 .modifier(MaintenanceStep(revealed: revealed, delay: 0.06, reduceMotion: reduceMotion))
 
             Text("Asystent jest na małym remoncie")
-                .font(.system(size: 28, weight: .semibold))
+                .font(.sc(size: 28, weight: .semibold))
                 .tracking(-0.5)
                 .lineSpacing(2)
                 .foregroundStyle(AssistantLook.ink(scheme))
@@ -65,7 +65,7 @@ struct AssistantMaintenanceView: View {
                 .modifier(MaintenanceStep(revealed: revealed, delay: 0.1, reduceMotion: reduceMotion))
 
             Text("Dokręcamy kilka śrubek, żeby podpowiadał jeszcze trafniej. Wróci niedługo.")
-                .font(.system(size: 17))
+                .font(.sc(size: 17))
                 .tracking(-0.3)
                 .lineSpacing(3)
                 .foregroundStyle(AssistantLook.muted(scheme))
@@ -83,7 +83,7 @@ struct AssistantMaintenanceView: View {
                 .modifier(MaintenanceStep(revealed: revealed, delay: 0.32, reduceMotion: reduceMotion))
 
             Text("Jeszcze nie wrócił — zajrzyj za kilka minut.")
-                .font(.system(size: 13.5))
+                .font(.sc(size: 13.5))
                 .foregroundStyle(AssistantLook.faint(scheme))
                 .padding(.top, 10)
                 .padding(.leading, 4)
@@ -112,7 +112,7 @@ struct AssistantMaintenanceView: View {
         .frame(width: 34, height: 34, alignment: .topLeading)
         .overlay(alignment: .bottomTrailing) {
             Image(systemName: "wrench.and.screwdriver.fill")
-                .font(.system(size: 10.5, weight: .bold))
+                .font(.sc(size: 10.5, weight: .bold))
                 .foregroundStyle(AssistantLook.terra(scheme))
                 .symbolEffect(
                     .wiggle,
@@ -133,10 +133,10 @@ struct AssistantMaintenanceView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.sc(size: 13, weight: .semibold))
                     .foregroundStyle(AssistantLook.sage(scheme))
                 Text("Działa jak zawsze")
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.sc(size: 13.5, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(AssistantLook.muted(scheme))
             }
@@ -145,12 +145,12 @@ struct AssistantMaintenanceView: View {
                 ForEach(working) { item in
                     VStack(spacing: 8) {
                         Image(systemName: item.icon)
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.sc(size: 16, weight: .semibold))
                             .foregroundStyle(item.accent)
                             .frame(width: 38, height: 38)
                             .background(Circle().fill(item.accent.opacity(scheme == .dark ? 0.16 : 0.12)))
                         Text(item.title)
-                            .font(.system(size: 13.5, weight: .semibold))
+                            .font(.sc(size: 13.5, weight: .semibold))
                             .tracking(-0.2)
                             .foregroundStyle(AssistantLook.ink(scheme))
                             .lineLimit(1)
@@ -199,10 +199,10 @@ struct AssistantMaintenanceView: View {
                         .controlSize(.small)
                 } else {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.sc(size: 15, weight: .bold))
                 }
                 Text("Sprawdź ponownie")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.sc(size: 17, weight: .semibold))
                     .tracking(-0.3)
                     .lineLimit(1)
             }

@@ -118,7 +118,7 @@ struct SCStepHeader: View {
 
             if let eyebrow {
                 Text(eyebrow.uppercased())
-                    .font(.system(size: 10.5, weight: .bold))
+                    .font(.sc(size: 10.5, weight: .bold))
                     .tracking(1.4)
                     .foregroundStyle(accent)
                     .lineLimit(1)
@@ -126,7 +126,7 @@ struct SCStepHeader: View {
             }
 
             titleText
-                .font(.system(size: 28, weight: .heavy))
+                .font(.sc(size: 28, weight: .heavy))
                 .tracking(-0.5)
                 .foregroundStyle(Color.scLabel(scheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -134,7 +134,7 @@ struct SCStepHeader: View {
 
             if let subtitle {
                 subtitleText(subtitle)
-                    .font(.system(size: 15))
+                    .font(.sc(size: 15))
                     .lineSpacing(2)
                     .foregroundStyle(Color.scMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -219,12 +219,12 @@ struct SCStepFeatureCard: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(feature.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.sc(size: 15, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                 if let subtitle = feature.subtitle {
                     Text(subtitle)
-                        .font(.system(size: 12.5))
+                        .font(.sc(size: 12.5))
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -364,7 +364,7 @@ struct SCStepFooter: View {
                         onBack?()
                     } label: {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.sc(size: 15, weight: .bold))
                             .foregroundStyle(Color.scMuted(scheme))
                             .frame(width: primaryHeight, height: primaryHeight)
                             .scChromeGlass(in: Circle())
@@ -445,7 +445,7 @@ struct SCStepFooter: View {
                 onSlotTap?()
             } label: {
                 Text(title)
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.sc(size: 13.5, weight: .semibold))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -466,7 +466,7 @@ struct SCStepFooter: View {
         switch slot {
         case let .progress(step, total):
             Text("\(step)/\(total)")
-                .font(.system(size: 12.5, weight: .semibold))
+                .font(.sc(size: 12.5, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(Color.scFaint(scheme))
                 .contentTransition(.numericText(value: Double(step)))

@@ -32,8 +32,6 @@ struct WeeklyPlanView: View {
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.scTabBarChrome) private var tabBarChrome
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Dzień planowany w tej zakładce. Własny stan Planu — Kalendarz ma swój,
     /// wspólny zostaje tylko tydzień.
@@ -412,10 +410,12 @@ struct WeeklyPlanView: View {
             // Różnica jest w tym, co się dzieje z osią dnia pod spodem:
             // `overlay` zostawiał ostatni wiersz („Dodaj posiłek") POD szkłem,
             // gdzie było go widać, ale nie dało się w niego stuknąć.
-            // `safeAreaInset` doksięgowuje wysokość pigułki do wnętrza
+            // `safeAreaBar` doksięgowuje wysokość pigułki do wnętrza
             // `ScrollView`, więc treść nadal przelatuje pod szkłem przy
-            // przewijaniu, ale kończy się nad nim.
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            // przewijaniu, ale kończy się nad nim — a pod pigułką leży natywny
+            // efekt krawędzi przewijania. Nad systemowym paskiem zakładek
+            // stawia ją sam bezpieczny obszar.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
                 PlanDayGoalBar(
                     nutrition: selectedDayNutrition,
                     targets: dailyTargets(for: nutritionPersonId),
@@ -427,30 +427,14 @@ struct WeeklyPlanView: View {
                     }
                 )
                 .frame(width: goalBarWidth)
-                // Zwija się RAZEM z dolnym menu: ten sam moment, ten sam ruch
-                // (`SCFloatingTabBar.compaction`). Opada o tyle, o ile opada
-                // górna krawędź paska, więc odstęp między nimi zostaje, i lekko
-                // maleje od dołu — jak pasek, który zszedł z drogi treści.
-                // Przesunięcie i skala nie ruszają układu, więc treść nad
-                // pigułką nie skacze.
-                .scaleEffect(tabBarChrome.isCompact ? 0.92 : 1, anchor: .bottom)
-                .offset(y: tabBarChrome.isCompact ? SCFloatingTabBar.compactionDrop : 0)
-                .animation(SCFloatingTabBar.compaction(reduceMotion: reduceMotion), value: tabBarChrome.isCompact)
                 .padding(.bottom, 8)
                 // Pierwsza klatka nie zna jeszcze szerokości zakładki, a
                 // pigułka o zerowej szerokości mignęłaby jako kreska.
                 .opacity(goalBarWidth > 0 ? 1 : 0)
-                // Oś dnia chowa się pod pigułką i dolnym menu jak w Telegramie:
-                // rozmyty pas od 28 pt nad pigułką do krawędzi ekranu, także
-                // pod menu (to on gasi treść pod paskiem na tej zakładce —
-                // `NavigationMenu.ownBottomEdge`).
-                .frame(maxWidth: .infinity)
-                .background(alignment: .top) {
-                    SCScrollEdgeBlur(edge: .bottom, solidFraction: 0.6)
-                        .padding(.top, -28)
-                        .ignoresSafeArea(.container, edges: .bottom)
-                }
             }
+            // Miękki, jawnie — `.automatic` z Xcode Cloud wychodził jako
+            // `.hard` (kreska i kryjące tło, patrz `scSheetFooterEdge`).
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
             // Wymiary obszaru zakładki: wysokość idzie na sufit arkusza
             // „Cel dnia", szerokość na szerokość pigułki. Mierzone spod spodu,
             // żeby pomiar nie ruszał układu.
@@ -463,9 +447,6 @@ struct WeeklyPlanView: View {
                         }
                 }
             }
-            // Miejsce pod własnym paskiem zakładek — musi być WEWNĄTRZ
-            // `NavigationStack`, patrz `scReservesTabBarSpace`.
-            .scReservesTabBarSpace()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -558,10 +539,30 @@ struct WeeklyPlanView: View {
             }
             // Skrót z karty asystenta: przełączenie zakładki to za mało,
             // bo lista zakupów jest arkuszem wewnątrz tego ekranu.
+            //
+            // Arkusz rusza chwilę PO przełączeniu: systemowy `TabView` buduje
+            // Plan przy pierwszym wyborze, a arkusz pokazany w tej samej
+            // aktualizacji co wstawienie zakładki do okna potrafi przepaść
+            // („not in the window hierarchy”).
             .onChange(of: sessionStore.opensShoppingList, initial: true) { _, wants in
                 guard wants else { return }
-                simpleSheet = .products
                 sessionStore.opensShoppingList = false
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    simpleSheet = .products
+                }
+            }
+            // „Zaplanuj” na pustej porze w „Dziś”: planowanie ma jedno miejsce,
+            // więc tamta zakładka tylko tu prowadzi — ten dzień w Planie i od
+            // razu wybór przepisu na tę porę, jak stuknięcie pustej pory na osi.
+            // Z tego samego powodu co lista zakupów — chwilę po przełączeniu.
+            .onChange(of: sessionStore.planSlotRequest, initial: true) { _, request in
+                guard let request else { return }
+                sessionStore.planSlotRequest = nil
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    openPlanRequest(request)
+                }
             }
             .sheet(item: $pickerTarget) { target in
                 PlanSlotPickerSheet(
@@ -787,6 +788,25 @@ struct WeeklyPlanView: View {
     }
 
     // MARK: - Actions
+
+    /// Prośba z zakładki „Dziś” (`PlanSlotRequest`): tydzień i dzień z prośby,
+    /// a gdy dzień da się jeszcze planować — wybór przepisu na tę porę.
+    ///
+    /// Tydzień i dzień idą RAZEM do `datesViewModel` i do stanu ekranu: obie
+    /// obserwacje wyżej (`isActiveTab`, `weekStartISO`) czytają dzień
+    /// z modelu, więc w jakiejkolwiek kolejności SwiftUI je odpali, zostaje
+    /// dzień z prośby.
+    private func openPlanRequest(_ request: PlanSlotRequest) {
+        datesViewModel.show(day: request.date)
+        selectedDate = request.date
+        guard let slot = request.slot, datesViewModel.isEditable(request.date) else { return }
+        pickerTarget = PickerTarget(
+            date: request.date,
+            slot: slot,
+            editing: nil,
+            defaultParticipantIds: request.participantIds
+        )
+    }
 
     private func openDetail(date: Date, slot: MealSlot, meal: PlanMeal) {
         Task { @MainActor in

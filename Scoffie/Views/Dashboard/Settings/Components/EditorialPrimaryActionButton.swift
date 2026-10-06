@@ -29,10 +29,10 @@ struct EditorialPrimaryActionButton: View {
                         .tint(accent)
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: 13, weight: .heavy))
+                        .font(.sc(size: 13, weight: .heavy))
                 }
                 Text(title)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.sc(size: 14, weight: .bold))
                     .tracking(-0.1)
                     // Dwa przyciski w rzędzie dzielą szerokość po połowie,
                     // a „Otwórz Plan” bywa od niej szersze na wąskim

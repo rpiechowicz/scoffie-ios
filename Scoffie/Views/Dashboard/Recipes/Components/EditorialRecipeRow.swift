@@ -43,7 +43,7 @@ struct EditorialRecipeRow: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(recipe.name)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.sc(size: 17, weight: .semibold))
                         .tracking(-0.3)
                         .foregroundStyle(Color.scLabel(scheme))
                         .lineLimit(2)
@@ -51,7 +51,7 @@ struct EditorialRecipeRow: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(metaText)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.sc(size: 12, weight: .medium))
                         .monospacedDigit()
                         .foregroundStyle(Color.scMuted(scheme))
                         .lineLimit(1)
@@ -63,14 +63,14 @@ struct EditorialRecipeRow: View {
                 // rozpychałby stałą wysokość listy.
                 if recipe.isThermomix {
                     Image(systemName: "cooktop.fill")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.sc(size: 13, weight: .semibold))
                         .foregroundStyle(SCPalette.sage)
                         .accessibilityLabel("Przepis na Thermomix")
                 }
 
                 if recipe.favourite {
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.sc(size: 14, weight: .bold))
                         .foregroundStyle(SCPalette.terracotta)
                         .accessibilityHidden(true)
                 }
@@ -78,7 +78,7 @@ struct EditorialRecipeRow: View {
                 switch accessory {
                 case .chevron:
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .heavy))
+                        .font(.sc(size: 12, weight: .heavy))
                         .foregroundStyle(Color.scFaint(scheme))
                         .accessibilityHidden(true)
                 case .selection(let isOn):
@@ -163,7 +163,7 @@ struct EditorialRecipeCover: View {
             )
 
             Image(systemName: RecipesConstants.icon(for: recipe.category))
-                .font(.system(size: max(14, size * 0.42), weight: .semibold))
+                .font(.sc(size: max(14, size * 0.42), weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.92))
         }
     }

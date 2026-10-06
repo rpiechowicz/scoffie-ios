@@ -90,18 +90,18 @@ struct RecipeScopeTabs: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 12.5, weight: .bold))
+                    .font(.sc(size: 12.5, weight: .bold))
                     .foregroundStyle(accent)
 
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.sc(size: 14, weight: .semibold))
                     .tracking(-0.2)
                     .foregroundStyle(isOn ? accent : Color.scLabel(scheme))
                     .lineLimit(1)
 
                 if let count {
                     Text(verbatim: "\(count)")
-                        .font(.system(size: 12.5, weight: .bold))
+                        .font(.sc(size: 12.5, weight: .bold))
                         .monospacedDigit()
                         .foregroundStyle(isOn ? accent : Color.scMuted(scheme))
                         .contentTransition(.numericText(value: Double(count)))

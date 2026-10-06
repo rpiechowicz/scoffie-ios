@@ -1,13 +1,18 @@
 import SwiftUI
 
+// Zakładka „Dziś” (6.10.2026, dawniej „Kalendarz”) — „mój dzień”: to, co JA
+// jem wczoraj, dziś i jutro, czy zjadłem i co ugotować. Plan zostaje „co
+// jemy w domu” (tydzień, cały dom, edycja); stąd do planowania prowadzi
+// tylko „Zaplanuj” na pustej porze. Typ zostaje `CalendarView`, bo tak
+// zakładkę nazywa `DashboardTab.calendar` i dolne menu.
 struct CalendarView: View {
     @Environment(\.mealCalendarStore) private var mealStore
-    @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scTabIsActive) private var isActiveTab
+    @Environment(\.scenePhase) private var scenePhase
 
     // Cel dnia mieszka w Ustawieniach → „Dieta i alergeny" i w profilu; tu
     // czytamy go tymi samymi kluczami, co Plan tygodnia, bo tylko
@@ -54,9 +59,16 @@ struct CalendarView: View {
     @State private var pageWidth: CGFloat = 0
     @State private var pageHeight: CGFloat = 0
 
-    /// Dzień oglądany w Kalendarzu. Własny stan zakładki — Plan ma swój,
-    /// wspólny zostaje tylko tydzień.
+    /// Dzień oglądany na „Dziś”: wczoraj, dziś albo jutro — dalsze dni to rola
+    /// Planu. Start aplikacji i każda nowa doba stawiają go na dziś
+    /// (`syncToday`). Własny stan zakładki: Plan ma swój dzień i tydzień.
     @State private var selectedDate: Date = Date()
+    /// Doba, którą ekran uważa za „dziś” (`yyyy-MM-dd`). Inny klucz zegara =
+    /// nowa doba: ekran wraca na dziś, a zakres wczoraj · dziś · jutro
+    /// przesuwa się o dzień.
+    @State private var todayKey: String = MealCalendarStore.dateKey(for: Date())
+    /// Doba, dla której tygodnie zakresu są już wczytane (`loadDayWindow`).
+    @State private var loadedWindowKey: String?
 
     /// Danie, które użytkownik sam przełożył na talerz stuknięciem
     /// w sekwencję pod nim. `nil` znaczy „pokaż to, co trzeba” — czyli
@@ -148,15 +160,112 @@ struct CalendarView: View {
         )
     }
 
-    private func dayMeals(on date: Date) -> [PlanMeal] {
-        visibleSlots(on: date).flatMap { myMeals(for: $0, on: date) }
+    // MARK: - Zakres dni
+
+    /// Północ dzisiejszego dnia — z klucza doby, więc zakres i „Dziś”
+    /// w nagłówku przesuwają się dokładnie wtedy, gdy ekran wraca na nowe
+    /// dziś (`syncToday`), a nie klatkę wcześniej czy później.
+    private var today: Date {
+        PlanWeek.date(fromKey: todayKey) ?? PlanWeek.calendar.startOfDay(for: Date())
     }
 
-    /// Posiłki dnia, który pokazuje PRZYPIĘTY nagłówek (oś i licznik).
-    /// Strona dnia rysuje z własnego argumentu — przez chwilę po machnięciu
-    /// pokazuje jeszcze poprzedni dzień, a nagłówek już nowy.
-    private var selectedDayMeals: [PlanMeal] {
-        dayMeals(on: selectedDate)
+    /// Wczoraj · dziś · jutro — północ każdego.
+    private var windowDays: [Date] {
+        (-1...1).compactMap { PlanWeek.calendar.date(byAdding: .day, value: $0, to: today) }
+    }
+
+    /// Zakres pagera i strzałek nagłówka.
+    private var dayRange: ClosedRange<Date> {
+        let days = windowDays
+        return (days.first ?? today)...(days.last ?? today)
+    }
+
+    /// Dzień obok oglądanego — o ile mieści się w zakresie.
+    private func neighbourDay(by days: Int) -> Date? {
+        let calendar = PlanWeek.calendar
+        guard let next = calendar.date(byAdding: .day, value: days, to: selectedDate),
+              dayRange.contains(calendar.startOfDay(for: next))
+        else { return nil }
+        return next
+    }
+
+    /// `weekStart` tygodnia, w którym leży dzień — klucz backendu.
+    private func weekStart(of date: Date) -> String {
+        PlanWeek.dateKey(PlanWeek.monday(of: date))
+    }
+
+    /// Siedem dni tygodnia, w którym leży dzień.
+    private func weekDates(of date: Date) -> [Date] {
+        PlanWeek.dates(from: PlanWeek.monday(of: date))
+    }
+
+    /// Nowa doba — północ minęła przy otwartej aplikacji albo w tle. Ekran
+    /// wraca na dziś: ta zakładka „zawsze otwiera się na dzisiejszym dniu”,
+    /// a wczorajsze „dziś” jest już tylko „Wczoraj”.
+    private func syncToday() {
+        let now = Date()
+        let key = MealCalendarStore.dateKey(for: now)
+        guard key != todayKey else { return }
+        todayKey = key
+        selectedDate = now
+    }
+
+    /// Wczytuje tygodnie, w których leżą wczoraj, dziś i jutro — RAZ na dobę
+    /// (`loadedWindowKey`); przy kolejnym wejściu na zakładkę wystarcza
+    /// nasłuch tygodnia oglądanego dnia.
+    ///
+    /// W poniedziałek „wczoraj” leży w poprzednim tygodniu, w niedzielę
+    /// „jutro” w następnym — a socket słucha jednego tygodnia (ostatnio
+    /// wczytanego). Sąsiedni tydzień idzie więc PIERWSZY, oglądany OSTATNI:
+    /// odczyt przejmuje nasłuch, więc słuchać ma ten, na który patrzymy.
+    /// Przejście na sąsiedni tydzień palcem przenosi nasłuch
+    /// (`onChange(of: weekStart(of: selectedDate))`), a dane już są.
+    private func loadDayWindow() async {
+        let window = todayKey
+        guard loadedWindowKey != window else {
+            mealStore.observeWeek(weekStart: weekStart(of: selectedDate), dates: weekDates(of: selectedDate))
+            return
+        }
+        loadedWindowKey = window
+
+        let watched = weekStart(of: selectedDate)
+        var mondays: [Date] = []
+        for day in windowDays {
+            let monday = PlanWeek.monday(of: day)
+            if PlanWeek.dateKey(monday) != watched,
+               !mondays.contains(where: { PlanWeek.dateKey($0) == PlanWeek.dateKey(monday) }) {
+                mondays.append(monday)
+            }
+        }
+        for monday in mondays {
+            await mealStore.loadWeekPlanFromBackend(
+                weekStart: PlanWeek.dateKey(monday),
+                dates: PlanWeek.dates(from: monday)
+            )
+        }
+        // Użytkownik zdążył przejść na inną zakładkę — jej tydzień już słucha
+        // zmian i nie wolno mu go zabrać. Zakres dociągnie się przy powrocie.
+        guard sessionStore.dashboardTab == .calendar else {
+            loadedWindowKey = nil
+            return
+        }
+        await mealStore.loadWeekPlanFromBackend(
+            weekStart: weekStart(of: selectedDate),
+            dates: weekDates(of: selectedDate)
+        )
+        // Zdjęcia trzech dni do pamięci podręcznej ZANIM ktoś przejdzie na
+        // sąsiedni dzień. Z pamięci podręcznej talerz dostaje zdjęcie w tej
+        // samej klatce, w której wjeżdża; bez tego pierwsze wejście w dzień
+        // pokazywało gradient pory, a zdjęcie wskakiwało w środku przejścia.
+        ImagePrefetcher.prefetch(
+            windowDays
+                .flatMap { date in MealSlot.allCases.flatMap { mealStore.meals(for: date, slot: $0) } }
+                .compactMap { $0.recipe.imageURL }
+        )
+        // Świeży plan = świeży rozkład przypomnień o gotowaniu. Hook cyklu
+        // życia (`.background`) też go przelicza, ale dopiero przy wyjściu
+        // z aplikacji — a plan potrafi przyjść zmieniony ręką domownika.
+        sessionStore.rescheduleMealReminders()
     }
 
     /// Ilu domowników dzieli się porcjami, albo `nil`, dopóki `SessionStore`
@@ -169,13 +278,6 @@ struct CalendarView: View {
     private var knownHouseholdMemberCount: Int? {
         guard sessionStore.didLoadHouseholdMembers else { return nil }
         return max(1, sessionStore.householdMembers.count)
-    }
-
-    /// Posiłki faktycznie odhaczone przez zalogowanego użytkownika. To one —
-    /// a nie sam plan — zasilają licznik kalorii i makra: zaplanowany obiad
-    /// nie jest dowodem, że ktokolwiek go zjadł.
-    private var eatenMeals: [PlanMeal] {
-        selectedDayMeals.filter { $0.isEaten(by: sessionStore.currentUserId) }
     }
 
     /// Dzienny cel — ta sama reguła i te same klucze, co w Planie tygodnia.
@@ -290,18 +392,6 @@ struct CalendarView: View {
     /// z `@AppStorage` zostaje `true` u tych, którzy włączyli ją wcześniej.
     private var showsSteps: Bool {
         FeatureFlags.health && stepsEnabled
-    }
-
-    /// Set of "yyyy-MM-dd" keys for visible days that already have ≥1 meal — drives the sage planned-dot.
-    private var plannedDates: Set<String> {
-        var set = Set<String>()
-        for date in datesViewModel.dates {
-            let plan = mealStore.plan(for: date)
-            if !plan.allRecipes.isEmpty {
-                set.insert(plan.dateKey)
-            }
-        }
-        return set
     }
 
     /// One card per planned variant visible to the current user, plus an
@@ -800,6 +890,11 @@ struct CalendarView: View {
                 // godzinową, a odliczanie i tak jest w minutach.
                 TimelineView(.everyMinute) { context in
                     page(now: context.date)
+                        // Północ przy otwartej aplikacji: zegar strony
+                        // przechodzi na nową dobę, a ekran wraca na dziś.
+                        .onChange(of: MealCalendarStore.dateKey(for: context.date)) { _, _ in
+                            syncToday()
+                        }
                 }
             }
             // Pigułka wchodzi bezpiecznym obszarem, a nie `overlay`. Różnica
@@ -841,9 +936,6 @@ struct CalendarView: View {
             // nagłówek ekranu jest przypięty, więc nie ma czego pod niego
             // wsunąć i materiał `.bar` już się nie zapala. Pusty element
             // trzyma pasek przed zwinięciem.
-            // Miejsce pod własnym paskiem zakładek — musi być WEWNĄTRZ
-            // `NavigationStack`, patrz `scReservesTabBarSpace`.
-            .scReservesTabBarSpace()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -851,49 +943,40 @@ struct CalendarView: View {
                 }
             }
             // The empty nav-bar layer would otherwise intercept taps in the
-            // ~44pt zone above the week bar, blocking the day chips. We let
+            // ~44pt zone of the header, blocking its day arrows. We let
             // SwiftUI keep rendering the bar (so the auto-blur still runs),
             // but disable its UIKit hit testing so touches fall through to
             // the scroll content underneath. There are no real toolbar
             // items, so nothing legitimate is lost.
             .background(NavBarHitTestPassthrough())
-            // Powrót na zakładkę: dzień mógł zostać zmieniony na innej.
+            // Wejście na zakładkę: nowa doba wraca na dziś, a zakres dni
+            // dociąga się (raz na dobę) albo przejmuje nasłuch tygodnia.
             // Flaga zamiast `onAppear`, bo zakładki żyją wszystkie naraz.
             .onChange(of: isActiveTab, initial: true) { _, active in
                 guard active else { return }
-                selectedDate = datesViewModel.dayWithinVisibleWeek(selectedDate)
+                syncToday()
+                Task { await loadDayWindow() }
+            }
+            // Powrót z tła po północy — ekran nie może zostać na wczoraj.
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                syncToday()
+            }
+            // Nowa doba przy tej zakładce na ekranie: zakres przesunął się
+            // o dzień, więc i tygodnie do wczytania mogą być inne.
+            .onChange(of: todayKey) { _, _ in
+                guard isActiveTab else { return }
+                Task { await loadDayWindow() }
+            }
+            // Przejście palcem albo strzałką do dnia z sąsiedniego tygodnia
+            // (niedziela → jutro, poniedziałek → wczoraj): socket słucha
+            // jednego tygodnia, więc nasłuch idzie za oglądanym dniem.
+            .onChange(of: weekStart(of: selectedDate)) { _, _ in
+                guard isActiveTab else { return }
                 mealStore.observeWeek(
-                    weekStart: datesViewModel.weekStartISO,
-                    dates: datesViewModel.dates
+                    weekStart: weekStart(of: selectedDate),
+                    dates: weekDates(of: selectedDate)
                 )
-            }
-            .onChange(of: datesViewModel.weekStartISO) { _, _ in
-                selectedDate = datesViewModel.selectedDate
-            }
-            .onChange(of: selectedDate) { _, newValue in
-                datesViewModel.selectDate(newValue)
-            }
-            .task(id: datesViewModel.weekStartISO) {
-                await mealStore.loadWeekPlanFromBackend(
-                    weekStart: datesViewModel.weekStartISO,
-                    dates: datesViewModel.dates
-                )
-                // Zdjęcia całego tygodnia do pamięci podręcznej ZANIM ktoś
-                // machnie na kolejny dzień. Z pamięci podręcznej talerz
-                // dostaje zdjęcie w tej samej klatce, w której wjeżdża;
-                // bez tego pierwsze wejście w dzień pokazywało gradient
-                // pory, a zdjęcie wskakiwało w środku przejścia — chyba że
-                // ktoś odwiedził wcześniej Plan tygodnia, który robi to samo.
-                ImagePrefetcher.prefetch(
-                    datesViewModel.dates
-                        .flatMap { date in MealSlot.allCases.flatMap { mealStore.meals(for: date, slot: $0) } }
-                        .compactMap { $0.recipe.imageURL }
-                )
-                // Świeży plan = świeży rozkład przypomnień o gotowaniu.
-                // Hook cyklu życia (`.background`) też go przelicza, ale
-                // dopiero przy wyjściu z aplikacji — a tydzień potrafi
-                // przyjść z serwera zmieniony ręką domownika.
-                sessionStore.rescheduleMealReminders()
             }
             // Kroki dnia spoza kroczącego okna (przeglądanie przeszłości) —
             // leniwy, czysto lokalny odczyt z HealthKit, bez wysyłki.
@@ -901,10 +984,11 @@ struct CalendarView: View {
                 await sessionStore.healthStepsStore?
                     .refreshIfNeeded(for: selectedDate)
             }
-            // Kalendarz nie planuje — picker zniknął stąd celowo. Dwie drogi
+            // „Dziś” nie planuje — picker zniknął stąd celowo. Dwie drogi
             // dodawania posiłków (Plan i Kalendarz) robiły to samo w dwóch
-            // miejscach i myliły się nawzajem; układanie tygodnia ma teraz
-            // jedno miejsce, a Kalendarz odpowiada na „co jem i czy zjadłem".
+            // miejscach i myliły się nawzajem; układanie tygodnia ma jedno
+            // miejsce, a „Dziś” odpowiada na „co jem i czy zjadłem”. Pusta
+            // pora tylko PROWADZI do Planu („Zaplanuj”, `planSlot`).
             .sheet(item: $simpleSheet) { which in
                 switch which {
                 case .dayGoal:
@@ -987,61 +1071,52 @@ struct CalendarView: View {
 
     // MARK: - Pieces
 
-    /// Cały ekran przy zadanej chwili. Przypięty zostaje pasek dni i nagłówek
-    /// dnia — wszystko, co odpowiada na „gdzie jestem”. Talerz, podpis
-    /// i sekwencja jadą razem z dniem, bo one tym dniem są.
+    /// Cały ekran przy zadanej chwili. Przypięty zostaje nagłówek „Dziś”
+    /// z datą i strzałkami — wszystko, co odpowiada na „gdzie jestem”.
+    /// Talerz, podpis i sekwencja jadą razem z dniem, bo one tym dniem są.
     ///
     /// Łuk doby, który stał tu wcześniej, zszedł z ekranu razem z listą
     /// wierszy pod nim: rysował „gdzie w dobie jestem” kosztem miejsca na
     /// odpowiedź, po którą otwiera się tę zakładkę — „co teraz jem”.
     private func page(now: Date) -> some View {
-        // „Dzisiaj" liczone z zegara strony, nie z `Date()` w trzech
-        // miejscach: plakietka w nagłówku, pierścień „następnego" i odliczanie
-        // pod talerzem muszą mówić o TEJ SAMEJ chwili.
-        let isToday = Calendar.current.isDate(selectedDate, inSameDayAs: now)
-
-        return VStack(alignment: .leading, spacing: 0) {
-            Group {
-                // Kalendarz nie ma tytułu — pasek dni sam mówi, co to za
-                // ekran. Układ ignoruje górny safe area (rozciąga się pod
-                // pasek nawigacji), więc pełne 78 pt idzie tu jako jawny
-                // padding, tak jak tytuł na pozostałych zakładkach.
-                EditorialWeekBar(
-                    datesViewModel: datesViewModel,
-                    selectedDate: $selectedDate,
-                    plannedDates: plannedDates
-                )
-                .padding(.horizontal, SCPageMetrics.horizontal)
-                .padding(.top, SCPageMetrics.top)
-
-                // Nazwa dnia i plakietka z kropkami („4 z 5 zjedzone").
-                // Przypięta razem z paskiem dni, bo odpowiada na to samo
-                // pytanie: który to dzień i ile z niego jest już za mną.
-                CalendarDayHeader(
-                    date: selectedDate,
-                    isToday: isToday,
-                    eaten: eatenMeals.count,
-                    total: selectedDayMeals.count
-                )
-                .padding(.horizontal, SCPageMetrics.horizontal)
-                .padding(.top, 14)
-            }
-            // Przypięty blok rośnie z Dynamic Type, a strona dnia pod nim ma
-            // pismo o stałych rozmiarach i stały budżet wysokości. Przy
-            // rozmiarach dostępności pasek dni i nagłówek zabierały talerzowi
-            // sto punktów i piętra wychodziły pod pigułkę celu — sufit na
-            // największym zwykłym rozmiarze trzyma je w budżecie.
+        VStack(alignment: .leading, spacing: 0) {
+            // Tytuł zakładki jak na pozostałych („Dziś”, przy sąsiednim dniu
+            // „Wczoraj” / „Jutro”), pod nim data słowami, obok strzałki
+            // o jeden dzień. Pasek tygodnia zszedł stąd 6.10.2026: dalsze dni
+            // przegląda się w Planie. Układ ignoruje górny safe area
+            // (rozciąga się pod pasek nawigacji), więc pełne 78 pt idzie tu
+            // jako jawny padding, tak jak tytuł na pozostałych zakładkach.
+            CalendarTodayHeader(
+                date: selectedDate,
+                today: today,
+                canGoBack: neighbourDay(by: -1) != nil,
+                canGoForward: neighbourDay(by: 1) != nil,
+                onStep: { days in
+                    if let next = neighbourDay(by: days) { selectedDate = next }
+                },
+                onToday: { selectedDate = today }
+            )
+            .padding(.horizontal, SCPageMetrics.horizontal)
+            .padding(.top, SCPageMetrics.top)
+            // Przypięty nagłówek rośnie z Dynamic Type, a strona dnia pod nim
+            // ma pismo o stałych rozmiarach i stały budżet wysokości. Przy
+            // rozmiarach dostępności nagłówek zabierałby talerzowi miejsce
+            // i piętra wychodziły pod pigułkę celu — sufit na największym
+            // zwykłym rozmiarze trzyma go w budżecie.
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
 
             DayPager(
-                datesViewModel: datesViewModel,
+                // Bez paska tygodnia: dzień liczy się sam kalendarzem,
+                // a palec nie wyjdzie poza wczoraj · dziś · jutro.
+                datesViewModel: nil,
                 selectedDate: $selectedDate,
+                range: dayRange,
                 // 16, nie 40: pigułka „Cel dnia" wstawia pod treść własny
                 // bezpieczny obszar, więc to już tylko prześwit MIĘDZY
                 // ostatnim piętrem dnia a szkłem.
                 bottomPadding: 16,
-                // Stuknięcie w pasek dni i strzałki tygodnia jadą tak samo
-                // jak machnięcie palcem. Warunek jest jeden: strona MUSI
+                // Strzałki i powrót do dziś w nagłówku jadą tak samo jak
+                // machnięcie palcem. Warunek jest jeden: strona MUSI
                 // rysować dzień z argumentu, bo na czas zjazdu pager
                 // pokazuje jeszcze poprzedni dzień.
                 animatesSelectionChanges: true,
@@ -1283,6 +1358,14 @@ struct CalendarView: View {
         if let focused, focused.cooking != nil {
             startCook = { cook(withCardId: focused.id, on: date) }
         }
+        // „Zaplanuj” — pusta pora (albo pusty dzień: `focused == nil`) dziś
+        // lub jutro prowadzi do Planu. Wczoraj planować się nie da (jak
+        // w Planie), więc tam pusta pora zostaje samą podpowiedzią.
+        var planAction: (() -> Void)?
+        if canPlan(on: date), focused?.isEmptySlot ?? true {
+            let slot = focused?.slot
+            planAction = { planSlot(slot, on: date) }
+        }
 
         return VStack(spacing: fit.gap) {
             CalendarPlateKicker(item: focused)
@@ -1308,7 +1391,8 @@ struct CalendarView: View {
                     canToggle: canToggle,
                     onToggle: { toggleEaten(withCardId: focused?.id, on: date) },
                     onOpenDetail: openDetail,
-                    onCook: startCook
+                    onCook: startCook,
+                    onPlan: planAction
                 )
                 .contentShape(.contextMenuPreview, Circle().inset(by: -CalendarPlate.rimInset(for: size)))
                 .contextMenu { plateActions(for: focused, on: date, canLog: canLog) }
@@ -1331,7 +1415,8 @@ struct CalendarView: View {
                 dayKey: dayKey,
                 titleLines: fit.titleLines,
                 showsChips: fit.showsChips,
-                onOpenDetail: openDetail
+                onOpenDetail: openDetail,
+                onPlan: planAction
             )
             .modifier(turn.effect(travel: 72, lift: 6, shrink: 0.04))
             .layoutPriority(1)
@@ -1437,6 +1522,39 @@ struct CalendarView: View {
 
     // MARK: - Actions
 
+    /// Planować można dziś i do przodu — ta sama granica co w Planie
+    /// (`DatesViewModel.isEditable`); wczoraj zostaje tylko do odhaczania.
+    private func canPlan(on date: Date) -> Bool {
+        let calendar = PlanWeek.calendar
+        return calendar.startOfDay(for: date) >= calendar.startOfDay(for: Date())
+    }
+
+    /// „Zaplanuj” na pustej porze albo pustym dniu.
+    ///
+    /// Planowanie ma JEDNO miejsce — Plan. Ta zakładka tylko tam prowadzi:
+    /// prośba w sklepie sesji (`PlanSlotRequest`), którą Plan odbiera sam
+    /// (ten dzień, wybór przepisu na tę porę), i przełączenie zakładki tą
+    /// samą drogą co skróty Asystenta (`sessionStore.dashboardTab`).
+    ///
+    /// Pora pusta tylko DLA MNIE (ktoś inny ma w niej swoje danie) startuje
+    /// z „dla kogo” = ja: dokładam swoje obok, zamiast dostać propozycję
+    /// zamiany cudzego dania („OBIAD · ANIA MA JUŻ”). Pora pusta dla
+    /// wszystkich — cały dom, jak stuknięcie pustej pory na osi Planu.
+    private func planSlot(_ slot: MealSlot?, on date: Date) {
+        var participants: [String] = []
+        if let slot,
+           let me = sessionStore.currentUserId,
+           !mealStore.meals(for: date, slot: slot).isEmpty {
+            participants = [me]
+        }
+        sessionStore.planSlotRequest = PlanSlotRequest(
+            date: date,
+            slot: slot,
+            participantIds: participants
+        )
+        sessionStore.dashboardTab = .plan
+    }
+
     /// Stuknięcie w pieczątkę w rogu talerza odhacza danie, które na nim
     /// stoi — i ZOSTAWIA je na talerzu.
     ///
@@ -1492,11 +1610,11 @@ struct CalendarView: View {
                 householdMemberCount: knownHouseholdMemberCount,
                 for: target.date,
                 slot: target.slot,
-                weekStart: datesViewModel.weekStartISO
+                weekStart: weekStart(of: target.date)
             )
             detailTarget = nil
             await shoppingListStore.load(
-                weekStart: datesViewModel.weekStartISO,
+                weekStart: weekStart(of: target.date),
                 force: true
             )
         }
@@ -1519,11 +1637,11 @@ struct CalendarView: View {
                     expectedRevision: target.meal.revision,
                     for: target.date,
                     slot: target.slot,
-                    weekStart: datesViewModel.weekStartISO
+                    weekStart: weekStart(of: target.date)
                 )
                 detailTarget = nil
                 await shoppingListStore.load(
-                    weekStart: datesViewModel.weekStartISO,
+                    weekStart: weekStart(of: target.date),
                     force: true
                 )
                 return
@@ -1536,11 +1654,11 @@ struct CalendarView: View {
                 itemId: target.meal.id,
                 for: target.date,
                 slot: target.slot,
-                weekStart: datesViewModel.weekStartISO
+                weekStart: weekStart(of: target.date)
             )
             detailTarget = nil
             await shoppingListStore.load(
-                weekStart: datesViewModel.weekStartISO,
+                weekStart: weekStart(of: target.date),
                 force: true
             )
         }
@@ -1554,7 +1672,7 @@ struct CalendarView: View {
                 recipeId: meal.recipe.id,
                 for: date,
                 slot: slot,
-                weekStart: datesViewModel.weekStartISO
+                weekStart: weekStart(of: date)
             )
             // Odhaczony posiłek nie ma o czym przypominać. Bez tego kolacja
             // odhaczona po południu i tak zawołałaby wieczorem „pora gotować"

@@ -20,7 +20,7 @@ struct SCInlineErrorText: View {
 
     var body: some View {
         Text(message)
-            .font(.system(size: 13, weight: .medium))
+            .font(.sc(size: 13, weight: .medium))
             .foregroundStyle(Self.tint)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -36,7 +36,7 @@ struct SCRetryButton: View {
         Button(action: action) {
             Label("Spróbuj ponownie", systemImage: "arrow.clockwise")
                 .labelStyle(.titleAndIcon)
-                .font(.system(size: 12.5, weight: .semibold))
+                .font(.sc(size: 12.5, weight: .semibold))
                 .foregroundStyle(SCPalette.terracotta)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)

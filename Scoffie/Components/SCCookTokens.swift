@@ -447,14 +447,16 @@ enum SCCook {
 
 /// Styl tekstu z tokenu: krój systemowy, grubość, światło liter, wysokość
 /// linii z makiety (`nil` = naturalna). Odstęp między liniami w SwiftUI to
-/// `lineHeight` minus naturalna linia kroju (~1,19 × rozmiar).
+/// `lineHeight` minus naturalna linia kroju (~1,19 × rozmiar). Rozmiar rośnie
+/// z Dynamic Type (`Font.sc` w aplikacji) — przy domyślnym rozmiarze tekstu
+/// jest dokładnie ten z makiety.
 struct SCCookTextStyle {
     let size: CGFloat
     let weight: Font.Weight
     let tracking: CGFloat
     let lineHeight: CGFloat?
 
-    var font: Font { .system(size: size, weight: weight) }
+    var font: Font { .sc(size: size, weight: weight) }
 
     var lineSpacing: CGFloat {
         guard let lineHeight else { return 0 }
