@@ -61,9 +61,14 @@ import SwiftUI
 /// „Zjedzone 1200 z 2100 kcal · w planie 1800” z torem kalorii pod spodem,
 /// a kolumna kalorii schodzi z rzędu — te same liczby nie stoją dwa razy.
 ///
-/// Pigułki Planu i „Dziś” NIE przechodzą jedna w drugą przy zmianie zakładki
-/// (dawne `handoff` przez `SCTabBarChrome.goalSnapshot`, 4.10.2026): to dwie
-/// różne liczby, a rosnące tory mówiły, że to jedna, która się zmieniła.
+/// **Przejście Plan ↔ Dziś** (Rafał 6.10.2026: „ładnie się animował, rozrastał
+/// z tego, co jest na planie, i z powrotem… liquid”). Przechodzi KSZTAŁT, nie
+/// liczby: pigułka zakładki, na którą się weszło, startuje w wysokości pigułki
+/// z poprzedniej zakładki (`SCTabBarChrome.goalBarHeights`) i sprężyną dochodzi
+/// do swojej — w Dziś szkło rośnie, a zdanie „Zjedzone …” wyłania się nad
+/// makrami; w Planie szkło się kurczy. Liczby stoją od pierwszej klatki swoje
+/// (to dwie różne liczby — dawne `goalSnapshot` z rosnącymi torami z 4.10
+/// mówiło, że to jedna, która się zmieniła; nie wracać).
 struct PlanDayGoalBar: View {
     let nutrition: PlanDayNutrition
     let targets: DailyNutritionTargets
@@ -79,9 +84,32 @@ struct PlanDayGoalBar: View {
     /// go drugi raz nie ma czym. Podane (zakładka „Dziś”) przełącza też układ
     /// na zdanie „Zjedzone … · w planie …” — patrz komentarz typu.
     var planned: PlanDayNutrition?
+    /// Zakładka, na której stoi pigułka (`.plan` / `.calendar`) — do przejścia
+    /// kształtu z pigułki drugiej z nich.
+    let tab: DashboardTab
     let action: () -> Void
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scTabIsActive) private var isActiveTab
+    @Environment(\.scTabBarChrome) private var tabBarChrome
+    @Environment(\.sessionStore) private var sessionStore
+
+    /// Wysokość, którą szkło trzyma na początku przejścia — `nil` = własna.
+    @State private var handoffHeight: CGFloat?
+
+    /// Pigułka po drugiej stronie przejścia.
+    private var handoffPartner: DashboardTab? {
+        switch tab {
+        case .plan: .calendar
+        case .calendar: .plan
+        default: nil
+        }
+    }
+
+    /// Sprężyna przejścia — szkło dochodzi z lekkim dobiciem, jak systemowe
+    /// zwijanie paska zakładek.
+    private static let handoffMotion: Animation = .spring(response: 0.5, dampingFraction: 0.78)
 
     // Zdanie „Zjedzone … · w planie …” w stopniach `MacroMeter` (wartość 13,
     // reszta 11), skalowanych z Dynamic Type tak samo jak tamte podpisy.
@@ -123,6 +151,17 @@ struct PlanDayGoalBar: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Własna wysokość — z niej startuje pigułka drugiej zakładki.
+                // W trakcie przejścia treść stoi w cudzej ramce — wtedy nie.
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    guard handoffHeight == nil else { return }
+                    tabBarChrome.goalBarHeights[tab] = height
+                }
+                // Przejście: szkło w wysokości pigułki, z której się przyszło,
+                // treść przyklejona do dołu (makra stoją w obu w tym samym
+                // miejscu), nadmiar przycięty do kształtu szkła.
+                .frame(height: handoffHeight, alignment: .bottom)
+                .clipShape(.rect(cornerRadius: Self.cornerRadius, style: .continuous))
                 // `interactive()` daje szkłu reakcję na dotyk — tę samą, którą ma
                 // dolne menu. `PlanPressStyle` dokłada ściśnięcie treści, więc
                 // pigułka odpowiada dokładnie jak wiersz osi nad nią.
@@ -152,6 +191,37 @@ struct PlanDayGoalBar: View {
         // stuknąć — VoiceOver czytał liczby i nie miał czego aktywować.
         .accessibilityElement(children: .combine)
         .accessibilityHint("Otwiera cel dnia")
+        // Wejście na zakładkę z pigułki drugiej strony (Plan ↔ Dziś).
+        // `initial`, bo `TabView` buduje zakładkę przy pierwszym wyborze
+        // i wtedy flaga już jest `true`.
+        .onChange(of: isActiveTab, initial: true) { _, active in
+            guard active else { return }
+            startHandoff()
+        }
+    }
+
+    /// Szkło staje w wysokości pigułki, z której się przyszło, i w następnej
+    /// klatce sprężyną dochodzi do własnej.
+    private func startHandoff() {
+        guard !reduceMotion,
+              let partner = handoffPartner,
+              sessionStore.previousDashboardTab == partner,
+              let from = tabBarChrome.goalBarHeights[partner]
+        else { return }
+        // Własnej wysokości nie ma przy pierwszym wejściu (zakładka dopiero się
+        // buduje) — wtedy przejście rusza i tak, bo pigułki się różnią układem.
+        if let own = tabBarChrome.goalBarHeights[tab], abs(from - own) <= 1 { return }
+
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) { handoffHeight = from }
+
+        Task { @MainActor in
+            // Klatka w wysokości startowej musi wejść na ekran, zanim ruszy
+            // sprężyna — inaczej SwiftUI zlepia oba zapisy w jeden.
+            try? await Task.sleep(for: .milliseconds(16))
+            withAnimation(Self.handoffMotion) { handoffHeight = nil }
+        }
     }
 
     /// Treść pigułki: w Planie cztery kolumny w jednym wierszu, na „Dziś”
@@ -161,6 +231,9 @@ struct PlanDayGoalBar: View {
         if let planned {
             VStack(alignment: .leading, spacing: 6) {
                 eatenSummary(planned: planned)
+                    // Przy przejściu z Planu zdanie wyłania się nad makrami
+                    // razem ze szkłem, które rośnie.
+                    .opacity(handoffHeight == nil ? 1 : 0)
                 HStack(alignment: .top, spacing: 8) {
                     macroMeters
                 }

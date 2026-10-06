@@ -38,6 +38,8 @@ struct RecipeCategoryScreen: View {
 
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.colorScheme) private var scheme
+    /// Systemowy pasek zakładek zwinięty przewijaniem — patrz `RecipesSearchBar`.
+    @State private var isTabBarMinimized = false
 
     // Te same klucze, co na korzeniu Przepisów — ekran czyta je sam, więc
     // zmiana dopasowania (żeton, różdżka w Filtrach) przelicza go od razu.
@@ -138,22 +140,19 @@ struct RecipeCategoryScreen: View {
             .scrollDismissesKeyboard(.immediately)
             // Pod systemowym paskiem — miękka krawędź, bez kreski.
             .scrollEdgeEffectStyle(.soft, for: .top)
-            // Ten sam pływający pasek, przyczepiony tak samo jak na korzeniu
-            // Przepisów (`RecipesView.content`) — zmieniać RAZEM z tamtym:
-            // pasek bezpiecznego obszaru nad systemowym paskiem zakładek
-            // (a przy klawiaturze — nad nią), pod nim natywny, miękki efekt
-            // krawędzi przewijania.
-            .safeAreaBar(edge: .bottom, spacing: 0) {
+            .recipesTracksTabBarMinimize($isTabBarMinimized)
+            // Ten sam pływający pasek, przyczepiony tą samą drogą co na korzeniu
+            // Przepisów (`recipesSearchDock`).
+            .recipesSearchDock(
                 RecipesSearchBar(
                     text: $searchText,
                     prompt: RecipesConstants.searchPrompt(for: category),
                     activeFilterCount: activeFilterCount,
-                    onOpenFilters: onOpenFilters
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
-            }
-            .scrollEdgeEffectStyle(.soft, for: .bottom)
+                    onOpenFilters: onOpenFilters,
+                    besideMinimizedTabBar: isTabBarMinimized
+                ),
+                horizontalPadding: 20
+            )
         }
         .navigationTitle(RecipesConstants.displayName(for: category))
         .navigationBarTitleDisplayMode(.large)

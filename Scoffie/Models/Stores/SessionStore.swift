@@ -156,7 +156,16 @@ final class SessionStore {
     var datesViewModel = DatesViewModel()
     /// Zakładka dolnego menu. Tu, a nie w `NavigationMenu`, bo przełącza ją
     /// też asystent — skrót „Otwórz" po zapisaniu planu.
-    var dashboardTab: DashboardTab = .calendar
+    var dashboardTab: DashboardTab = .calendar {
+        didSet {
+            if oldValue != dashboardTab { previousDashboardTab = oldValue }
+        }
+    }
+    /// Zakładka, z której właśnie przyszedł użytkownik — pigułka kcal
+    /// przechodzi kształtem z Planu w Dziś i z powrotem (`PlanDayGoalBar`).
+    /// Ustawiana RAZEM z `dashboardTab`, więc ekran, który właśnie stał się
+    /// aktywny, czyta ją już poprawną.
+    private(set) var previousDashboardTab: DashboardTab?
     /// Prośba asystenta o otwarcie listy zakupów.
     ///
     /// Lista jest arkuszem WEWNĄTRZ Planu, więc samo przełączenie zakładki

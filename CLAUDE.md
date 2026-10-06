@@ -25,6 +25,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   `confirmationDialog`, `SFSafariViewController`); własny tylko z konkretnym powodem zapisanym tutaj.
 - **Ruch mówi, że coś się ZMIENIŁO**, nie dekoruje otwarcia: bez kaskad wejścia, liczenia od zera, osiadania zdjęć,
   pisania gotowego tekstu. Animują się zmiany (porcje, zapis, odhaczanie, rolowanie cyfr przy zmianie).
+- **Pasek nawigacji zakładek**: Plan, Dziś, Ustawienia i korzeń Przepisów mają `.toolbar(.hidden, for: .navigationBar)`
+  (nagłówek rysuje treść). `NavBarHitTestPassthrough` USUNIĘTY 6.10.2026 — pod systemowym `TabView` przestał działać
+  i pusty pasek zjadał stuknięcia w koszyk i „…” Planu; nie wracać. Pasek pokazują tylko wepchnięte ekrany.
 - **Dynamic Type**: rozmiary z makiet przez `.font(.sc(size:weight:design:))` (`Components/SCDynamicType.swift`),
   NIGDY `.system(size:)` w nowym kodzie. Przy domyślnym rozmiarze tekstu = makieta co do punktu; większy rośnie
   krzywą najbliższego stylu systemowego (`SCDynamicType.style(for:)`), limit xxL (`SCDynamicType.cap`, to samo
@@ -43,8 +46,11 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   na zakładkę) = dziś. Własny dzień, bez `DatesViewModel` — osobny tydzień Kalendarza z 4.10 (`calendarDatesViewModel`)
   USUNIĘTY. Tygodnie trzech dni wczytywane raz na dobę (`loadDayWindow`: sąsiedni pierwszy, oglądany ostatni — nasłuch
   socketu idzie za tygodniem oglądanego dnia). Pigułka = `PlanDayGoalBar(planned:)` w układzie „Zjedzone X z Y kcal ·
-  w planie Z” + tor kcal + B/T/W; przejście `handoff` między pigułkami Planu i Dziś USUNIĘTE (dwie różne liczby, nie
-  wracać). Pusta pora / pusty dzień dziś i jutro = „Zaplanuj” (pierwsza pigułka w kolorze pory + pusty talerz jako
+  w planie Z” + tor kcal + B/T/W. Między pigułkami Planu i Dziś przechodzi KSZTAŁT (6.10.2026 wieczór, Rafał: „liquid się
+  rozrasta z tego, co jest na planie, i z powrotem”): pigułka zakładki, na którą się weszło z drugiej, startuje w jej
+  wysokości (`SCTabBarChrome.goalBarHeights`, `SessionStore.previousDashboardTab`) i sprężyną dochodzi do swojej, treść
+  przyklejona do dołu, zdanie „Zjedzone …” wyłania się; liczby własne od pierwszej klatki (dawne `goalSnapshot` z rosnącymi
+  torami nie wraca). Zakres wczoraj · dziś · jutro jest CELOWY — dalsze dni ogląda się i planuje w Planie. Pusta pora / pusty dzień dziś i jutro = „Zaplanuj” (pierwsza pigułka w kolorze pory + pusty talerz jako
   przycisk) → `SessionStore.planSlotRequest` (`PlanSlotRequest`) + `dashboardTab = .plan`; Plan zdejmuje prośbę,
   `DatesViewModel.show(day:)`, otwiera „Wybierz przepis” na tę porę („dla kogo”: `[]` = cały dom, `[ja]`, gdy ktoś
   inny ma w porze swoje danie); wczoraj — tylko podpowiedź „Zaplanujesz w Planie”.
@@ -56,7 +62,12 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
 - **Przepisy**: kategoria = PUSH (`RecipeCategoryScreen`: systemowy pasek z dużym tytułem i „wstecz”; cały nagłówek
   sekcji to przycisk; ten sam pływający `RecipesSearchBar` z `searchPrompt(for:)` szuka w kategorii — przyczepiony
   tak jak na korzeniu, zmieniać RAZEM). Korzeń: `.toolbar(.hidden)` zamiast `NavBarHitTestPassthrough`; kapsuła
-  `compactTitles[.recipes]` odkładana na czas kategorii; fraza korzenia nie przechodzi do kategorii. „Filtry” działają
+  `compactTitles[.recipes]` odkładana na czas kategorii; fraza korzenia nie przechodzi do kategorii. Pasek szukania
+  na korzeniu i w kategorii = `recipesSearchDock` (jedna droga) + `recipesTracksTabBarMinimize` na liście: gdy systemowy
+  pasek zakładek zwinie się do ikony, pasek szukania ZJEŻDŻA w jego wiersz obok niej (6.10.2026; system nie mówi o
+  zwinięciu publicznie — liczymy z kierunku przewijania; stałe `besideTabBarDrop` / `besideTabBarLeading` do dostrojenia
+  na urządzeniu), przy fokusie zostaje nad klawiaturą. Krążek Filtrów BEZ `GlassEffectContainer` (w grupie był martwy
+  pod systemowym `TabView`), plakietka wprost na krążku. „Filtry” działają
   NA ŻYWO (bez szkicu i „Pokaż”), stopka „N z M przepisów” + tekstowe „Gotowe” (lupa odpadła). Filtry kategorii =
   sekcja „Filtrów”, gdy lista stoi w kategorii (ekran albo zakładka wyników, `scope`), bez kuchni i okazji kategorii;
   bez zakresu — wiersze „Filtry kategorii”. Podstrony Filtrów („Więcej filtrów”, Wyklucz składniki → dział) i filtry
@@ -418,7 +429,7 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (`SessionStore.prepareUnbuiltTabs`: rozmowa i pula Asystenta). Wstawki nad paskiem = `safeAreaBar(edge: .bottom)` +
   `scrollEdgeEffectStyle(.soft, for: .bottom)` w treści zakładki (pasek szukania Przepisów — też na ekranie
   kategorii, pigułka Planu, pole Asystenta); pigułka Dziś (bez przewijania) = `safeAreaInset`. `SCTabBarChrome` niesie
-  już tylko `compactTitles` i `keyboardCurve`; `SCStatusBarBlur` i `SCCompactTitle` to nakładka nad `TabView`.
+  już tylko `compactTitles`, `keyboardCurve` i `goalBarHeights` (przejście pigułek kcal); `SCStatusBarBlur` i `SCCompactTitle` to nakładka nad `TabView`.
   USUNIĘTE i nie wracać: własny `SCFloatingTabBar`, `ZStack` zamiast `TabView`, budowanie wszystkich zakładek pod
   loaderem, gest pigułki, przenikanie `tabSelection` / `leavingTab`, zwijanie „Revolut” (`scTracksTabBarCompaction`),
   rezerwa `scReservesTabBarSpace`, `ownBottomEdge`, `goalSnapshot`.
