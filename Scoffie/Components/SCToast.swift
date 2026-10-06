@@ -42,17 +42,22 @@ struct SCToast: Identifiable, Equatable {
     /// Akcja toastu: krótki tytuł i to, co ma się stać. Kapsuła zamyka się
     /// PRZED wykonaniem — skutek przychodzi jako następny toast.
     struct Action {
+        /// Jedna operacja = jeden identyfikator. Dwa „Dodano do planu ·
+        /// Jutro · Obiad” z „Cofnij” (dwa dania dla dwóch osób) to RÓŻNE
+        /// toasty — inaczej tłumienie powtórek zostawiłoby na ekranie
+        /// pierwszy, a jego „Cofnij” zdjęłoby nie to danie (Codex 6.10.2026).
+        let id = UUID()
         let title: String
         let perform: @MainActor () -> Void
     }
 
     /// Dwa toasty są „tym samym", gdy niosą tę samą treść — identyfikator
     /// jest z definicji różny, więc nie może brać udziału w porównaniu.
-    /// Na tym stoi tłumienie powtórek w `SCToastCenter`. Domknięcia akcji
-    /// porównać się nie da — liczy się jej tytuł.
+    /// Na tym stoi tłumienie powtórek w `SCToastCenter`. Toast z akcją jest
+    /// zawsze osobną operacją — porównuje się identyfikator akcji.
     static func == (lhs: SCToast, rhs: SCToast) -> Bool {
         lhs.style == rhs.style && lhs.title == rhs.title && lhs.message == rhs.message
-            && lhs.action?.title == rhs.action?.title
+            && lhs.action?.id == rhs.action?.id
     }
 
     /// Ile toast zostaje na ekranie.
