@@ -510,7 +510,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (`EditorialWeekBar`, „Dodaj do planu”), „Wyczyść filtry”, strzałka nagłówka sekcji Przepisów, „Otwórz” u Asystenta,
   „Ustaw/Policz/Odrzuć/…” w Ustawieniach, chipy „Dla kogo”, kciuki oceny Gotuj. Serce ulubionych = podskok glifu +
   `ThumbCheer` w terakocie (jak „like” w Gotuj).
-  Gotuj (4.10.2026; alarm od 6.10: „Gotowe” = szkło w PEŁNYM kolorze timera, „+1 min” i „…” neutralne): szkło na „Gotuj dalej”, stepperze porcji powitania, „Pomiń” w Timerach,
+  Gotuj (4.10.2026; alarm od 6.10: „Gotowe” = szkło w PEŁNYM kolorze timera — decyzja 6.10.2026 wieczór: ZOSTAJE pełne, jak
+  „Zatrzymaj” w Zegarze iOS; pismo `CookTimerAccent.ink(_:)`: tło strony, ale ciemne na musztardzie w jasnym motywie i jasne
+  na indygo w ciemnym — „+1 min” i „…” neutralne): szkło na „Gotuj dalej”, stepperze porcji powitania, „Pomiń” w Timerach,
   pigułkach powodów oceny (`scChoiceSurface`). Przyciski nagłówka arkusza (krzyżyk, serce, „Cofnij/Wyczyść”, „…” w Zakupach) = 38 pt z glifem `scLabel`
   (`SCSheetIconLabel.size`) — 36 pt z szarym glifem wyglądało na płaskie kółko, 44 było „ciut za duże”.
   Ciemny dok (`cookDockGlass` w ciemnym = bez szkła, `cookIslandSurface`,
