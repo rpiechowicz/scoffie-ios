@@ -403,22 +403,19 @@ struct WeeklyPlanView: View {
             // efekt krawędzi przewijania. Nad systemowym paskiem zakładek
             // stawia ją sam bezpieczny obszar.
             .safeAreaBar(edge: .bottom, spacing: 0) {
-                PlanDayGoalBar(
-                    nutrition: selectedDayNutrition,
-                    targets: dailyTargets(for: nutritionPersonId),
-                    tab: .plan,
-                    action: {
-                        simpleSheet = .dayGoal
-                        // Cel domownika mógł się zmienić od ostatniego
-                        // odczytu — arkusz dociąga świeży w tle.
-                        Task { await refreshMemberPreferences() }
-                    }
-                )
-                .frame(width: goalBarWidth)
-                .padding(.bottom, 8)
-                // Pierwsza klatka nie zna jeszcze szerokości zakładki, a
-                // pigułka o zerowej szerokości mignęłaby jako kreska.
-                .opacity(goalBarWidth > 0 ? 1 : 0)
+                PlanDayGoalBar.dock(width: goalBarWidth) {
+                    PlanDayGoalBar(
+                        nutrition: selectedDayNutrition,
+                        targets: dailyTargets(for: nutritionPersonId),
+                        tab: .plan,
+                        action: {
+                            simpleSheet = .dayGoal
+                            // Cel domownika mógł się zmienić od ostatniego
+                            // odczytu — arkusz dociąga świeży w tle.
+                            Task { await refreshMemberPreferences() }
+                        }
+                    )
+                }
             }
             // Miękki, jawnie — `.automatic` z Xcode Cloud wychodził jako
             // `.hard` (kreska i kryjące tło, patrz `scSheetFooterEdge`).
