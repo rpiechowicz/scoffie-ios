@@ -60,8 +60,16 @@ import SwiftUI
 /// reguła, z którą zapisuje szybkie menu przycisku w szczegółach („Dziś ·
 /// Obiad”, „Jutro · Obiad”). Pozycja menu z porą zajętą innym daniem otwiera
 /// ten arkusz z dniem i porą już wybranymi (`initialDate`, `initialSlot`).
+///
+/// Ze szczegółów przepisu wchodzi jako EKRAN STOSU ich arkusza (`isPushed`,
+/// 6.10.2026 — „jak od Apple”: jeden arkusz, dalszy krok = push): tytuł
+/// i „wstecz” w pasku systemu, nad treścią samo danie bez krzyżyka. Jako
+/// samodzielny arkusz zostaje tylko w podglądach.
 struct AddToPlanSheet: View {
     let recipe: Recipe
+    /// Ekran wepchnięty w stos arkusza szczegółów — bez krzyżyka, z paskiem
+    /// systemu i bez ustawień prezentacji arkusza.
+    var isPushed: Bool = false
     var onAdded: ((Date, MealSlot) -> Void)? = nil
 
     /// `initialServings` — liczba porcji ze steppera w szczegółach, punkt
@@ -77,9 +85,11 @@ struct AddToPlanSheet: View {
         didOverrideServings: Bool = false,
         initialDate: Date? = nil,
         initialSlot: MealSlot? = nil,
+        isPushed: Bool = false,
         onAdded: ((Date, MealSlot) -> Void)? = nil
     ) {
         self.recipe = recipe
+        self.isPushed = isPushed
         self.onAdded = onAdded
         let units = initialUnits ?? initialServings * PlanPortions.unitsPerServing
         // Ten sam punkt startowy, z którym zapisuje szybkie menu szczegółów
@@ -224,6 +234,17 @@ struct AddToPlanSheet: View {
     // MARK: - Body
 
     var body: some View {
+        if isPushed {
+            page
+                .scPushedPage("Dodaj do planu")
+        } else {
+            page
+                .presentationDetents([.large])
+                .dashboardLiquidSheet()
+        }
+    }
+
+    private var page: some View {
         let overview = weekOverview(for: weekDates)
         let visibleSlots = sessionStore.mealSlots.visibleSlots(planned: overview.plannedSlots)
 
@@ -235,7 +256,7 @@ struct AddToPlanSheet: View {
                 // Nagłówek przypięty nad treścią — nie przewija się i nie zwija.
                 header
                     .padding(.horizontal, 20)
-                    .padding(.top, 18)
+                    .padding(.top, isPushed ? 8 : 18)
                     .padding(.bottom, 14)
 
                 ScrollView {
@@ -303,8 +324,6 @@ struct AddToPlanSheet: View {
             old != nil && new != nil
         }
         .sensoryFeedback(.selection, trigger: calendar.startOfDay(for: selectedDate))
-        .presentationDetents([.large])
-        .dashboardLiquidSheet()
     }
 
     // MARK: - Nagłówek
@@ -312,14 +331,40 @@ struct AddToPlanSheet: View {
     /// Wspólny nagłówek arkuszy (`EditorialSheetHeader`) ze zdjęciem dania
     /// w miejscu kafelka — to jego dotyczy cały arkusz — i faktami (czas,
     /// kcal) w podtytule. Dawniej własna kopia układu z własnym krzyżykiem.
+    /// Na ekranie stosu „Dodaj do planu” i „wstecz” stoją w pasku systemu,
+    /// więc nad treścią zostaje samo danie: zdjęcie, nazwa i fakty.
+    @ViewBuilder
     private var header: some View {
-        EditorialSheetHeader(
-            eyebrow: "Dodaj do planu",
-            title: recipe.name,
-            subtitle: facts.isEmpty ? nil : facts.map(\.text).joined(separator: " · "),
-            leading: AnyView(EditorialRecipeCover(recipe: recipe, size: 52, cornerRadius: 14)),
-            onClose: { dismiss() }
-        )
+        if isPushed {
+            HStack(spacing: 12) {
+                EditorialRecipeCover(recipe: recipe, size: 52, cornerRadius: 14)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(recipe.name)
+                        .font(.sc(size: 19, weight: .bold))
+                        .tracking(-0.3)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if !facts.isEmpty {
+                        Text(facts.map(\.text).joined(separator: " · "))
+                            .font(.sc(size: 13))
+                            .foregroundStyle(Color.scMuted(scheme))
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+        } else {
+            EditorialSheetHeader(
+                eyebrow: "Dodaj do planu",
+                title: recipe.name,
+                subtitle: facts.isEmpty ? nil : facts.map(\.text).joined(separator: " · "),
+                leading: AnyView(EditorialRecipeCover(recipe: recipe, size: 52, cornerRadius: 14)),
+                onClose: { dismiss() }
+            )
+        }
     }
 
     // MARK: - Kiedy
