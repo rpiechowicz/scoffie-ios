@@ -3350,9 +3350,6 @@ final class SessionStore {
     ) async -> Bool {
         guard let userId = currentUserId, !userId.isEmpty else { return false }
         let epoch = sessionEpoch
-        // Znacznik „Nie podaję” w chwili WYWOŁANIA — porównywany po wejściu
-        // do kolejki (patrz gałąź z płcią niżej).
-        let sexClearAtCall = UserDefaults.standard.string(forKey: ProfileKeys.sexClearPending)
         // Sylwetka z niepotwierdzonej kopii (wartości domyślne po odtworzeniu
         // telefonu) nie nadpisuje konta (7.10.2026). Niepotwierdzone „Nie
         // podaję” (`sexClearPending`) nie ginie: flaga zostaje i jedzie z
@@ -3409,15 +3406,11 @@ final class SessionStore {
             data["sex"] = NSNull()
             SCProtectedSettings.shared.removeObject(forKey: ProfileKeys.sex)
             UserDefaults.standard.set(token, forKey: ProfileKeys.sexClearPending)
-        } else if let sex, !sex.isEmpty, pendingClear == sexClearAtCall {
+        } else if let sex, !sex.isEmpty {
             data["sex"] = sex.uppercased()
             SCProtectedSettings.shared.set(sex.lowercased(), forKey: ProfileKeys.sex)
             UserDefaults.standard.removeObject(forKey: ProfileKeys.sexClearPending)
         }
-        // Płeć z wywołania, po którym (w czasie czekania w kolejce) padło
-        // nowsze „Nie podaję” (inny znacznik niż przy wywołaniu): ten zapis
-        // płci nie wysyła i znacznika nie zdejmuje — nowszy zamiar wygrywa
-        // (7.10.2026, Codex runda 3).
         guard !data.isEmpty else { return true }
         var sentProfileKeys: [String] = []
         if data["displayName"] != nil { sentProfileKeys.append(Keys.displayName) }
