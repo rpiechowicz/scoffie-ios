@@ -36,9 +36,9 @@ struct MealDayAxisList<Top: View, Status: View>: View {
     /// Treść NAD kartą, przewijana razem z nią (nagłówek kroku kreatora).
     let showsTop: Bool
     let topMargin: CGFloat
-    @ViewBuilder let top: () -> Top
+    let top: () -> Top
     /// Stan zapisu pod kartą (Ustawienia: błąd i „Spróbuj ponownie”).
-    @ViewBuilder let status: () -> Status
+    let status: () -> Status
 
     @Environment(\.colorScheme) private var scheme
 
