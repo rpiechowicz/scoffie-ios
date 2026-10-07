@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
+    @Environment(\.toasts) private var toasts
 
     @AppStorage("settings.theme") private var themeRawValue: String = AppTheme.system.rawValue
     @AppStorage("settings.notifications.enabled") private var notificationsEnabled: Bool = true
@@ -17,9 +18,9 @@ struct SettingsView: View {
     @AppStorage(MealReminderService.Keys.mealReminders) private var mealRemindersEnabled: Bool = true
     @AppStorage(MealReminderService.Keys.morningBriefing) private var morningBriefingEnabled: Bool = true
     @AppStorage(MealReminderService.Keys.dayWrapUp) private var dayWrapUpEnabled: Bool = true
-    @AppStorage("settings.user.displayName") private var userDisplayName: String = "user1"
-    @AppStorage("settings.user.email") private var userEmail: String = "user1@example.com"
-    @AppStorage("settings.user.avatarUrl") private var userAvatarUrl: String = ""
+    @ProtectedSetting("settings.user.displayName") private var userDisplayName: String = "user1"
+    @ProtectedSetting("settings.user.email") private var userEmail: String = "user1@example.com"
+    @ProtectedSetting("settings.user.avatarUrl") private var userAvatarUrl: String = ""
     // −1 = backend jeszcze nie przydzielił koloru (konto sprzed tej zmiany).
     @AppStorage("settings.user.avatarColor") private var userAvatarColor: Int = -1
     // Ziarno awatara musi być tym samym identyfikatorem, którego używa
@@ -28,23 +29,23 @@ struct SettingsView: View {
     // jeden w Ustawieniach, drugi w Planie.
     @AppStorage("auth.userId") private var userId: String = ""
     @AppStorage("settings.household.name") private var persistedHouseholdName: String = ""
-    @AppStorage("settings.diet.preference") private var dietPreferenceRaw: String = DietPreference.none.rawValue
-    @AppStorage("settings.diet.allergens") private var allergensRaw: String = ""
-    @AppStorage("settings.diet.calorieGoal") private var calorieGoal: Int = 2000
-    @AppStorage("settings.diet.goal") private var goalRaw: String = UserGoal.healthy.rawValue
+    @ProtectedSetting("settings.diet.preference") private var dietPreferenceRaw: String = DietPreference.none.rawValue
+    @ProtectedSetting("settings.diet.allergens") private var allergensRaw: String = ""
+    @ProtectedSetting("settings.diet.calorieGoal") private var calorieGoal: Int = 2000
+    @ProtectedSetting("settings.diet.goal") private var goalRaw: String = UserGoal.healthy.rawValue
     // Sylwetka z arkusza „Twoje dane" — tylko do odczytu, żeby podpowiedź
     // kaloryczna liczyła się z realnych danych zamiast z płaskiej stałej.
-    @AppStorage(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
-    @AppStorage(BodyMetrics.Keys.weightKg) private var profileWeightKg: Double = 0
-    @AppStorage(BodyMetrics.Keys.sex) private var profileSexRaw: String = ""
+    @ProtectedSetting(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
+    @ProtectedSetting(BodyMetrics.Keys.weightKg) private var profileWeightKg: Double = 0
+    @ProtectedSetting(BodyMetrics.Keys.sex) private var profileSexRaw: String = ""
     // −1 znaczy „nie nadpisane, licz za mnie". `@AppStorage` nie umie
     // opcjonalnego `Int`, a 0 g białka jest legalną (choć głupią) wartością,
     // więc potrzebny jest sentinel spoza dziedziny.
-    @AppStorage("settings.diet.proteinG") private var proteinOverride: Int = -1
-    @AppStorage("settings.diet.fatG") private var fatOverride: Int = -1
-    @AppStorage("settings.diet.carbsG") private var carbsOverride: Int = -1
-    @AppStorage(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
-    @AppStorage(BodyMetrics.Keys.activityLevel) private var profileActivityRaw: Int = ActivityLevel.light.rawValue
+    @ProtectedSetting("settings.diet.proteinG") private var proteinOverride: Int = -1
+    @ProtectedSetting("settings.diet.fatG") private var fatOverride: Int = -1
+    @ProtectedSetting("settings.diet.carbsG") private var carbsOverride: Int = -1
+    @ProtectedSetting(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
+    @ProtectedSetting(BodyMetrics.Keys.activityLevel) private var profileActivityRaw: Int = ActivityLevel.light.rawValue
 
     @State private var showCreateHouseholdSheet = false
     @State private var showHouseholdSheet = false
@@ -97,6 +98,10 @@ struct SettingsView: View {
     /// Flagi zeruje `onAppear` arkusza, więc każde otwarcie ma swój
     /// „pierwszy strzał" do pominięcia.
     @State private var didObserveDietPreferencesToken = false
+    /// Licznik edycji diety z ręki przy ostatnim zapisie — zmiana wartości
+    /// BEZ nowej edycji (odczyt z serwera wpisał wiersz) nie wysyła niczego
+    /// z powrotem (7.10.2026, Codex runda 2).
+    @State private var savedDietEditGeneration = 0
     @State private var didObserveNotificationToken = false
     /// Domownik wskazany do usunięcia — nie-nil otwiera alert potwierdzenia.
     @State private var memberToRemove: HouseholdMemberSnapshot?
@@ -1334,11 +1339,35 @@ struct SettingsView: View {
         // arkusza) jest pomijane — patrz `didObserveDietPreferencesToken`.
         .onAppear { didObserveDietPreferencesToken = false }
         .task(id: dietPreferencesSyncToken) {
+            let editGeneration = SCProtectedSettings.shared.userEditGeneration(.preferences)
             guard didObserveDietPreferencesToken else {
                 didObserveDietPreferencesToken = true
+                savedDietEditGeneration = editGeneration
                 return
             }
+            // Wartości zmienił odczyt z serwera, nie użytkownik — nic nie wysyłamy.
+            guard editGeneration != savedDietEditGeneration else { return }
             try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            savedDietEditGeneration = SCProtectedSettings.shared.userEditGeneration(.preferences)
+            // Ten ekran wysyła PEŁNY zestaw (z alergenami) — tylko z kopii
+            // potwierdzonej odczytem z serwera (7.10.2026). Po odtworzeniu
+            // telefonu kopia bywa pusta i zmiana kalorii skasowałaby alergeny.
+            switch await sessionStore.ensurePreferencesBaseline() {
+            case .confirmed:
+                break
+            case .reloaded:
+                toasts.info(
+                    "Wczytano Twoje ustawienia",
+                    "Ostatnia zmiana nie została zapisana — wprowadź ją jeszcze raz."
+                )
+                return
+            case .unavailable:
+                toasts.error("Nie udało się wczytać Twoich ustawień", "Spróbuj ponownie.")
+                return
+            }
+            // Odczyt jest wspólny i nie anuluje się z tym zadaniem — nowsza
+            // edycja w międzyczasie ma już własne zadanie zapisu.
             guard !Task.isCancelled else { return }
             await sessionStore.saveUserPreferences(
                 diet: currentDiet.rawValue,

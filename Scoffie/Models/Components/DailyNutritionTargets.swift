@@ -19,8 +19,9 @@ struct DailyNutritionTargets: Equatable {
     /// postępu do wartości, której nikt mu nie wyznaczył.
     let macros: MacroTargets?
 
-    /// Klucze `UserDefaults` pod ręcznym nadpisaniem makr. `−1` znaczy „nie
-    /// nadpisane, licz za mnie" — `@AppStorage` nie umie `nil` dla `Int`.
+    /// Klucze ręcznego nadpisania makr (od 7.10.2026 w `SCProtectedSettings`,
+    /// czytane przez `@ProtectedSetting`). `−1` znaczy „nie nadpisane, licz za
+    /// mnie" — wrapper, jak dawniej `@AppStorage`, nie trzyma `nil` dla `Int`.
     enum Keys {
         static let proteinG = "settings.diet.proteinG"
         static let fatG = "settings.diet.fatG"

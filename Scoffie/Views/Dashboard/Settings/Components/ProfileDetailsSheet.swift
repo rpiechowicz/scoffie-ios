@@ -40,17 +40,17 @@ struct ProfileDetailsSheet: View {
     @Environment(\.toasts) private var toasts
     @Environment(\.colorScheme) private var scheme
 
-    @AppStorage("settings.user.displayName") private var displayName: String = ""
-    @AppStorage("settings.user.email") private var email: String = ""
-    @AppStorage("settings.user.avatarUrl") private var avatarUrl: String = ""
+    @ProtectedSetting("settings.user.displayName") private var displayName: String = ""
+    @ProtectedSetting("settings.user.email") private var email: String = ""
+    @ProtectedSetting("settings.user.avatarUrl") private var avatarUrl: String = ""
     @AppStorage("settings.user.avatarColor") private var avatarColor: Int = -1
     /// Ziarno awatara — to samo id, którym posługuje się `MemberAvatar`.
     @AppStorage("auth.userId") private var userId: String = ""
-    @AppStorage("settings.profile.yearOfBirth") private var yearOfBirth: Int = Self.defaultYearOfBirth
-    @AppStorage("settings.profile.heightCm") private var heightCm: Int = Self.defaultHeightCm
-    @AppStorage("settings.profile.weightKg") private var weightKg: Double = Self.defaultWeightKg
-    @AppStorage("settings.profile.sex") private var sexRaw: String = ""
-    @AppStorage("settings.diet.activityLevel") private var activityLevelRaw: Int = ActivityLevel.light.rawValue
+    @ProtectedSetting("settings.profile.yearOfBirth") private var yearOfBirth: Int = Self.defaultYearOfBirth
+    @ProtectedSetting("settings.profile.heightCm") private var heightCm: Int = Self.defaultHeightCm
+    @ProtectedSetting("settings.profile.weightKg") private var weightKg: Double = Self.defaultWeightKg
+    @ProtectedSetting("settings.profile.sex") private var sexRaw: String = ""
+    @ProtectedSetting("settings.diet.activityLevel") private var activityLevelRaw: Int = ActivityLevel.light.rawValue
 
     @State private var isConfirmingDeletion = false
     @State private var isDeleting = false
@@ -89,6 +89,10 @@ struct ProfileDetailsSheet: View {
     /// (świeże logowanie, zanim `users:me` zdążył przywrócić prawdziwe),
     /// nadpisywały w bazie realną sylwetkę.
     @State private var didObserveInitialToken = false
+    /// Licznik edycji z ręki (sylwetka + aktywność) przy ostatniej obsłużonej
+    /// zmianie — wartości wpisane przez `users:me` / odczyt preferencji nie są
+    /// edycją i nie wysyłają niczego z powrotem (7.10.2026, Codex runda 2).
+    @State private var observedEditGeneration = 0
     @State private var didEditThisSession = false
     /// W tym otwarciu wybrano „Nie podaję” — zapis kasuje płeć na serwerze
     /// (`saveProfile(clearSex:)`), zamiast ją pomijać.
@@ -205,10 +209,15 @@ struct ProfileDetailsSheet: View {
         // to samo pokazanie arkusza (`task(id:)` startuje też bez zmiany id) —
         // nic wtedy nie wysyłamy; każde KOLEJNE to już realna edycja.
         .task(id: profileSyncToken) {
+            let editGeneration = Self.userEditGeneration
             guard didObserveInitialToken else {
                 didObserveInitialToken = true
+                observedEditGeneration = editGeneration
                 return
             }
+            // Wartości zmienił odczyt z serwera, nie użytkownik — nic nie wysyłamy.
+            guard editGeneration != observedEditGeneration else { return }
+            observedEditGeneration = editGeneration
             didEditThisSession = true
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
@@ -591,6 +600,9 @@ struct ProfileDetailsSheet: View {
     /// `users:profile:update`, a liczba treningów przez
     /// `users:preferences:update` (tam mieszka `activityLevel`).
     private func pushProfile() async {
+        guard await Self.serverCopiesReady(sessionStore, toasts: toasts) else { return }
+        // Nowsza edycja w międzyczasie ma już własne zadanie zapisu.
+        guard !Task.isCancelled else { return }
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         await sessionStore.saveProfile(
@@ -603,6 +615,35 @@ struct ProfileDetailsSheet: View {
         )
 
         await sessionStore.saveUserPreferences(activityLevel: activityLevelRaw)
+    }
+
+    /// Arkusz wysyła CAŁY zestaw (sylwetka + aktywność) z lokalnej kopii, więc
+    /// najpierw upewnia się, że kopia przyszła z serwera (7.10.2026). Po
+    /// odtworzeniu telefonu albo nieudanym odczycie przy starcie kopia to
+    /// wartości domyślne — wysłane nadpisałyby prawdziwe dane konta. `false` =
+    /// nic nie wysyłać (komunikat już pokazany).
+    /// Edycje z ręki w obu domenach, które ten arkusz zapisuje.
+    private static var userEditGeneration: Int {
+        let store = SCProtectedSettings.shared
+        return store.userEditGeneration(.profile) &+ store.userEditGeneration(.preferences)
+    }
+
+    @MainActor
+    private static func serverCopiesReady(_ store: SessionStore, toasts: SCToastCenter) async -> Bool {
+        let profile = await store.ensureProfileBaseline()
+        let preferences = await store.ensurePreferencesBaseline()
+        if profile == .unavailable || preferences == .unavailable {
+            toasts.error("Nie udało się wczytać Twoich danych", "Spróbuj ponownie.")
+            return false
+        }
+        if profile == .reloaded || preferences == .reloaded {
+            toasts.info(
+                "Wczytano Twoje dane",
+                "Ostatnia zmiana nie została zapisana — wprowadź ją jeszcze raz."
+            )
+            return false
+        }
+        return true
     }
 
     /// Zamknięcie arkusza nie może zgubić zmiany zrobionej sekundę wcześniej —
@@ -640,6 +681,7 @@ struct ProfileDetailsSheet: View {
         // tego widoku już nie istnieje, gdy `await` wracają.
         let toasts = toasts
         Task { @MainActor in
+            guard await Self.serverCopiesReady(store, toasts: toasts) else { return }
             let profileSaved = await store.saveProfile(
                 displayName: name.isEmpty ? nil : name,
                 yearOfBirth: year,
@@ -668,12 +710,28 @@ struct ProfileDetailsSheet: View {
     /// wyzerował — a 0 cm wzrostu i rok 0 to nie są wartości, które da się
     /// postawić na kole. Podmieniamy je na te same wartości startowe, których
     /// używa kreator powitalny.
+    ///
+    /// Zapis przez magazyn, NIE przez `@ProtectedSetting` (7.10.2026, przegląd
+    /// gałęzi): poprawka wartości spoza zakresu to nie edycja z ręki — nie
+    /// podbija `userEditGeneration`, więc nie unieważnia `users:me` w drodze
+    /// i sama nie odpala zapisu na serwer. Klucze = te z deklaracji wyżej.
     private func normaliseStoredValues() {
-        if !yearRange.contains(yearOfBirth) { yearOfBirth = Self.defaultYearOfBirth }
-        if !ProfileField.heights.contains(heightCm) { heightCm = Self.defaultHeightCm }
-        if !ProfileField.weights.contains(weightKg) { weightKg = Self.defaultWeightKg }
-        if !sexRaw.isEmpty, Sex(rawValue: sexRaw) == nil { sexRaw = "" }
-        if ActivityLevel(rawValue: activityLevelRaw) == nil { activityLevelRaw = ActivityLevel.light.rawValue }
+        let store = SCProtectedSettings.shared
+        if !yearRange.contains(yearOfBirth) {
+            store.set(Self.defaultYearOfBirth, forKey: "settings.profile.yearOfBirth")
+        }
+        if !ProfileField.heights.contains(heightCm) {
+            store.set(Self.defaultHeightCm, forKey: "settings.profile.heightCm")
+        }
+        if !ProfileField.weights.contains(weightKg) {
+            store.set(Self.defaultWeightKg, forKey: "settings.profile.weightKg")
+        }
+        if !sexRaw.isEmpty, Sex(rawValue: sexRaw) == nil {
+            store.set("", forKey: "settings.profile.sex")
+        }
+        if ActivityLevel(rawValue: activityLevelRaw) == nil {
+            store.set(ActivityLevel.light.rawValue, forKey: "settings.diet.activityLevel")
+        }
     }
 
     /// Bez zbędnego „,0" — 83 kg zostaje jako „83", 83,5 jako „83,5".

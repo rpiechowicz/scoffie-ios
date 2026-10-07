@@ -764,12 +764,13 @@ struct AssistantIntroDish: Identifiable {
     /// scenka o pilnowaniu alergenów nie może podsuwać dania z alergenem.
     @MainActor
     private static func pool(from recipes: [Recipe], slot: MealSlot, maxMinutes: Int) -> [Recipe] {
-        let defaults = UserDefaults.standard
+        // Dieta i alergeny z chronionego magazynu (7.10.2026), nie z `UserDefaults`.
+        let protectedStore = SCProtectedSettings.shared
         let profile = RecipePersonalization(
-            dietRaw: defaults.string(forKey: RecipePersonalization.Keys.diet) ?? "",
-            allergensRaw: defaults.string(forKey: RecipePersonalization.Keys.allergens) ?? "",
-            goalRaw: defaults.string(forKey: RecipePersonalization.Keys.goal) ?? "",
-            calorieGoal: defaults.integer(forKey: RecipePersonalization.Keys.calorieGoal),
+            dietRaw: protectedStore.string(forKey: RecipePersonalization.Keys.diet) ?? "",
+            allergensRaw: protectedStore.string(forKey: RecipePersonalization.Keys.allergens) ?? "",
+            goalRaw: protectedStore.string(forKey: RecipePersonalization.Keys.goal) ?? "",
+            calorieGoal: protectedStore.integer(forKey: RecipePersonalization.Keys.calorieGoal),
             isEnabled: true
         )
         return recipes.filter { recipe in

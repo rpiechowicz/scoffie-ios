@@ -494,6 +494,44 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   pierwszym dostępie (i ponawia, dopóki się nie uda) lista w `AppCacheDirectory` — nowy plik w starym miejscu = dopisz go tam.
   Sprzątanie sesji tylko przez `removeFiles(where:)` / `removeEverywhere(_:)` (kasują też w starych miejscach);
   katalogu nie kasować w całości. `NSAllowsLocalNetworking` zostaje tylko w Debug — w Release zdejmuje go faza „Configure API Base URL”.
+- **Dane wrażliwe NIE w `UserDefaults`** (7.10.2026, audyt 5.09.2026 pkt 2.5 — plist jedzie jawnie w kopii
+  zapasowej): tokeny i id domu w Keychainie (`KeychainService`), a profil (rok urodzenia, wzrost, waga, płeć),
+  dieta (preferencja, alergeny, cel, kcal, makra, aktywność) i konto (e-mail, imię, adres zdjęcia) w
+  `Models/Stores/SCProtectedSettings.swift` — jeden plik JSON w `Application Support/ProtectedSettings/`
+  z ochroną `.completeUntilFirstUserAuthentication`, `isExcludedFromBackup`, zapis atomowy. Widoki: `@ProtectedSetting(klucz)`
+  zamiast `@AppStorage(klucz)` (ten sam klucz, typ `Int`/`Double`/`String`, wartość domyślna i `$x` jako `Binding`;
+  odświeżanie przez Observation, slot na klucz). Kod poza widokami: `SCProtectedSettings.shared` z API jak
+  `UserDefaults` (`set`/`string`/`integer`/`double`/`removeObject`). Migracja: przy pierwszym dostępie w procesie
+  klucze z `registeredKeys` znalezione w `UserDefaults` przechodzą do pliku (wartość już w pliku wygrywa) i znikają
+  z `UserDefaults` po udanym zapisie. Wylogowanie / usunięcie konta: `clearPersistedSession` → `removeAll()`.
+  Plik nieczytelny (start w tle przed pierwszym odblokowaniem) = nie nadpisujemy go; ponowna próba przy zapisie i
+  w `refreshRealtimeStoresOnForeground`. **Nowy wrażliwy klucz** = dopisz go do `SCProtectedSettings.registeredKeys`
+  i czytaj tylko przez `@ProtectedSetting` / `SCProtectedSettings.shared`. W `UserDefaults` zostają świadomie:
+  `auth.userId`, kolor awatara, nazwa domu, przełączniki, motyw, flagi „pokazano”, `sexClearPending`. Rozszerzenie
+  Live Activity tych kluczy nie czyta (App Group tylko na miniaturę).
+  Plik nie przeżywa kopii zapasowej ani reinstalacji (Keychain z tokenami tak), więc sesja bywa z PUSTĄ dietą:
+  pełny zestaw preferencji (ekran diety wysyła też alergeny) wychodzi tylko po `ensurePreferencesBaseline()` — kopia
+  potwierdzona `users:preferences:get` w tym procesie dla tego konta, inaczej najpierw odczyt, a zapis ze starej kopii
+  przepada z toastem. Tak samo sylwetka: `saveProfile` po `ensureProfileBaseline()` (potwierdza `users:me` w
+  `restoreHouseholdIfNeeded`), „Twoje dane” sprawdzają oba przez `serverCopiesReady`. Wyjątek
+  `confirmBaselineFirst: false`: kreator i sprzątanie po odczycie. Oba odczyty ponawia foreground; potwierdzenia
+  tylko w pamięci, przypięte do id konta, zerowane w `logout()`.
+  Wyścig migawek: odczyt (`loadUserPreferences`, `users:me` w `restoreHouseholdIfNeeded`) to JEDNO wspólne zadanie na
+  konto; zapamiętuje `SCProtectedSettings.changeGeneration` i po powrocie nie nadpisuje (ani nie potwierdza), jeśli
+  w międzyczasie była edycja z ręki (`@ProtectedSetting`) albo zapis (`noteLocalSave`). Zapisy i odczyty jednej domeny
+  (dieta: `users:preferences:update`/`get`; profil: `users:profile:update`/`users:me`) idą przez kolejkę
+  `SessionSyncQueue` — odczyt nigdy obok zapisu w locie, zapisy po kolei; strażnik `ensure…` stoi PRZED wejściem do
+  kolejki zapisu. Każda operacja kolejki zapamiętuje `sessionEpoch` i konto i sprawdza je zaraz po wejściu oraz przy
+  odpowiedzi; `logout()` podbija epokę i podmienia kolejki na nowe (operacja trzyma swoją w lokalnej stałej) —
+  nic ze starej sesji nie trafia do pliku nowego konta i nie blokuje jego logowania. Odpowiedź na zapis wpisuje TYLKO wysłane pola, i tylko te nietknięte od wysłania (`mergeSavedValues`);
+  zapis z alergenami i dietą ustawia znacznik zaufanej kopii (bramkę pełnego zapisu daje tylko odczyt), profil
+  potwierdza zapis sylwetki + imienia. Arkusze diety i „Twoich danych” zapisują same tylko po `userEditGeneration` —
+  wartości wpisane przez odczyt nie odpalają zapisu.
+  Brak kopii diety ≠ brak alergii: `SessionStore.preferencesAvailability` (`.ready` = ZAUFANA kopia w pliku —
+  znacznik `SCProtectedSettings.trustedPreferencesKey` z migracji, udanego odczytu albo udanego zapisu alergenów i diety,
+  nigdy z edycji w widoku — albo potwierdzony odczyt; inaczej `.loading` / `.unavailable`) i `RecipePreferencesNotice` (`RecipeListKit`) nad
+  listą w Przepisach, kategorii i `PlanSlotPickerSheet` — „Wczytuję Twoje alergie…” albo „Nie udało się wczytać…
+  — przepisy bez dopasowania” + „Spróbuj ponownie”. Nowa lista dopasowanych przepisów = wstaw ten sam komunikat.
 
 ## Kontrakty z backendem (nie zmieniać jednostronnie)
 - **Minimalna wersja** (2.10.2026): `Components/SCAppUpdateGate.swift` pyta `GET /public/app-version?platform=ios&version=`

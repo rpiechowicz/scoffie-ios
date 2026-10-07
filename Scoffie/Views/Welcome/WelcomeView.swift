@@ -115,36 +115,39 @@ struct WelcomeView: View {
         _tourPhase = State(initialValue: showsTour && initialStep == 1 ? startTourPhase : nil)
 
         let defaults = UserDefaults.standard
+        // Profil, cel i dieta z chronionego magazynu (7.10.2026); `defaults`
+        // zostaje dla pór posiłków niżej.
+        let protectedStore = SCProtectedSettings.shared
 
-        let storedName = defaults.string(forKey: "settings.user.displayName") ?? initialDisplayName
+        let storedName = protectedStore.string(forKey: "settings.user.displayName") ?? initialDisplayName
         _name = State(initialValue: storedName.isEmpty ? initialDisplayName : storedName)
 
-        let storedYear = defaults.integer(forKey: "settings.profile.yearOfBirth")
+        let storedYear = protectedStore.integer(forKey: "settings.profile.yearOfBirth")
         _yearOfBirth = State(
             initialValue: storedYear > 0 ? storedYear : BodyMetrics.defaultYearOfBirth
         )
 
-        let storedHeight = defaults.integer(forKey: "settings.profile.heightCm")
+        let storedHeight = protectedStore.integer(forKey: "settings.profile.heightCm")
         _heightCm = State(initialValue: storedHeight > 0 ? storedHeight : BodyMetrics.defaultHeightCm)
 
-        let storedWeight = defaults.double(forKey: "settings.profile.weightKg")
+        let storedWeight = protectedStore.double(forKey: "settings.profile.weightKg")
         _weightKg = State(initialValue: storedWeight > 0 ? storedWeight : BodyMetrics.defaultWeightKg)
 
-        let storedSex = defaults.string(forKey: "settings.profile.sex") ?? ""
+        let storedSex = protectedStore.string(forKey: "settings.profile.sex") ?? ""
         _sex = State(initialValue: Sex(rawValue: storedSex))
 
-        let storedGoal = defaults.string(forKey: "settings.diet.goal") ?? UserGoal.healthy.rawValue
+        let storedGoal = protectedStore.string(forKey: "settings.diet.goal") ?? UserGoal.healthy.rawValue
         let resolvedGoal = UserGoal(rawValue: storedGoal) ?? .healthy
         _goal = State(initialValue: resolvedGoal)
 
-        let storedActivityRaw = defaults.integer(forKey: "settings.diet.activityLevel")
+        let storedActivityRaw = protectedStore.integer(forKey: "settings.diet.activityLevel")
         let storedActivity = ActivityLevel(rawValue: storedActivityRaw) ?? .light
         _activity = State(initialValue: storedActivity)
 
-        let storedDiet = defaults.string(forKey: "settings.diet.preference") ?? DietPreference.none.rawValue
+        let storedDiet = protectedStore.string(forKey: "settings.diet.preference") ?? DietPreference.none.rawValue
         _diet = State(initialValue: DietPreference(rawValue: storedDiet) ?? .none)
 
-        let storedCalorieGoal = defaults.integer(forKey: "settings.diet.calorieGoal")
+        let storedCalorieGoal = protectedStore.integer(forKey: "settings.diet.calorieGoal")
         let seedMetrics = BodyMetrics(
             heightCm: storedHeight > 0 ? storedHeight : BodyMetrics.defaultHeightCm,
             weightKg: storedWeight > 0 ? storedWeight : BodyMetrics.defaultWeightKg,
@@ -159,7 +162,7 @@ struct WelcomeView: View {
             initialValue: storedCalorieGoal > 0 && storedCalorieGoal != seedSuggestion
         )
 
-        let storedAllergensRaw = defaults.string(forKey: "settings.diet.allergens") ?? ""
+        let storedAllergensRaw = protectedStore.string(forKey: "settings.diet.allergens") ?? ""
         let storedTokens = storedAllergensRaw
             .split(separator: ",")
             .map { String($0).trimmingCharacters(in: .whitespaces).lowercased() }
@@ -544,7 +547,10 @@ struct WelcomeView: View {
             yearOfBirth: yearOfBirth,
             heightCm: heightCm,
             weightKg: weightKg,
-            sex: sex?.rawValue
+            sex: sex?.rawValue,
+            // Formularz kreatora, nie lokalna kopia — bez czekania na `users:me`
+            // (7.10.2026, `ensureProfileBaseline`).
+            confirmBaselineFirst: false
         )
         pendingProfileRetry = !ok
         refreshSaveWarning()
@@ -559,7 +565,11 @@ struct WelcomeView: View {
             calorieGoal: calorieGoal,
             allergens: allergenRaws,
             goal: goal.rawValue,
-            activityLevel: activity.rawValue
+            activityLevel: activity.rawValue,
+            // Formularz kreatora to świadoma decyzja użytkownika, nie lokalna
+            // kopia — nie czeka na odczyt z serwera (nowe konto i tak ma tam
+            // domyślny wiersz). 7.10.2026, patrz `ensurePreferencesBaseline`.
+            confirmBaselineFirst: false
         )
         pendingPreferencesRetry = !ok
         refreshSaveWarning()

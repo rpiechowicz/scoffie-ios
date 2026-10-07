@@ -50,7 +50,7 @@ struct AssistantConsentGateView: View {
     /// Poniżej 16 blokujemy; od 17 ptaszek „mam 16 lat" jest z góry —
     /// dokładnie 16 po roku może jeszcze nie mieć urodzin, więc pyta.
     static var profileAgeByYear: Int? {
-        let year = UserDefaults.standard.integer(forKey: "settings.profile.yearOfBirth")
+        let year = SCProtectedSettings.shared.integer(forKey: "settings.profile.yearOfBirth")
         guard year > 0 else { return nil }
         return Calendar.current.component(.year, from: Date()) - year
     }
