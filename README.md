@@ -35,7 +35,7 @@ During `Debug` builds, a build phase rewrites the built app's `Info.plist` like 
 - branch `master` or `main`: `https://api.scoffie.app`
 - any other local branch: `http://localhost:3000`
 
-`Release` builds always use `https://api.scoffie.app`.
+`Release` builds always use `https://api.scoffie.app`, and the same build phase removes the ATS exception `NSAppTransportSecurity:NSAllowsLocalNetworking` from the built app's `Info.plist` (it stays only in `Debug`, for the local backend).
 
 For local backend development on a physical iPhone, override `API_BASE_URL` in your local Xcode scheme or launch environment and use your Mac's LAN IP (for example `http://192.168.x.x:3000`) rather than `localhost`, which resolves to the phone itself.
 
