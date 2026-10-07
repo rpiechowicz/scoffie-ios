@@ -57,6 +57,16 @@ final class RecipeCatalogStore {
     /// właśnie czeka w kolejce, mógłby przyjść po skasowaniu.
     static func clearCache() {
         CatalogSyncCore<Recipe>.clearPrivateFiles(.appCache, gate: .shared)
+        // 7.10.2026: kopie, których migracja nie przeniosła z `Documents` —
+        // te same pliki, poza kolejką (zapisy kolejki idą tylko do nowego
+        // katalogu). Publiczny `recipe_catalog.json` zostaje, jak w nowym.
+        // Celowo tu, a nie w `CatalogSyncCore`: sprawdzian na macOS woła
+        // `clearPrivateFiles` i nie może sięgać do prawdziwego `Documents`.
+        let householdFileName = CatalogCacheFiles.appCache.householdURL.lastPathComponent
+        AppCacheDirectory.removeLegacyCopies { name in
+            name == householdFileName
+                || (name.hasPrefix("recipes_catalog_cache_v") && name.hasSuffix(".json"))
+        }
     }
 
     /// Pliki sprzed synchronizacji rewizją: `recipes_catalog_cache_v<N>.json`

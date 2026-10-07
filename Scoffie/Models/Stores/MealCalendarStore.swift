@@ -697,12 +697,9 @@ class MealCalendarStore {
 
     /// Wylogowanie, usunięcie konta, zmiana domu: plik planu (także stary,
     /// wspólny `meal_plans.json`) nie może przeżyć sesji.
+    /// Także ze starego `Documents` (7.10.2026), gdyby migracja go nie przeniosła.
     static func clearCache() {
-        let directory = AppCacheDirectory.directory
-        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return }
-        for name in names where name.hasPrefix(cacheFilePrefix) && name.hasSuffix(".json") {
-            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
-        }
+        AppCacheDirectory.removeFiles { $0.hasPrefix(cacheFilePrefix) && $0.hasSuffix(".json") }
     }
 
     private func save() {

@@ -158,8 +158,9 @@ final class CookScenarioStore {
 
     /// Przepisy domu są prywatne, więc katalog paczek znika z wylogowaniem
     /// i wyjściem z domu (`SessionStore.clearRuntimeStores`).
+    /// Także ze starego miejsca (7.10.2026), gdyby migracja go nie przeniosła.
     static func clearCache() {
-        try? FileManager.default.removeItem(at: directory)
+        AppCacheDirectory.removeEverywhere(directory.lastPathComponent)
     }
 
     /// 7.10.2026 (audyt 2.5): w katalogu offline wykluczonym z kopii zapasowej

@@ -490,9 +490,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
 - **Pliki offline** (7.10.2026, audyt bezpieczeństwa 2.5): plan, lista zakupów, domownicy, katalog i Gotuj
   piszą WYŁĄCZNIE przez `AppCacheDirectory.url(for:)` (`Models/Stores/AppCacheDirectory.swift`):
   `Application Support/ScoffieCache`, wykluczony z kopii zapasowej, ochrona `completeUntilFirstUserAuthentication`.
-  Nigdy `Documents` (idzie do kopii iCloud) ani `Caches` (system go czyści). Stare pliki przenosi raz na
-  proces lista w `AppCacheDirectory` — nowy plik w starym miejscu = dopisz go tam. Katalogu nie kasować w
-  całości. `NSAllowsLocalNetworking` zostaje tylko w Debug — w Release zdejmuje go faza „Configure API Base URL”.
+  Nigdy `Documents` (idzie do kopii iCloud) ani `Caches` (system go czyści). Stare pliki przenosi przy
+  pierwszym dostępie (i ponawia, dopóki się nie uda) lista w `AppCacheDirectory` — nowy plik w starym miejscu = dopisz go tam.
+  Sprzątanie sesji tylko przez `removeFiles(where:)` / `removeEverywhere(_:)` (kasują też w starych miejscach);
+  katalogu nie kasować w całości. `NSAllowsLocalNetworking` zostaje tylko w Debug — w Release zdejmuje go faza „Configure API Base URL”.
 
 ## Kontrakty z backendem (nie zmieniać jednostronnie)
 - **Minimalna wersja** (2.10.2026): `Components/SCAppUpdateGate.swift` pyta `GET /public/app-version?platform=ios&version=`

@@ -60,12 +60,9 @@ final class ShoppingListStore {
     }
 
     /// Usunięcie konta / wylogowanie: lista z dysku nie zostaje (art. 17).
+    /// Także ze starego `Documents` (7.10.2026), gdyby migracja go nie przeniosła.
     static func clearCache() {
-        let directory = AppCacheDirectory.directory
-        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return }
-        for name in names where name.hasPrefix("shopping_list_cache_") && name.hasSuffix(".json") {
-            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
-        }
+        AppCacheDirectory.removeFiles { $0.hasPrefix("shopping_list_cache_") && $0.hasSuffix(".json") }
     }
 
     init(repository: ShoppingListRepository, currentUserId: String = "", cacheNamespace: String = "default") {

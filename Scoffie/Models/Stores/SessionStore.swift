@@ -3089,8 +3089,9 @@ final class SessionStore {
         try? data.write(to: householdMembersCacheURL, options: .atomic)
     }
 
+    /// Także ze starego `Documents` (7.10.2026), gdyby migracja go nie przeniosła.
     private func clearHouseholdMembersCache() {
-        try? FileManager.default.removeItem(at: householdMembersCacheURL)
+        AppCacheDirectory.removeEverywhere(householdMembersCacheURL.lastPathComponent)
     }
 
     /// Claimy z access tokenu (bez weryfikacji podpisu — to robi serwer).
