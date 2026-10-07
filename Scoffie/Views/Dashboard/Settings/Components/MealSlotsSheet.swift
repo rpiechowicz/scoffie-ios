@@ -173,8 +173,9 @@ struct MealSlotsSheet: View {
         .sheet(item: $editing) { slot in
             editorSheet(slot)
                 // Jedna trzecia ekranu — nad nią dalej widać oś dnia.
-                // Pory dodatkowe mają nad kołem wiersz „W planie dnia” — wyżej niż 1/3.
-                .presentationDetents([MealSlot.optionalSlots.contains(slot) ? .height(390) : .fraction(1.0 / 3.0)])
+                // Pory dodatkowe mają „Wyłącz” obok krzyżyka i koło w pełnych
+                // 216 pt (ściśnięte wystawało nad nagłówek i zjadało stuknięcie).
+                .presentationDetents([MealSlot.optionalSlots.contains(slot) ? .height(370) : .fraction(1.0 / 3.0)])
                 .dashboardLiquidSheet(cornerRadius: 26)
         }
         .alert(
@@ -462,10 +463,10 @@ struct MealSlotsSheet: View {
         )
     }
 
-    /// Wiersz „W planie dnia” z przełącznikiem — tylko przy porach
-    /// dodatkowych (obowiązkowych nie da się wyłączyć). Wyłączenie zamyka
-    /// okienko, gdy kciuk przejedzie (oś pod spodem pokazuje skutek);
-    /// włączenie zostawia je otwarte, bo zwykle chce się od razu ustawić godzinę.
+    /// „Wyłącz” / „Włącz” obok krzyżyka — tylko przy porach dodatkowych
+    /// (obowiązkowych nie da się wyłączyć). Wyłączenie od razu zamyka okienko
+    /// (oś pod spodem pokazuje skutek); włączenie zostawia je otwarte, bo
+    /// zwykle chce się od razu ustawić godzinę.
     private func inPlanToggle(for slot: MealSlot) -> MealTimeEditorSheet.InPlan? {
         guard MealSlot.optionalSlots.contains(slot) else { return nil }
         return MealTimeEditorSheet.InPlan(
@@ -475,11 +476,8 @@ struct MealSlotsSheet: View {
                     popCounts[slot, default: 0] += 1
                     toggle(slot, to: true)
                 } else {
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(300))
-                        editing = nil
-                        disableFromEditor(slot)
-                    }
+                    editing = nil
+                    disableFromEditor(slot)
                 }
             }
         )
