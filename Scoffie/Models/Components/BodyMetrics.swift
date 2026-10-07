@@ -232,9 +232,11 @@ extension BodyMetrics {
     }
 }
 
-// MARK: - Odczyt z UserDefaults
+// MARK: - Klucze ustawień
 
 extension BodyMetrics {
+    /// Klucze sylwetki — od 7.10.2026 w `SCProtectedSettings` (`@ProtectedSetting`),
+    /// NIE w `UserDefaults` / `@AppStorage` (dane zdrowotne poza kopią zapasową).
     enum Keys {
         static let heightCm = "settings.profile.heightCm"
         static let weightKg = "settings.profile.weightKg"

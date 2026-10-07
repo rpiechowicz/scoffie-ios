@@ -80,13 +80,13 @@ struct RecipesView: View {
     // zapisuje Ustawienia → „Dieta i alergeny”. Czytamy je przez
     // `@AppStorage`, więc zmiana w Ustawieniach przestawia listę od razu po
     // powrocie na tę zakładkę, bez żadnego odświeżania.
-    @AppStorage(RecipePersonalization.Keys.diet)
+    @ProtectedSetting(RecipePersonalization.Keys.diet)
     private var dietPreferenceRaw: String = DietPreference.none.rawValue
-    @AppStorage(RecipePersonalization.Keys.allergens)
+    @ProtectedSetting(RecipePersonalization.Keys.allergens)
     private var allergensRaw: String = ""
-    @AppStorage(RecipePersonalization.Keys.goal)
+    @ProtectedSetting(RecipePersonalization.Keys.goal)
     private var goalRaw: String = UserGoal.healthy.rawValue
-    @AppStorage(RecipePersonalization.Keys.calorieGoal)
+    @ProtectedSetting(RecipePersonalization.Keys.calorieGoal)
     private var calorieGoal: Int = RecipePersonalization.defaultCalorieGoal
     @AppStorage(RecipePersonalization.Keys.enabled)
     private var isPersonalizationEnabled: Bool = true

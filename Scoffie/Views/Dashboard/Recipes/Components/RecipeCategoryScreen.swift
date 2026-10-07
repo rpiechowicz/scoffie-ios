@@ -41,13 +41,13 @@ struct RecipeCategoryScreen: View {
 
     // Te same klucze, co na korzeniu Przepisów — ekran czyta je sam, więc
     // zmiana dopasowania (żeton, różdżka w Filtrach) przelicza go od razu.
-    @AppStorage(RecipePersonalization.Keys.diet)
+    @ProtectedSetting(RecipePersonalization.Keys.diet)
     private var dietPreferenceRaw: String = DietPreference.none.rawValue
-    @AppStorage(RecipePersonalization.Keys.allergens)
+    @ProtectedSetting(RecipePersonalization.Keys.allergens)
     private var allergensRaw: String = ""
-    @AppStorage(RecipePersonalization.Keys.goal)
+    @ProtectedSetting(RecipePersonalization.Keys.goal)
     private var goalRaw: String = UserGoal.healthy.rawValue
-    @AppStorage(RecipePersonalization.Keys.calorieGoal)
+    @ProtectedSetting(RecipePersonalization.Keys.calorieGoal)
     private var calorieGoal: Int = RecipePersonalization.defaultCalorieGoal
     @AppStorage(RecipePersonalization.Keys.enabled)
     private var isPersonalizationEnabled: Bool = true

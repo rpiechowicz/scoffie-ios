@@ -227,6 +227,9 @@ final class SessionStore {
     }
 
     func refreshRealtimeStoresOnForeground() {
+        // Chroniony plik ustawień też bywa zamknięty, gdy proces wstał przed
+        // pierwszym odblokowaniem — teraz telefon jest odblokowany (7.10.2026).
+        SCProtectedSettings.shared.reloadIfNeeded()
         // Proces obudzony, zanim Keychain był dostępny — sesja czeka na
         // pierwsze wejście na pierwszy plan.
         if !isAuthenticated, restoreDeferredUntilKeychainAvailable {
@@ -2078,12 +2081,12 @@ final class SessionStore {
             }
 
             let defaults = UserDefaults.standard
-            defaults.set(user.displayName, forKey: Keys.displayName)
-            defaults.set(user.email ?? "", forKey: Keys.email)
+            SCProtectedSettings.shared.set(user.displayName, forKey: Keys.displayName)
+            SCProtectedSettings.shared.set(user.email ?? "", forKey: Keys.email)
             if let avatarUrl = user.avatarUrl, !avatarUrl.isEmpty {
-                defaults.set(avatarUrl, forKey: Keys.avatarUrl)
+                SCProtectedSettings.shared.set(avatarUrl, forKey: Keys.avatarUrl)
             } else {
-                defaults.removeObject(forKey: Keys.avatarUrl)
+                SCProtectedSettings.shared.removeObject(forKey: Keys.avatarUrl)
             }
             persistProfileFields(
                 yearOfBirth: user.yearOfBirth,
@@ -2147,15 +2150,15 @@ final class SessionStore {
         }
 
         defaults.set(response.user.id, forKey: Keys.userId)
-        defaults.set(response.user.displayName, forKey: Keys.displayName)
-        defaults.set(response.user.email ?? "", forKey: Keys.email)
+        SCProtectedSettings.shared.set(response.user.displayName, forKey: Keys.displayName)
+        SCProtectedSettings.shared.set(response.user.email ?? "", forKey: Keys.email)
         // Apple Sign in doesn't provide a profile photo; avatarUrl is typically
         // nil for Apple users and surfaces initials-based fallback in the UI.
         // For Google / other providers it persists the real URL.
         if let avatarUrl = response.user.avatarUrl, !avatarUrl.isEmpty {
-            defaults.set(avatarUrl, forKey: Keys.avatarUrl)
+            SCProtectedSettings.shared.set(avatarUrl, forKey: Keys.avatarUrl)
         } else {
-            defaults.removeObject(forKey: Keys.avatarUrl)
+            SCProtectedSettings.shared.removeObject(forKey: Keys.avatarUrl)
         }
         // Kolor awatara prosto z logowania — bez tego do czasu pierwszego
         // `users:me` profil świecił fallbackiem z hasza, innym niż listy
@@ -2213,10 +2216,10 @@ final class SessionStore {
         defaults.removeObject(forKey: Keys.householdId)
         defaults.removeObject(forKey: Keys.householdName)
         defaults.removeObject(forKey: Keys.appleUserIdentifier)
-        defaults.removeObject(forKey: Keys.avatarUrl)
+        SCProtectedSettings.shared.removeObject(forKey: Keys.avatarUrl)
         defaults.removeObject(forKey: Keys.avatarColor)
-        defaults.removeObject(forKey: Keys.displayName)
-        defaults.removeObject(forKey: Keys.email)
+        SCProtectedSettings.shared.removeObject(forKey: Keys.displayName)
+        SCProtectedSettings.shared.removeObject(forKey: Keys.email)
         defaults.removeObject(forKey: Keys.onboardingCompletedAt)
         // Przewodnik „Poznaj aplikację" należy do konta, nie do telefonu:
         // bez tej linii kolejna osoba logująca się na tym urządzeniu
@@ -2225,6 +2228,9 @@ final class SessionStore {
         defaults.removeObject(forKey: TourCompletion.storageKey)
         clearPersistedProfileFields()
         clearPersistedPreferences()
+        // Cały chroniony plik (profil, dieta, e-mail, imię — 7.10.2026), nie
+        // tylko klucze wymienione wyżej: ta sama zasada co `KeychainService.deleteAll()`.
+        SCProtectedSettings.shared.removeAll()
         clearPersistedHealthIntegration()
         onboardingCompletedAt = nil
     }
@@ -2247,14 +2253,14 @@ final class SessionStore {
     /// already filled).
     private func clearPersistedPreferences() {
         let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: PreferencesKeys.diet)
-        defaults.removeObject(forKey: PreferencesKeys.calorieGoal)
-        defaults.removeObject(forKey: PreferencesKeys.allergens)
-        defaults.removeObject(forKey: PreferencesKeys.goal)
-        defaults.removeObject(forKey: PreferencesKeys.activityLevel)
-        defaults.removeObject(forKey: PreferencesKeys.proteinG)
-        defaults.removeObject(forKey: PreferencesKeys.fatG)
-        defaults.removeObject(forKey: PreferencesKeys.carbsG)
+        SCProtectedSettings.shared.removeObject(forKey: PreferencesKeys.diet)
+        SCProtectedSettings.shared.removeObject(forKey: PreferencesKeys.calorieGoal)
+        SCProtectedSettings.shared.removeObject(forKey: PreferencesKeys.allergens)
+        SCProtectedSettings.shared.removeObject(forKey: PreferencesKeys.goal)
+        SCProtectedSettings.shared.removeObject(forKey: PreferencesKeys.activityLevel)
+        SCProtectedSettings.shared.removeObject(forKey: PreferencesKeys.proteinG)
+        SCProtectedSettings.shared.removeObject(forKey: PreferencesKeys.fatG)
+        SCProtectedSettings.shared.removeObject(forKey: PreferencesKeys.carbsG)
         // Posiłki i ich pory należą do GOSPODARSTWA, nie do telefonu.
         // Zostawione, wchodziły kolejnej osobie logującej się na tym
         // urządzeniu jako jej własne — a od kroku „Ile posiłków jecie?"
@@ -2596,6 +2602,12 @@ final class SessionStore {
 
     // MARK: - User preferences (diet, kcal, allergens)
     //
+    // 7.10.2026: profil, dieta i dane konta leżą w `SCProtectedSettings`
+    // (chroniony plik poza kopią zapasową), widoki czytają je przez
+    // `@ProtectedSetting` — „AppStorage” niżej znaczy dziś ten magazyn.
+    // W `UserDefaults` zostały tylko niewrażliwe klucze (powiadomienia,
+    // `sexClearPending`, wygaszone „Czego nie jem”).
+    //
     // Source of truth lives in `@AppStorage` so SwiftUI views read it
     // synchronously. SessionStore mirrors writes to the backend so the row
     // persists across devices and powers other views (e.g. Calendar's kcal
@@ -2643,9 +2655,9 @@ final class SessionStore {
         sex: String?
     ) {
         let defaults = UserDefaults.standard
-        if let yearOfBirth { defaults.set(yearOfBirth, forKey: ProfileKeys.yearOfBirth) }
-        if let heightCm { defaults.set(heightCm, forKey: ProfileKeys.heightCm) }
-        if let weightKg { defaults.set(weightKg, forKey: ProfileKeys.weightKg) }
+        if let yearOfBirth { SCProtectedSettings.shared.set(yearOfBirth, forKey: ProfileKeys.yearOfBirth) }
+        if let heightCm { SCProtectedSettings.shared.set(heightCm, forKey: ProfileKeys.heightCm) }
+        if let weightKg { SCProtectedSettings.shared.set(weightKg, forKey: ProfileKeys.weightKg) }
         // Backend oddaje `MALE` / `FEMALE`, iOS trzyma małymi literami —
         // ta sama konwencja co przy diecie i celu. `users:me` (jedyne wywołanie)
         // oddaje płeć ZAWSZE, `null` gdy jej nie podano — brak to więc fakt:
@@ -2655,22 +2667,22 @@ final class SessionStore {
             // Niepotwierdzone „Nie podaję” wygrywa ze starą płcią z serwera,
             // dopóki zapis go nie ponowi — inaczej arkusz pokazałby ją z powrotem.
             if defaults.string(forKey: ProfileKeys.sexClearPending) == nil {
-                defaults.set(sex.lowercased(), forKey: ProfileKeys.sex)
+                SCProtectedSettings.shared.set(sex.lowercased(), forKey: ProfileKeys.sex)
             }
         } else {
             // Flagi NIE zdejmujemy: spóźniony odczyt z `null` sprzed nowszego
             // „Nie podaję” skasowałby jej znacznik. Zdejmuje ją tylko
             // potwierdzony zapis (ponowny `null` serwerowi nie szkodzi).
-            defaults.removeObject(forKey: ProfileKeys.sex)
+            SCProtectedSettings.shared.removeObject(forKey: ProfileKeys.sex)
         }
     }
 
     private func clearPersistedProfileFields() {
         let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: ProfileKeys.yearOfBirth)
-        defaults.removeObject(forKey: ProfileKeys.heightCm)
-        defaults.removeObject(forKey: ProfileKeys.weightKg)
-        defaults.removeObject(forKey: ProfileKeys.sex)
+        SCProtectedSettings.shared.removeObject(forKey: ProfileKeys.yearOfBirth)
+        SCProtectedSettings.shared.removeObject(forKey: ProfileKeys.heightCm)
+        SCProtectedSettings.shared.removeObject(forKey: ProfileKeys.weightKg)
+        SCProtectedSettings.shared.removeObject(forKey: ProfileKeys.sex)
         defaults.removeObject(forKey: ProfileKeys.sexClearPending)
     }
 
@@ -2694,23 +2706,23 @@ final class SessionStore {
             // Przez `backendValue`, nie przez `lowercased()` — patrz komentarz
             // przy `DietPreference.backendValue`.
             if let diet = DietPreference(backendValue: prefs.dietPreference) {
-                defaults.set(diet.rawValue, forKey: PreferencesKeys.diet)
+                SCProtectedSettings.shared.set(diet.rawValue, forKey: PreferencesKeys.diet)
             }
-            defaults.set(prefs.calorieGoal, forKey: PreferencesKeys.calorieGoal)
-            defaults.set(
+            SCProtectedSettings.shared.set(prefs.calorieGoal, forKey: PreferencesKeys.calorieGoal)
+            SCProtectedSettings.shared.set(
                 prefs.allergens
                     .map { $0.lowercased() }
                     .sorted()
                     .joined(separator: ","),
                 forKey: PreferencesKeys.allergens
             )
-            defaults.set(prefs.goal.lowercased(), forKey: PreferencesKeys.goal)
-            defaults.set(prefs.activityLevel, forKey: PreferencesKeys.activityLevel)
+            SCProtectedSettings.shared.set(prefs.goal.lowercased(), forKey: PreferencesKeys.goal)
+            SCProtectedSettings.shared.set(prefs.activityLevel, forKey: PreferencesKeys.activityLevel)
             // −1 to sentinel „licz za mnie" po stronie iOS; backend trzyma
             // tam `null`. Tłumaczenie w obie strony siedzi wyłącznie tutaj.
-            defaults.set(prefs.proteinG ?? -1, forKey: PreferencesKeys.proteinG)
-            defaults.set(prefs.fatG ?? -1, forKey: PreferencesKeys.fatG)
-            defaults.set(prefs.carbsG ?? -1, forKey: PreferencesKeys.carbsG)
+            SCProtectedSettings.shared.set(prefs.proteinG ?? -1, forKey: PreferencesKeys.proteinG)
+            SCProtectedSettings.shared.set(prefs.fatG ?? -1, forKey: PreferencesKeys.fatG)
+            SCProtectedSettings.shared.set(prefs.carbsG ?? -1, forKey: PreferencesKeys.carbsG)
 
             // „Czego nie jem” (wykluczone składniki i limit czasu na danie)
             // zniknęło z aplikacji 23.09.2026 — wykluczanie składników żyje
@@ -2789,11 +2801,11 @@ final class SessionStore {
         var data: [String: Any] = [:]
         if let diet, let preference = DietPreference(rawValue: diet) {
             data["dietPreference"] = preference.backendValue
-            defaults.set(preference.rawValue, forKey: PreferencesKeys.diet)
+            SCProtectedSettings.shared.set(preference.rawValue, forKey: PreferencesKeys.diet)
         }
         if let calorieGoal {
             data["calorieGoal"] = calorieGoal
-            defaults.set(calorieGoal, forKey: PreferencesKeys.calorieGoal)
+            SCProtectedSettings.shared.set(calorieGoal, forKey: PreferencesKeys.calorieGoal)
         }
         if let allergens {
             // Dedupe i trim tutaj, bo DTO ma `@ArrayUnique` tylko na ścieżce
@@ -2805,7 +2817,7 @@ final class SessionStore {
                     .filter { !$0.isEmpty }
             )).sorted()
             data["allergens"] = normalised
-            defaults.set(
+            SCProtectedSettings.shared.set(
                 normalised.joined(separator: ","),
                 forKey: PreferencesKeys.allergens
             )
@@ -2829,31 +2841,31 @@ final class SessionStore {
         }
         if let goal {
             data["goal"] = goal.uppercased()
-            defaults.set(goal.lowercased(), forKey: PreferencesKeys.goal)
+            SCProtectedSettings.shared.set(goal.lowercased(), forKey: PreferencesKeys.goal)
         }
         if let activityLevel {
             data["activityLevel"] = activityLevel
-            defaults.set(activityLevel, forKey: PreferencesKeys.activityLevel)
+            SCProtectedSettings.shared.set(activityLevel, forKey: PreferencesKeys.activityLevel)
         }
         if clearMacroOverrides {
             data["proteinG"] = NSNull()
             data["fatG"] = NSNull()
             data["carbsG"] = NSNull()
-            defaults.set(-1, forKey: PreferencesKeys.proteinG)
-            defaults.set(-1, forKey: PreferencesKeys.fatG)
-            defaults.set(-1, forKey: PreferencesKeys.carbsG)
+            SCProtectedSettings.shared.set(-1, forKey: PreferencesKeys.proteinG)
+            SCProtectedSettings.shared.set(-1, forKey: PreferencesKeys.fatG)
+            SCProtectedSettings.shared.set(-1, forKey: PreferencesKeys.carbsG)
         } else {
             if let proteinG {
                 data["proteinG"] = proteinG
-                defaults.set(proteinG, forKey: PreferencesKeys.proteinG)
+                SCProtectedSettings.shared.set(proteinG, forKey: PreferencesKeys.proteinG)
             }
             if let fatG {
                 data["fatG"] = fatG
-                defaults.set(fatG, forKey: PreferencesKeys.fatG)
+                SCProtectedSettings.shared.set(fatG, forKey: PreferencesKeys.fatG)
             }
             if let carbsG {
                 data["carbsG"] = carbsG
-                defaults.set(carbsG, forKey: PreferencesKeys.carbsG)
+                SCProtectedSettings.shared.set(carbsG, forKey: PreferencesKeys.carbsG)
             }
         }
         guard !data.isEmpty else { return true }
@@ -2967,16 +2979,16 @@ final class SessionStore {
             )
             if !trimmed.isEmpty {
                 data["displayName"] = trimmed
-                UserDefaults.standard.set(trimmed, forKey: Keys.displayName)
+                SCProtectedSettings.shared.set(trimmed, forKey: Keys.displayName)
             }
         }
         if let yearOfBirth {
             data["yearOfBirth"] = yearOfBirth
-            UserDefaults.standard.set(yearOfBirth, forKey: ProfileKeys.yearOfBirth)
+            SCProtectedSettings.shared.set(yearOfBirth, forKey: ProfileKeys.yearOfBirth)
         }
         if let heightCm {
             data["heightCm"] = heightCm
-            UserDefaults.standard.set(heightCm, forKey: ProfileKeys.heightCm)
+            SCProtectedSettings.shared.set(heightCm, forKey: ProfileKeys.heightCm)
         }
         if let weightKg {
             // Jedno miejsce po przecinku — tyle waliduje backend i tyle
@@ -2984,7 +2996,7 @@ final class SessionStore {
             // wywracałoby walidację `maxDecimalPlaces: 1`.
             let rounded = (weightKg * 10).rounded() / 10
             data["weightKg"] = rounded
-            UserDefaults.standard.set(rounded, forKey: ProfileKeys.weightKg)
+            SCProtectedSettings.shared.set(rounded, forKey: ProfileKeys.weightKg)
         }
         // Skasowanie płci: wybrane teraz albo niepotwierdzone z wcześniejszego
         // zapisu, który padł (`sexClearPending`) — ponawiamy je, dopóki serwer
@@ -2997,11 +3009,11 @@ final class SessionStore {
             let token = clearSex ? UUID().uuidString : (pendingClear ?? UUID().uuidString)
             clearToken = token
             data["sex"] = NSNull()
-            UserDefaults.standard.removeObject(forKey: ProfileKeys.sex)
+            SCProtectedSettings.shared.removeObject(forKey: ProfileKeys.sex)
             UserDefaults.standard.set(token, forKey: ProfileKeys.sexClearPending)
         } else if let sex, !sex.isEmpty {
             data["sex"] = sex.uppercased()
-            UserDefaults.standard.set(sex.lowercased(), forKey: ProfileKeys.sex)
+            SCProtectedSettings.shared.set(sex.lowercased(), forKey: ProfileKeys.sex)
             UserDefaults.standard.removeObject(forKey: ProfileKeys.sexClearPending)
         }
         guard !data.isEmpty else { return true }

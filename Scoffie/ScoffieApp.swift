@@ -537,7 +537,7 @@ struct ScoffieApp: App {
             )
         case .welcome:
             WelcomeFlowView(
-                initialDisplayName: UserDefaults.standard.string(forKey: "settings.user.displayName") ?? "",
+                initialDisplayName: SCProtectedSettings.shared.string(forKey: "settings.user.displayName") ?? "",
                 // Jak przy logowaniu: dom już jest, korzeń zaraz przejdzie
                 // na pulpit — przycisk kroku 5 nie wraca na moment do stanu
                 // spoczynku pod zasłoną.

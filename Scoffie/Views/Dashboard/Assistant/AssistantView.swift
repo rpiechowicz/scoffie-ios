@@ -25,24 +25,24 @@ struct AssistantView: View {
 
     // Cel czytany tak samo jak na Przepisach i w Kalendarzu — jedno źródło,
     // żeby chip kontekstu nie obiecywał innej liczby niż reszta aplikacji.
-    @AppStorage(RecipePersonalization.Keys.calorieGoal)
+    @ProtectedSetting(RecipePersonalization.Keys.calorieGoal)
     private var calorieGoal: Int = RecipePersonalization.defaultCalorieGoal
     // Reszta profilu pod dzienny cel makro — te same klucze, co Plan
     // i Kalendarz, bo briefing „brakuje Ci białka” ma mówić o TYM SAMYM celu,
     // który pokazuje pigułka „Cel dnia”.
-    @AppStorage(RecipePersonalization.Keys.goal)
+    @ProtectedSetting(RecipePersonalization.Keys.goal)
     private var goalRaw: String = UserGoal.healthy.rawValue
-    @AppStorage(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
-    @AppStorage(BodyMetrics.Keys.weightKg) private var profileWeightKg: Double = 0
-    @AppStorage(BodyMetrics.Keys.sex) private var profileSexRaw: String = ""
-    @AppStorage(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
-    @AppStorage(BodyMetrics.Keys.activityLevel)
+    @ProtectedSetting(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
+    @ProtectedSetting(BodyMetrics.Keys.weightKg) private var profileWeightKg: Double = 0
+    @ProtectedSetting(BodyMetrics.Keys.sex) private var profileSexRaw: String = ""
+    @ProtectedSetting(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
+    @ProtectedSetting(BodyMetrics.Keys.activityLevel)
     private var profileActivityRaw: Int = ActivityLevel.light.rawValue
-    @AppStorage(DailyNutritionTargets.Keys.proteinG)
+    @ProtectedSetting(DailyNutritionTargets.Keys.proteinG)
     private var proteinOverride: Int = DailyNutritionTargets.Keys.noOverride
-    @AppStorage(DailyNutritionTargets.Keys.fatG)
+    @ProtectedSetting(DailyNutritionTargets.Keys.fatG)
     private var fatOverride: Int = DailyNutritionTargets.Keys.noOverride
-    @AppStorage(DailyNutritionTargets.Keys.carbsG)
+    @ProtectedSetting(DailyNutritionTargets.Keys.carbsG)
     private var carbsOverride: Int = DailyNutritionTargets.Keys.noOverride
 
     @State private var draft = ""
@@ -741,7 +741,7 @@ struct AssistantView: View {
         return AssistantBriefingContext(
             now: now,
             calendar: calendar,
-            displayName: UserDefaults.standard.string(forKey: "settings.user.displayName"),
+            displayName: SCProtectedSettings.shared.string(forKey: "settings.user.displayName"),
             trialExhausted: store.isLockedByTrialQuota,
             isNewUser: isNewUser,
             thisWeek: thisWeek,

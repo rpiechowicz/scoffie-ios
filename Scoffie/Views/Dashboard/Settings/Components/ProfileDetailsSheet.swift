@@ -40,17 +40,17 @@ struct ProfileDetailsSheet: View {
     @Environment(\.toasts) private var toasts
     @Environment(\.colorScheme) private var scheme
 
-    @AppStorage("settings.user.displayName") private var displayName: String = ""
-    @AppStorage("settings.user.email") private var email: String = ""
-    @AppStorage("settings.user.avatarUrl") private var avatarUrl: String = ""
+    @ProtectedSetting("settings.user.displayName") private var displayName: String = ""
+    @ProtectedSetting("settings.user.email") private var email: String = ""
+    @ProtectedSetting("settings.user.avatarUrl") private var avatarUrl: String = ""
     @AppStorage("settings.user.avatarColor") private var avatarColor: Int = -1
     /// Ziarno awatara — to samo id, którym posługuje się `MemberAvatar`.
     @AppStorage("auth.userId") private var userId: String = ""
-    @AppStorage("settings.profile.yearOfBirth") private var yearOfBirth: Int = Self.defaultYearOfBirth
-    @AppStorage("settings.profile.heightCm") private var heightCm: Int = Self.defaultHeightCm
-    @AppStorage("settings.profile.weightKg") private var weightKg: Double = Self.defaultWeightKg
-    @AppStorage("settings.profile.sex") private var sexRaw: String = ""
-    @AppStorage("settings.diet.activityLevel") private var activityLevelRaw: Int = ActivityLevel.light.rawValue
+    @ProtectedSetting("settings.profile.yearOfBirth") private var yearOfBirth: Int = Self.defaultYearOfBirth
+    @ProtectedSetting("settings.profile.heightCm") private var heightCm: Int = Self.defaultHeightCm
+    @ProtectedSetting("settings.profile.weightKg") private var weightKg: Double = Self.defaultWeightKg
+    @ProtectedSetting("settings.profile.sex") private var sexRaw: String = ""
+    @ProtectedSetting("settings.diet.activityLevel") private var activityLevelRaw: Int = ActivityLevel.light.rawValue
 
     @State private var isConfirmingDeletion = false
     @State private var isDeleting = false

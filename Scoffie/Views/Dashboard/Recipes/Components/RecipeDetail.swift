@@ -1920,21 +1920,21 @@ private struct DetailNutritionCard: View {
     let nutrition: Nutrition
 
     // Cel dnia — te same klucze i ta sama reguła, co Plan i Kalendarz.
-    @AppStorage(RecipePersonalization.Keys.calorieGoal)
+    @ProtectedSetting(RecipePersonalization.Keys.calorieGoal)
     private var calorieGoal: Int = RecipePersonalization.defaultCalorieGoal
-    @AppStorage(RecipePersonalization.Keys.goal)
+    @ProtectedSetting(RecipePersonalization.Keys.goal)
     private var goalRaw: String = UserGoal.healthy.rawValue
-    @AppStorage(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
-    @AppStorage(BodyMetrics.Keys.weightKg) private var profileWeightKg: Double = 0
-    @AppStorage(BodyMetrics.Keys.sex) private var profileSexRaw: String = ""
-    @AppStorage(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
-    @AppStorage(BodyMetrics.Keys.activityLevel)
+    @ProtectedSetting(BodyMetrics.Keys.heightCm) private var profileHeightCm: Int = 0
+    @ProtectedSetting(BodyMetrics.Keys.weightKg) private var profileWeightKg: Double = 0
+    @ProtectedSetting(BodyMetrics.Keys.sex) private var profileSexRaw: String = ""
+    @ProtectedSetting(BodyMetrics.Keys.yearOfBirth) private var profileYearOfBirth: Int = 0
+    @ProtectedSetting(BodyMetrics.Keys.activityLevel)
     private var profileActivityRaw: Int = ActivityLevel.light.rawValue
-    @AppStorage(DailyNutritionTargets.Keys.proteinG)
+    @ProtectedSetting(DailyNutritionTargets.Keys.proteinG)
     private var proteinOverride: Int = DailyNutritionTargets.Keys.noOverride
-    @AppStorage(DailyNutritionTargets.Keys.fatG)
+    @ProtectedSetting(DailyNutritionTargets.Keys.fatG)
     private var fatOverride: Int = DailyNutritionTargets.Keys.noOverride
-    @AppStorage(DailyNutritionTargets.Keys.carbsG)
+    @ProtectedSetting(DailyNutritionTargets.Keys.carbsG)
     private var carbsOverride: Int = DailyNutritionTargets.Keys.noOverride
 
     private var targets: DailyNutritionTargets {
