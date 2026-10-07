@@ -1,11 +1,17 @@
 import SwiftUI
 
-/// „16 · Co o Was pamięta” — 1:1 z makietą: nagłówek o treści, nie
-/// o limicie; trzy grupy (preferencje, ograniczenia, zwyczaje), każda
-/// notatka ze źródłem; „6 z 30 notatek” w stopce jako cicha metadana.
-/// Stuknięcie w notatkę pyta, czy ją zapomnieć.
+/// „16 · Co o Was pamięta” — trzy grupy (preferencje, ograniczenia,
+/// zwyczaje), każda notatka ze źródłem. Stuknięcie w notatkę pyta, czy ją
+/// zapomnieć.
 ///
 /// Notatki są WSPÓLNE dla domu — tak samo jak plan tygodnia i lista zakupów.
+///
+/// 7.10.2026 (nowy język arkuszy, jak Ustawienia → Gospodarstwo): podtytuł
+/// to samo „6 z 30 notatek” (bez zdania objaśnień i bez liczenia od zera),
+/// grupy = etykieta + karta Ustawień, notatka = `EditorialSettingsRow`
+/// z kafelkiem grupy i pełnym tekstem, pusty stan `RecipeListEmptyState`,
+/// a „Usuń wszystkie notatki” to `SCDestructiveButton` przypięty na dole
+/// (jak „Opuść gospodarstwo”) zamiast terakotowego napisu pod licznikiem.
 struct AssistantMemorySheet: View {
     let store: AgentStore
 
@@ -21,21 +27,30 @@ struct AssistantMemorySheet: View {
         NavigationStack {
             AssistantSheetScaffold(
                 title: "Co o Was pamięta",
-                subtitle: "Trwałe rzeczy o Waszym domu, zapamiętane z rozmów. Każdą możesz poprawić albo usunąć.",
+                subtitle: store.memory.isEmpty ? nil : "\(store.memory.count) z \(Self.memoryLimit) notatek",
                 // Glif „Pamięci domu” z menu ⋯.
                 icon: "brain.head.profile.fill",
                 onClose: { dismiss() },
-                footer: { footerMeta }
+                footer: {
+                    if !store.memory.isEmpty {
+                        SCDestructiveButton(title: "Usuń wszystkie notatki", icon: "trash") {
+                            showsForgetAllAlert = true
+                        }
+                    }
+                }
             ) {
                 if store.memory.isEmpty && !store.isLoadingMemory {
-                    AssistantGroup {
-                        emptyState
-                    }
+                    emptyState
+                        .padding(.top, 14)
                 } else {
-                    ForEach(grouped) { section in
-                        AssistantGroup(title: section.group.title) {
-                            ForEach(Array(section.notes.enumerated()), id: \.element.id) { index, note in
-                                noteRow(note, first: index == 0)
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(grouped.enumerated()), id: \.element.id) { index, section in
+                            EditorialSheetSectionLabel(title: section.group.title)
+                                .padding(.top, index == 0 ? 14 : 20)
+                            EditorialSettingsCardGroup {
+                                ForEach(Array(section.notes.enumerated()), id: \.element.id) { noteIndex, note in
+                                    noteRow(note, group: section.group, isLast: noteIndex == section.notes.count - 1)
+                                }
                             }
                         }
                     }
@@ -85,55 +100,35 @@ struct AssistantMemorySheet: View {
         }
     }
 
-    /// Wiersz notatki: treść 15/500, źródło „Z rozmowy · 14 wrz”, chevron.
-    private func noteRow(_ note: AgentMemoryNoteDTO, first: Bool) -> some View {
-        Button {
-            pendingForget = note
-        } label: {
-            AssistantRow(
-                title: note.text,
-                subtitle: source(note),
-                chevron: true,
-                first: first,
-                titleSize: 15,
-                titleWeight: .medium
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.985))
+    /// Wiersz notatki: kafelek grupy · CAŁA treść (notatka to sama treść,
+    /// nie nazwa — łamie się zamiast ucinać) · źródło „Z rozmowy · 14 wrz”.
+    private func noteRow(_ note: AgentMemoryNoteDTO, group: AgentMemoryGroup, isLast: Bool) -> some View {
+        let look = Self.look(group)
+        return EditorialSettingsRow(
+            icon: look.icon,
+            iconColor: look.color,
+            title: note.text,
+            subtitle: source(note),
+            isLast: isLast,
+            wrapsText: true,
+            action: { pendingForget = note }
+        )
         .accessibilityHint("Pyta, czy zapomnieć tę notatkę")
+    }
+
+    /// Kafelek grupy — kolor i glif mówią rodzaj notatki bez czytania
+    /// nagłówka sekcji.
+    private static func look(_ group: AgentMemoryGroup) -> (icon: String, color: Color) {
+        switch group {
+        case .preference: return ("heart.fill", SCPalette.rose)
+        case .constraint: return ("nosign", SettingsAccent.coral)
+        case .habit: return ("repeat", SCPalette.indigo)
+        }
     }
 
     private func source(_ note: AgentMemoryNoteDTO) -> String {
         guard let date = AgentStore.parseTimestamp(note.createdAt) else { return "Z rozmowy" }
         return "Z rozmowy · \(Self.dayFormatter.string(from: date))"
-    }
-
-    /// Limit jako cicha metadana; „usuń wszystko” tuż pod nim.
-    private var footerMeta: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 4) {
-                CountingNumber(target: store.memory.count)
-                Text("z \(Self.memoryLimit) notatek")
-            }
-            .font(.sc(size: 12.5))
-            .foregroundStyle(AssistantLook.faint(scheme))
-            .frame(maxWidth: .infinity)
-
-            if !store.memory.isEmpty {
-                Button {
-                    showsForgetAllAlert = true
-                } label: {
-                    Text("Usuń wszystkie notatki")
-                        .font(.sc(size: 13.5, weight: .semibold))
-                        .foregroundStyle(AssistantLook.terra(scheme))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 36)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
     }
 
     private static let dayFormatter: DateFormatter = {
@@ -143,33 +138,13 @@ struct AssistantMemorySheet: View {
         return formatter
     }()
 
-    /// `MemoryEmpty`: znak w szarości, „Na razie nic” i jedno zdanie — krojem
-    /// pustych stanów aplikacji (tytuł 16 heavy, zdanie 13 pt).
+    /// Pusty stan list aplikacji (`RecipeListEmptyState`) zamiast szarego
+    /// znaku z własnym krojem.
     private var emptyState: some View {
-        VStack(spacing: 0) {
-            SCMarkShape()
-                .fill(AssistantLook.ink(scheme).opacity(0.28))
-                .frame(width: 30, height: 30)
-                .accessibilityHidden(true)
-
-            Text("Na razie nic")
-                .font(.sc(size: 16, weight: .heavy))
-                .tracking(-0.3)
-                .foregroundStyle(AssistantLook.ink(scheme))
-                .padding(.top, 14)
-
-            Text("Gdy powiesz asystentowi coś trwałego o swoim domu — „w środy jemy u teściów”, „Kuba nie je ryb” — zapisze to tutaj i będzie o tym wiedział w kolejnych rozmowach.")
-                .font(.sc(size: 13))
-                .lineSpacing(3)
-                .foregroundStyle(AssistantLook.muted(scheme))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 24)
-        .padding(.top, 36)
-        .padding(.bottom, 32)
-        .accessibilityElement(children: .combine)
+        RecipeListEmptyState(
+            icon: "brain.head.profile.fill",
+            title: "Na razie nic",
+            message: "Gdy powiesz Asystentowi coś trwałego o swoim domu — „w środy jemy u teściów”, „Kuba nie je ryb” — zapisze to tutaj i będzie o tym wiedział w kolejnych rozmowach."
+        )
     }
 }
