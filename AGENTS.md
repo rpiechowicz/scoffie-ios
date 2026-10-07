@@ -145,7 +145,7 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   „Wyloguj się” (wiersz „Wersja” i `EditorialSettingsInfoTile` USUNIĘTE). Od 7.10.2026 wiersz ma też `subtitle:`
   (linijka 12,5 szara pod tytułem, wiersz 8 pt oddechu) i `wrapsText:` (tytuł i podpis łamią się zamiast ucinać — gdy
   treść jest sprawą wiersza: notatka, przykład do wysłania, zdanie zgody); bez nich wiersz jest taki jak był.
-  `PlanAccessRow` i wiersz wyboru diety (`DietPreferencesForm.choiceRowLabel`) to jeszcze kopie tego układu z podpisem.
+  `PlanAccessRow` i wiersz wyboru diety (`SettingsView.choiceRowLabel`) to jeszcze kopie tego układu z podpisem.
 - **Arkusze Asystenta = klocki Ustawień** (7.10.2026, Rafał: „popraw widoki i sheet dla asystenta zgodnie z nowym
   design”; spis odejść `docs/asystent-spojnosc-2026-10-07.md`): listy w arkuszach Asystenta to `EditorialSheetSectionLabel`
   + `EditorialSettingsCardGroup` + `EditorialSettingsRow` (pełny kafelek w kolorze sprawy) — „Co potrafi” (kafelek
