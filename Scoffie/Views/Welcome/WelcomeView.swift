@@ -362,6 +362,25 @@ struct WelcomeView: View {
         goal?.suggestedCalories(for: bodyMetrics)
     }
 
+    /// Cel w kroku diety: wybór przestawia kalorie W TEJ SAMEJ transakcji
+    /// (animacji stuknięcia), a nie dopiero w `onChange` — dwie animacje po
+    /// sobie (makro z nowym celem i starymi kaloriami, potem z nowymi
+    /// kaloriami innym sprężynowaniem) zawracały liczby i paski makro w
+    /// połowie ruchu (Rafał 7.10.2026: „animacja w makro się buguje”).
+    /// `onChange(of: calorieSuggestionToken)` zostaje dla zmian sylwetki.
+    private var goalWithCalories: Binding<UserGoal?> {
+        Binding(
+            get: { goal },
+            set: { newGoal in
+                goal = newGoal
+                guard !calorieAdjustedManually,
+                      let suggestion = newGoal?.suggestedCalories(for: bodyMetrics)
+                else { return }
+                calorieGoal = suggestion
+            }
+        )
+    }
+
     /// Zmienia się przy każdej danej, która wpływa na podpowiedź.
     private var calorieSuggestionToken: String {
         "\(goal?.rawValue ?? "")|\(heightCm ?? 0)|\(weightKg ?? 0)|\(yearOfBirth)|\(activity?.rawValue ?? 0)|\(sexRaw ?? "-")"
@@ -475,7 +494,7 @@ struct WelcomeView: View {
         case 2:
             WelcomeDietStep(
                 calorieGoal: $calorieGoal,
-                goal: $goal,
+                goal: goalWithCalories,
                 diet: $diet,
                 allergens: $allergens,
                 metrics: bodyMetrics
