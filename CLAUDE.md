@@ -697,6 +697,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   wiadomości wykorzystane” / „Wiadomości wrócą 1 listopada”), a stuknięcie w to pole przywraca kartę. Karta stoi POZA
   `GlassEffectContainer` pola — w grupie szklany „Zobacz plany” nie przyjmował stuknięć (jak krążek Filtrów, 9af6e15);
   nie wkładać jej z powrotem do grupy. `PlansSheet` z rozmowy dostaje `onPurchased` → `loadUsage` (blokada schodzi od razu).
+  Akcja karty, która wysyła zdanie (`AssistantView.ask`: wiersze „Jak nadrobić” w `AssistantMacroGapCard`, pigułki,
+  „Wstaw” przy daniu do wyboru, akcje powitania), NIGDY nie ginie po cichu: gdy `store.canSend == false`, `refuseAsk`
+  pokazuje toast z powodem, a przy puli przywraca jej kartę (7.10.2026: trzy propozycje domknięcia białka „nie dawały
+  się otworzyć”, bo `ask` wracał bez śladu po wyczerpaniu puli).
 - Przyciski Asystenta (runda 14): stopka karty = `AssistantButtonSize.compact` (42 pt rysowane, 44 dotyk,
   14 semibold), przycisk samodzielny (arkusz, stopka, plany) = `.regular` (46 pt, 15). Para =
   `AssistantActionPair`: równe połowy, gdy oba tytuły się mieszczą, inaczej stos z główną NA DOLE — główna

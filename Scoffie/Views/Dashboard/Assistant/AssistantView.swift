@@ -63,7 +63,8 @@ struct AssistantView: View {
     @State private var showPaywall = false
     /// Karta wykorzystanej puli zamknięta krzyżykiem (7.10.2026) — zamiast
     /// niej stoi wyłączone pole. Wraca, gdy blokada zejdzie i założy się
-    /// znowu, albo po stuknięciu w wyłączone pole.
+    /// znowu, albo po stuknięciu w wyłączone pole lub w akcję karty, która
+    /// chciała coś wysłać (`refuseAsk`).
     @State private var quotaCardDismissed = false
     /// „Prywatność i zgoda" z menu — stan zgody i jej cofnięcie.
     @State private var showConsentReview = false
@@ -1649,6 +1650,27 @@ struct AssistantView: View {
         isComposerFocused = true
     }
 
+    /// Akcja karty (wiersz „Jak nadrobić”, pigułka odpowiedzi, „Wstaw” przy
+    /// daniu do wyboru, akcja powitania), gdy Asystent nie przyjmie teraz
+    /// wiadomości. Dotąd `ask` wracał bez śladu i stuknięcie „nic nie
+    /// robiło” — Rafał 7.10.2026: trzy propozycje domknięcia białka
+    /// (`AssistantMacroGapCard`) „nie dają się otworzyć”, bo pula była już
+    /// wykorzystana. Teraz zawsze widać powód: przy puli wraca jej karta
+    /// (z „Zobacz plany” / „Limity asystenta”) i toast, przy turze w biegu
+    /// albo przerwie — sam toast. Toast gra też haptykę.
+    private func refuseAsk() {
+        if isQuotaLocked {
+            withAnimation(.easeInOut(duration: 0.2)) { quotaCardDismissed = false }
+            toasts.show(SCToast(style: .warning, title: lockedPrompt))
+        } else if store.isSending || store.isPreparing {
+            toasts.show(SCToast(style: .info, title: "Chwila — kończę poprzednią odpowiedź"))
+        } else if store.isUnavailable {
+            toasts.show(SCToast(style: .info, title: "Asystent ma przerwę"))
+        } else if store.isLocked {
+            toasts.show(SCToast(style: .info, title: lockedPrompt))
+        }
+    }
+
     /// „Poproś o nową” z karty STALE/EXPIRED — gotowe zdanie, bez zapisu.
     private func askForFreshProposal() {
         ask("Przelicz tę propozycję na nowo na aktualnym planie")
@@ -1656,7 +1678,11 @@ struct AssistantView: View {
 
     private func ask(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, store.canSend else { return }
+        guard !trimmed.isEmpty else { return }
+        guard store.canSend else {
+            refuseAsk()
+            return
+        }
         draft = ""
         isComposerFocused = false
         // Tekst, który nie doszedł, wraca przyciskiem „Spróbuj ponownie" przy
