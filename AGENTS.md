@@ -879,9 +879,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   Pod zasłoną, przed podmianą: `dismissPresentedScreens()` zamyka BEZ animacji arkusze starego
   korzenia (inaczej UIKit zamykał je sam, z animacją, już nad ekranem logowania), klawiatura chowa
   się razem z wejściem zasłony. Ekran, z którego się wychodzi, nie wraca do stanu spoczynku
-  pod wchodzącą zasłoną: spinner logowania trzyma `isAuthenticated`, przycisk kroku 5 —
+  pod wchodzącą zasłoną: spinner logowania trzyma `isAuthenticated`, przycisk ostatniego kroku (`householdOnlyStep`) —
   `currentHouseholdId`. Logowanie BEZ domu czeka na `users:me` (limit 4 s) przed `isAuthenticated`,
-  bo to ono mówi, czy kreator zaczyna od przewodnika, od kroku 5, czy od razu pulpit — dociągnięte
+  bo to ono mówi, czy kreator zaczyna od przewodnika, od kroku gospodarstwa (`householdOnlyStep`), czy od razu pulpit — dociągnięte
   po wejściu przestawiało kreator albo korzeń drugi raz na oczach użytkownika.
 - Szczegóły posiłku v2 (21.09.2026) — makieta Claude Design „Scoffie — Szczegóły Posiłku v2”
   (projekt `43b605d0-…`, `components/detail-v2.jsx`, sekcja „final”). Stepper porcji siedzi
@@ -1302,7 +1302,7 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (`SCStepFooter(backPlacement: .besidePrimary)`) w całym przepływie — od wprowadzenia v2 także u Asystenta.
   Treść kroków kreatora = widoki Ustawień (akapit „Kreator = widoki Ustawień” na górze). Dawne zapisy o kroku 1
   bez przewijania z kartą „Profil” i `BodyMetricsSummaryRow`, krokach 2–3 z kartą „Aktywność” i paskami makro
-  w procentach oraz kroku 5 z nazwą w miejscu — NIEAKTUALNE od 7.10.2026. Licznik kroków w stopce ma szerokość
+  w procentach oraz dawnym kroku 5 z nazwą w miejscu — NIEAKTUALNE od 7.10.2026. Licznik kroków w stopce ma szerokość
   z treści — „10/10” nie łamie się.
 - Kreator profilu (`WelcomeView`) od 24.09.2026 BEZ paska nawigacji i BEZ „Wyloguj” (Rafał: „wywal”):
   nagłówek kroku od góry jak w przewodniku (`WelcomeLayout.topInset = TourLayout.top`), górny brzeg
