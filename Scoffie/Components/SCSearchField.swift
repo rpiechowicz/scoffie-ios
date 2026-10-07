@@ -7,8 +7,8 @@ import SwiftUI
 /// bez krzyżyka w liście kategorii, zaokrąglony prostokąt przy wyborze
 /// przepisu do planu i jeszcze inny, na `scChipBg`, w wykluczaniu
 /// składników — cztery pola w odległości jednego stuknięcia od siebie.
-/// Własne zostaje tylko pływające pole rozmów Asystenta: stoi na dole
-/// ekranu, w języku arkuszy asystenta (`AssistantLook`).
+/// Od 7.10.2026 także „Rozmowy” Asystenta (dawna kremowa pigułka z cieniem
+/// na dole arkusza odpadła) — wyjątkiem zostaje pasek szukania Przepisów.
 struct SCSearchField: View {
     let prompt: String
     @Binding var text: String
