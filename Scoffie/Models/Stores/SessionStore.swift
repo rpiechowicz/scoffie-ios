@@ -44,8 +44,17 @@ final class SessionStore {
     /// serwera w odwrotnej kolejności. Strażniki `ensure…Baseline` stoją PRZED
     /// wejściem do kolejki zapisu — odczyt, na który czekają, sam wchodzi do
     /// kolejki, więc nic nie czeka na siebie.
-    private let preferencesSyncQueue = SessionSyncQueue()
-    private let profileSyncQueue = SessionSyncQueue()
+    ///
+    /// `logout()` podmienia obie kolejki na nowe (7.10.2026, przegląd): stare
+    /// operacje kończą się na SWOJEJ instancji (trzymają ją w lokalnej stałej),
+    /// a nowa sesja nie czeka na `emitWithAck` poprzedniej.
+    private var preferencesSyncQueue = SessionSyncQueue()
+    private var profileSyncQueue = SessionSyncQueue()
+    /// Epoka sesji — rośnie przy każdym `logout()`. Operacja kolejki zapamiętuje
+    /// ją (i konto) na wejściu i sprawdza zaraz po wejściu do kolejki oraz przy
+    /// odpowiedzi: operacja poprzedniej sesji nie pisze do pliku, nie ustawia
+    /// `sexClearPending` i nic nie wysyła (wyciek między kontami, 7.10.2026).
+    private var sessionEpoch = 0
 
     /// Aktualny access token z Keychain. Używać do autoryzacji HTTP requestów.
     var currentAccessToken: String? {
@@ -610,6 +619,12 @@ final class SessionStore {
         preferencesReadUserId = nil
         householdRestoreTask = nil
         householdRestoreUserId = nil
+        // Nowa epoka i nowe kolejki: operacje poprzedniego konta czekające
+        // w kolejce kończą się zaraz po wejściu (strażnik epoki), a trwające
+        // nie blokują logowania następnego konta.
+        sessionEpoch &+= 1
+        preferencesSyncQueue = SessionSyncQueue()
+        profileSyncQueue = SessionSyncQueue()
         CrashReporting.setUser(id: currentUserId)
         currentHouseholdId = nil
         currentHouseholdName = nil
@@ -2114,9 +2129,10 @@ final class SessionStore {
             }
             return
         }
+        let epoch = sessionEpoch
         let task = Task { @MainActor [weak self] () -> Void in
             guard let self else { return }
-            await self.performHouseholdRestore(userId: userId)
+            await self.performHouseholdRestore(userId: userId, epoch: epoch)
         }
         householdRestoreTask = task
         householdRestoreUserId = userId
@@ -2133,12 +2149,15 @@ final class SessionStore {
 
     /// Właściwe `users:me` — tylko przez `restoreHouseholdIfNeeded`. Nie czeka
     /// na nic, co czeka na nie samo (`bootstrapSession` tylko odpala zadania).
-    private func performHouseholdRestore(userId: String) async {
+    private func performHouseholdRestore(userId: String, epoch: Int) async {
         // W kolejce profilu: zapis „Twoich danych” w locie kończy się przed
         // `users:me` (7.10.2026). W środku nic nie czeka na tę kolejkę
         // (`bootstrapSession` tylko odpala zadania).
-        await profileSyncQueue.enter()
-        defer { profileSyncQueue.leave() }
+        let queue = profileSyncQueue
+        await queue.enter()
+        defer { queue.leave() }
+        // Wylogowanie w czasie czekania — ta operacja należy do starej sesji.
+        guard sessionEpoch == epoch, currentUserId == userId else { return }
         let persistedHouseholdId =
             (currentHouseholdId?.isEmpty == false) ? currentHouseholdId : nil
         let protectedStore = SCProtectedSettings.shared
@@ -2156,7 +2175,7 @@ final class SessionStore {
                 return
             }
             // Wylogowanie / zmiana konta w trakcie — odpowiedź nie jest już nasza.
-            guard currentUserId == userId else { return }
+            guard sessionEpoch == epoch, currentUserId == userId else { return }
 
             let defaults = UserDefaults.standard
             // Sylwetkę i imię wpisujemy tylko, gdy w trakcie odczytu nie było
@@ -2789,9 +2808,10 @@ final class SessionStore {
         if let running = preferencesReadTask, preferencesReadUserId == userId {
             return await running.value
         }
+        let epoch = sessionEpoch
         let task = Task { @MainActor [weak self] () -> Bool in
             guard let self else { return false }
-            return await self.performPreferencesRead(userId: userId)
+            return await self.performPreferencesRead(userId: userId, epoch: epoch)
         }
         preferencesReadTask = task
         preferencesReadUserId = userId
@@ -2807,14 +2827,15 @@ final class SessionStore {
     /// Nie woła `ensurePreferencesBaseline` (ani nic, co czeka na odczyt),
     /// więc zadanie nigdy nie czeka samo na siebie.
     @MainActor
-    private func performPreferencesRead(userId: String) async -> Bool {
+    private func performPreferencesRead(userId: String, epoch: Int) async -> Bool {
         // W kolejce diety: zapis w locie kończy się, zanim odczyt zapyta
         // serwer. Sprzątanie „Czego nie jem” to zapis — idzie PO wyjściu
         // z kolejki (inaczej czekałoby na samo siebie).
-        await preferencesSyncQueue.enter()
-        let outcome = await readPreferencesInQueue(userId: userId)
-        preferencesSyncQueue.leave()
-        guard let hasLegacyRestrictions = outcome else { return false }
+        let queue = preferencesSyncQueue
+        await queue.enter()
+        let outcome = await readPreferencesInQueue(userId: userId, epoch: epoch)
+        queue.leave()
+        guard let hasLegacyRestrictions = outcome, sessionEpoch == epoch else { return false }
         if hasLegacyRestrictions {
             await saveUserPreferences(
                 excludedIngredientIds: [],
@@ -2828,7 +2849,9 @@ final class SessionStore {
     /// Sam odczyt, już w kolejce. `nil` = nieudany albo pominięty; inaczej:
     /// czy na serwerze zostały wygaszone ograniczenia „Czego nie jem”.
     @MainActor
-    private func readPreferencesInQueue(userId: String) async -> Bool? {
+    private func readPreferencesInQueue(userId: String, epoch: Int) async -> Bool? {
+        // Wylogowanie w czasie czekania w kolejce — nic nie pytamy.
+        guard sessionEpoch == epoch, currentUserId == userId else { return nil }
         let protectedStore = SCProtectedSettings.shared
         let generationAtStart = protectedStore.changeGeneration(.preferences)
         let socket = sessionSocket()
@@ -2841,7 +2864,7 @@ final class SessionStore {
             )
             guard envelope.ok, let prefs = envelope.data else { return nil }
             // Odpowiedź po wylogowaniu / zmianie konta nie jest już nasza.
-            guard currentUserId == userId else { return nil }
+            guard sessionEpoch == epoch, currentUserId == userId else { return nil }
             // W trakcie odczytu była edycja z ręki — migawka serwera jest
             // starsza niż telefon. Nie nadpisujemy i NIE potwierdzamy (lokalne
             // wartości nie pochodzą z tej odpowiedzi).
@@ -3089,14 +3112,19 @@ final class SessionStore {
         confirmBaselineFirst: Bool = true
     ) async -> Bool {
         guard let userId = currentUserId, !userId.isEmpty else { return false }
+        let epoch = sessionEpoch
         // Zestaw zbudowany na niepotwierdzonej kopii (np. puste alergeny po
         // odtworzeniu telefonu) nie ma prawa nadpisać konta (7.10.2026).
         if confirmBaselineFirst, await ensurePreferencesBaseline() != .confirmed {
             return false
         }
         // Po strażniku, nie przed nim: jego odczyt sam wchodzi do kolejki.
-        await preferencesSyncQueue.enter()
-        defer { preferencesSyncQueue.leave() }
+        let queue = preferencesSyncQueue
+        await queue.enter()
+        defer { queue.leave() }
+        // Wylogowanie w czasie czekania — zapis należy do starej sesji: nic
+        // lokalnie, nic na serwer. Dalej do `emitWithAck` nie ma już `await`.
+        guard sessionEpoch == epoch, currentUserId == userId else { return false }
         // Trwające odczyty są od teraz starsze niż telefon (7.10.2026).
         SCProtectedSettings.shared.noteLocalSave(.preferences)
 
@@ -3198,7 +3226,7 @@ final class SessionStore {
             // diety idą po kolei (`preferencesSyncQueue`). Bramki pełnego
             // zapisu (`preferencesConfirmedForUserId`) to nie zdejmuje — tę
             // daje tylko odczyt (zapis nie mówi nic o polach, których nie wysłał).
-            if envelope.ok, let saved = envelope.data, currentUserId == userId {
+            if envelope.ok, let saved = envelope.data, sessionEpoch == epoch, currentUserId == userId {
                 let untouched = mergeSavedValues(
                     sent: sentValues,
                     server: Self.preferencesLocalValues(saved)
@@ -3303,6 +3331,7 @@ final class SessionStore {
         confirmBaselineFirst: Bool = true
     ) async -> Bool {
         guard let userId = currentUserId, !userId.isEmpty else { return false }
+        let epoch = sessionEpoch
         // Sylwetka z niepotwierdzonej kopii (wartości domyślne po odtworzeniu
         // telefonu) nie nadpisuje konta (7.10.2026). Niepotwierdzone „Nie
         // podaję” (`sexClearPending`) nie ginie: flaga zostaje i jedzie z
@@ -3311,8 +3340,12 @@ final class SessionStore {
             return false
         }
         // Po strażniku, nie przed nim: jego `users:me` sam wchodzi do kolejki.
-        await profileSyncQueue.enter()
-        defer { profileSyncQueue.leave() }
+        let queue = profileSyncQueue
+        await queue.enter()
+        defer { queue.leave() }
+        // Wylogowanie w czasie czekania — nic do pliku, żadnego
+        // `sexClearPending`, nic na serwer. Dalej do `emitWithAck` bez `await`.
+        guard sessionEpoch == epoch, currentUserId == userId else { return false }
         // Trwające `users:me` są od teraz starsze niż telefon (7.10.2026).
         SCProtectedSettings.shared.noteLocalSave(.profile)
 
@@ -3379,7 +3412,7 @@ final class SessionStore {
                 payload: ["userId": userId, "data": data],
                 as: WsEnvelope<BackendUserProfileDTO>.self
             )
-            if envelope.ok, let clearToken,
+            if envelope.ok, let clearToken, sessionEpoch == epoch,
                UserDefaults.standard.string(forKey: ProfileKeys.sexClearPending) == clearToken {
                 UserDefaults.standard.removeObject(forKey: ProfileKeys.sexClearPending)
             }
@@ -3388,7 +3421,7 @@ final class SessionStore {
             // „Nie podaję” zmieniło lokalną wartość, więc zostaje nietknięte
             // (a jego `sexClearPending` żyje dalej). Potwierdza tylko pełny
             // zestaw bez zmian w międzyczasie.
-            if envelope.ok, let saved = envelope.data, currentUserId == userId {
+            if envelope.ok, let saved = envelope.data, sessionEpoch == epoch, currentUserId == userId {
                 var server: [String: SCProtectedValue?] = [:]
                 server.updateValue(SCProtectedValue.string(saved.displayName), forKey: Keys.displayName)
                 if let year = saved.yearOfBirth {

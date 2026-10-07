@@ -521,7 +521,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   w międzyczasie była edycja z ręki (`@ProtectedSetting`) albo zapis (`noteLocalSave`). Zapisy i odczyty jednej domeny
   (dieta: `users:preferences:update`/`get`; profil: `users:profile:update`/`users:me`) idą przez kolejkę
   `SessionSyncQueue` — odczyt nigdy obok zapisu w locie, zapisy po kolei; strażnik `ensure…` stoi PRZED wejściem do
-  kolejki zapisu. Odpowiedź na zapis wpisuje TYLKO wysłane pola, i tylko te nietknięte od wysłania (`mergeSavedValues`);
+  kolejki zapisu. Każda operacja kolejki zapamiętuje `sessionEpoch` i konto i sprawdza je zaraz po wejściu oraz przy
+  odpowiedzi; `logout()` podbija epokę i podmienia kolejki na nowe (operacja trzyma swoją w lokalnej stałej) —
+  nic ze starej sesji nie trafia do pliku nowego konta i nie blokuje jego logowania. Odpowiedź na zapis wpisuje TYLKO wysłane pola, i tylko te nietknięte od wysłania (`mergeSavedValues`);
   zapis z alergenami i dietą ustawia znacznik zaufanej kopii (bramkę pełnego zapisu daje tylko odczyt), profil
   potwierdza zapis sylwetki + imienia. Arkusze diety i „Twoich danych” zapisują same tylko po `userEditGeneration` —
   wartości wpisane przez odczyt nie odpalają zapisu.
