@@ -257,7 +257,7 @@ struct AssistantOptionsDebugScreen: View {
             // Wprowadzenie Asystenta v2 — strona `index` ze stopką.
             debugAssistantIntro(AssistantIntroPage(rawValue: index) ?? .hello)
         } else if let raw = mode, raw.hasPrefix("welcome-"), let step = Int(raw.dropFirst(8)) {
-            // Kreator „Poznajmy się”, krok 1…4 (od 7.10.2026: dane, dieta, posiłki, dom).
+            // Kreator „Poznajmy się”, krok 1…5.
             WelcomeView(initialDisplayName: "Rafał", isCreatingHousehold: false, errorMessage: nil, initialStep: step)
         } else if mode == "legal" {
             // Arkusz dokumentu nad ekranem logowania.
