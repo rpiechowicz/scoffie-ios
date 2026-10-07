@@ -494,6 +494,21 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   pierwszym dostępie (i ponawia, dopóki się nie uda) lista w `AppCacheDirectory` — nowy plik w starym miejscu = dopisz go tam.
   Sprzątanie sesji tylko przez `removeFiles(where:)` / `removeEverywhere(_:)` (kasują też w starych miejscach);
   katalogu nie kasować w całości. `NSAllowsLocalNetworking` zostaje tylko w Debug — w Release zdejmuje go faza „Configure API Base URL”.
+- **Dane wrażliwe NIE w `UserDefaults`** (7.10.2026, audyt 5.09.2026 pkt 2.5 — plist jedzie jawnie w kopii
+  zapasowej): tokeny i id domu w Keychainie (`KeychainService`), a profil (rok urodzenia, wzrost, waga, płeć),
+  dieta (preferencja, alergeny, cel, kcal, makra, aktywność) i konto (e-mail, imię, adres zdjęcia) w
+  `Models/Stores/SCProtectedSettings.swift` — jeden plik JSON w `Application Support/ProtectedSettings/`
+  z ochroną `.completeUntilFirstUserAuthentication`, `isExcludedFromBackup`, zapis atomowy. Widoki: `@ProtectedSetting(klucz)`
+  zamiast `@AppStorage(klucz)` (ten sam klucz, typ `Int`/`Double`/`String`, wartość domyślna i `$x` jako `Binding`;
+  odświeżanie przez Observation, slot na klucz). Kod poza widokami: `SCProtectedSettings.shared` z API jak
+  `UserDefaults` (`set`/`string`/`integer`/`double`/`removeObject`). Migracja: przy pierwszym dostępie w procesie
+  klucze z `registeredKeys` znalezione w `UserDefaults` przechodzą do pliku (wartość już w pliku wygrywa) i znikają
+  z `UserDefaults` po udanym zapisie. Wylogowanie / usunięcie konta: `clearPersistedSession` → `removeAll()`.
+  Plik nieczytelny (start w tle przed pierwszym odblokowaniem) = nie nadpisujemy go; ponowna próba przy zapisie i
+  w `refreshRealtimeStoresOnForeground`. **Nowy wrażliwy klucz** = dopisz go do `SCProtectedSettings.registeredKeys`
+  i czytaj tylko przez `@ProtectedSetting` / `SCProtectedSettings.shared`. W `UserDefaults` zostają świadomie:
+  `auth.userId`, kolor awatara, nazwa domu, przełączniki, motyw, flagi „pokazano”, `sexClearPending`. Rozszerzenie
+  Live Activity tych kluczy nie czyta (App Group tylko na miniaturę).
 
 ## Kontrakty z backendem (nie zmieniać jednostronnie)
 - **Minimalna wersja** (2.10.2026): `Components/SCAppUpdateGate.swift` pyta `GET /public/app-version?platform=ios&version=`
