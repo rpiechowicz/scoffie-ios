@@ -112,7 +112,7 @@ extension TourStep {
             eyebrow: "Zakładka Przepisy",
             accent: SCPalette.sage,
             title: "Przepisy dopasowane do Was",
-            lead: "Kilkaset dań z kaloriami i czasem gotowania. Te z Twoimi alergenami chowamy same.",
+            lead: "Ponad tysiąc dań z kaloriami i czasem gotowania. Te z Twoimi alergenami chowamy same.",
             points: [
                 TourPoint(icon: "slider.horizontal.3", title: "Filtry", subtitle: "Czas, kalorie, trudność, dieta, składniki"),
                 TourPoint(icon: "plusminus", title: "Porcje", subtitle: "Przeliczają składniki i makro"),
