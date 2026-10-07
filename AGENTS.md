@@ -1112,7 +1112,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (`WeeklyPlan/Components/PlanAudiencePicker.swift`): szklany `PlanAudienceButton` obok przycisku zapisu (awatary
   wybranych / domek) → SYSTEMOWE menu iOS (od 4.10.2026 wieczorem, „uprościć”): `Toggle` „Cały dom”, sekcja „Osoby”
   z ptaszkami, `menuActionDismissBehavior(.disabled)` — zostaje otwarte przy zaznaczaniu kilku; wszystkie = „Cały
-  dom”. Arkusz `PlanAudienceSheet` usunięty. Chipy w przewijaniu
+  dom”. Stuknięcie w OSOBĘ nigdy nie daje „Całego domu” po cichu (7.10.2026, „oba chipy są dom”): ostatniej osoby
+  się nie odznacza, a w domu dwuosobowym osoby się wykluczają (stuknięcie w drugą przełącza) — wcześniej „wybranie”
+  user2 przy wybranym user1 (albo ponowne stuknięcie user2) zapisywało danie dla całego domu, karta mówiła „Zamień
+  dla wszystkich”, a „Dodaj obok” stawiało dwa dania „Wspólne”. Arkusz `PlanAudienceSheet` usunięty. Chipy w przewijaniu
   „Dodaj do planu” odpadły. Porcje w „Dodaj do planu” — ikona `chart.pie.fill`. Pusty stan Zakupów =
   `ShoppingEmptyHero` (szklany koszyk, wokół działy sklepu w swoich kolorach, unoszą się).
 - Zakupy (4.10.2026): pasek postępu, który zjedzie pod górę, ma przypiętą kopię na szkle (`pinnedProgress`,
