@@ -509,6 +509,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   i czytaj tylko przez `@ProtectedSetting` / `SCProtectedSettings.shared`. W `UserDefaults` zostają świadomie:
   `auth.userId`, kolor awatara, nazwa domu, przełączniki, motyw, flagi „pokazano”, `sexClearPending`. Rozszerzenie
   Live Activity tych kluczy nie czyta (App Group tylko na miniaturę).
+  Plik nie przeżywa kopii zapasowej ani reinstalacji (Keychain z tokenami tak), więc sesja bywa z PUSTĄ dietą:
+  pełny zestaw preferencji (ekran diety wysyła też alergeny) wychodzi tylko po `ensurePreferencesBaseline()` — kopia
+  potwierdzona `users:preferences:get` w tym procesie dla tego konta, inaczej najpierw odczyt, a zapis ze starej kopii
+  przepada z toastem. Wyjątek `confirmBaselineFirst: false`: kreator i sprzątanie po odczycie. Odczyt ponawia foreground.
 
 ## Kontrakty z backendem (nie zmieniać jednostronnie)
 - **Minimalna wersja** (2.10.2026): `Components/SCAppUpdateGate.swift` pyta `GET /public/app-version?platform=ios&version=`
