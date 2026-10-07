@@ -1315,9 +1315,11 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   i aktywność; krok 3 — dieta („Bez diety” to odpowiedź), alergeny opcjonalne; kroki 4–5 bez zmian.
   Zakresy w `WelcomeProgress`. Brak = etykieta pola/sekcji w terakocie (`WelcomeSection(isMissing:)`),
   nic więcej; wynik BMI/kcal w kroku 1 zakryty (`redacted`) do podania danych. Cel/aktywność/dieta są
-  w magazynie ZAWSZE (start sesji wpisuje domyślny wiersz serwera), więc zaznaczone startują tylko po
-  zaliczonym kroku: `WelcomeProgress.answeredStepKey` w `UserDefaults`, kasowany z sesją. Zapis wysyła
-  tylko odpowiedzi (alergeny i dieta dopiero po kroku 3).
+  w magazynie ZAWSZE (start sesji wpisuje domyślny wiersz serwera), a zapis na serwer idzie w tle, więc
+  wznowienie czyta SZKIC (`WelcomeDraft`: odpowiedzi kroków 1–3 + zaliczony krok + `userId`, JSON pod
+  `onboarding.draft` w `SCProtectedSettings`, zapisywany synchronicznie przy „Dalej” przed `advance()`),
+  nie kopię. Szkic znika po zakończeniu onboardingu (`persistOnboardingCompletedAt`) i z `removeAll`
+  przy wylogowaniu. Zapis wysyła tylko odpowiedzi (alergeny i dieta dopiero po kroku 3).
 - Kreator profilu (`WelcomeView`) od 24.09.2026 BEZ paska nawigacji i BEZ „Wyloguj” (Rafał: „wywal”):
   nagłówek kroku od góry jak w przewodniku (`WelcomeLayout.topInset = TourLayout.top`), górny brzeg
   treści gaśnie przez `scScrollEdgeFade`. Wyjście z kreatora = dokończyć go albo zamknąć aplikację. Kreatora profilu (`Welcome*`) to NIE dotyczy — Rafał rozróżnia „onboarding aplikacji”

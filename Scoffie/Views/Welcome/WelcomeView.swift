@@ -67,9 +67,9 @@ struct WelcomeView: View {
     @State private var goal: UserGoal?
     @State private var activity: ActivityLevel?
     @State private var diet: DietPreference?
-    /// Ostatni krok zaliczony „Dalej” (`WelcomeProgress`). Cel, aktywność
-    /// i dieta są w magazynie zawsze — start sesji wpisuje tam domyślny
-    /// wiersz serwera — więc „zapisane” znaczy tu „zaliczone w kreatorze”.
+    /// Ostatni krok zaliczony „Dalej” (`WelcomeDraft.answeredStep`). Cel,
+    /// aktywność i dieta są w magazynie zawsze — start sesji wpisuje tam
+    /// domyślny wiersz serwera — więc „podane” znaczy tu „zaliczone w kreatorze”.
     @State private var answeredStep: Int
     @State private var calorieGoal: Int
     @State private var allergens: Set<Allergen>
@@ -131,79 +131,101 @@ struct WelcomeView: View {
 
         let defaults = UserDefaults.standard
         // Profil, cel i dieta z chronionego magazynu (7.10.2026); `defaults`
-        // zostaje dla pór posiłków niżej.
+        // zostaje dla `auth.userId` i pór posiłków niżej.
         let protectedStore = SCProtectedSettings.shared
 
-        let storedName = protectedStore.string(forKey: "settings.user.displayName") ?? initialDisplayName
-        _name = State(initialValue: storedName.isEmpty ? initialDisplayName : storedName)
-
-        // Postęp kreatora (7.10.2026) — patrz `answeredStep`.
-        let answered = defaults.integer(forKey: WelcomeProgress.answeredStepKey)
+        // Szkic kreatora (7.10.2026, Codex): odpowiedzi z kroków zaliczonych
+        // „Dalej”, zapisane synchronicznie RAZEM z numerem kroku. Wznowienie
+        // czyta szkic, nie kopię profilu i preferencji — zapis na serwer idzie
+        // w tle przez kolejkę i po zabiciu aplikacji kopia mogła zostać starsza
+        // niż to, co użytkownik zatwierdził (a cel, aktywność i dieta są
+        // w kopii zawsze — start sesji wpisuje tam domyślny wiersz serwera).
+        let draft = WelcomeDraft.load(forUserId: defaults.string(forKey: "auth.userId"))
+        let answered = draft?.answeredStep ?? 0
         _answeredStep = State(initialValue: answered)
 
-        // Sylwetka: wartość w magazynie = podana (przerwany kreator albo konto
-        // z danymi); nowe konto ma tam pusto, bo serwer trzyma `null`.
-        let storedYear = protectedStore.integer(forKey: "settings.profile.yearOfBirth")
-        _yearOfBirth = State(
-            initialValue: storedYear > 0 ? storedYear : Calendar.current.component(.year, from: Date())
-        )
+        let storedName = protectedStore.string(forKey: "settings.user.displayName") ?? initialDisplayName
+        let resolvedName = draft.map(\.name) ?? storedName
+        _name = State(initialValue: resolvedName.isEmpty ? initialDisplayName : resolvedName)
 
-        let storedHeight = protectedStore.integer(forKey: "settings.profile.heightCm")
-        _heightCm = State(initialValue: storedHeight > 0 ? storedHeight : nil)
-
-        let storedWeight = protectedStore.double(forKey: "settings.profile.weightKg")
-        _weightKg = State(initialValue: storedWeight > 0 ? storedWeight : nil)
-
-        let storedSex = protectedStore.string(forKey: "settings.profile.sex") ?? ""
-        let resolvedSex = Sex(rawValue: storedSex)
+        // Sylwetka: ze szkicu, a bez niego z kopii — tam leży tylko to, co
+        // konto naprawdę ma (nowe konto: pusto, serwer trzyma `null`).
+        let currentYear = Calendar.current.component(.year, from: Date())
+        let resolvedYear: Int
+        let resolvedHeight: Int?
+        let resolvedWeight: Double?
+        let resolvedSex: Sex?
+        let resolvedSexDeclined: Bool
+        if let draft {
+            resolvedYear = draft.yearOfBirth ?? currentYear
+            resolvedHeight = draft.heightCm
+            resolvedWeight = draft.weightKg
+            resolvedSex = draft.sex.flatMap { Sex(rawValue: $0) }
+            resolvedSexDeclined = resolvedSex == nil && draft.sexDeclined
+        } else {
+            let storedYear = protectedStore.integer(forKey: "settings.profile.yearOfBirth")
+            let storedHeight = protectedStore.integer(forKey: "settings.profile.heightCm")
+            let storedWeight = protectedStore.double(forKey: "settings.profile.weightKg")
+            resolvedYear = storedYear > 0 ? storedYear : currentYear
+            resolvedHeight = storedHeight > 0 ? storedHeight : nil
+            resolvedWeight = storedWeight > 0 ? storedWeight : nil
+            resolvedSex = Sex(rawValue: protectedStore.string(forKey: "settings.profile.sex") ?? "")
+            resolvedSexDeclined = false
+        }
+        _yearOfBirth = State(initialValue: resolvedYear)
+        _heightCm = State(initialValue: resolvedHeight)
+        _weightKg = State(initialValue: resolvedWeight)
         _sex = State(initialValue: resolvedSex)
-        // Krok 1 zaliczony bez płci = wtedy padło „Nie podaję”.
-        _sexDeclined = State(initialValue: resolvedSex == nil && answered >= 1)
+        _sexDeclined = State(initialValue: resolvedSexDeclined)
 
-        // Cel, aktywność i dieta — tylko z zaliczonego kroku (`answeredStep`),
-        // nie z domyślnego wiersza serwera.
+        // Cel, aktywność i dieta — wyłącznie z zaliczonego kroku w szkicu.
         let resolvedGoal: UserGoal? = answered >= 2
-            ? protectedStore.string(forKey: "settings.diet.goal").flatMap { UserGoal(rawValue: $0) }
+            ? draft?.goal.flatMap { UserGoal(rawValue: $0) }
             : nil
         _goal = State(initialValue: resolvedGoal)
 
-        let storedActivity: ActivityLevel? = answered >= 2
-            ? ActivityLevel(rawValue: protectedStore.integer(forKey: "settings.diet.activityLevel"))
+        let resolvedActivity: ActivityLevel? = answered >= 2
+            ? draft?.activityLevel.flatMap { ActivityLevel(rawValue: $0) }
             : nil
-        _activity = State(initialValue: storedActivity)
+        _activity = State(initialValue: resolvedActivity)
 
-        let storedDiet: DietPreference? = answered >= 3
-            ? protectedStore.string(forKey: "settings.diet.preference").flatMap { DietPreference(rawValue: $0) }
+        let resolvedDiet: DietPreference? = answered >= 3
+            ? draft?.diet.flatMap { DietPreference(rawValue: $0) }
             : nil
-        _diet = State(initialValue: storedDiet)
+        _diet = State(initialValue: resolvedDiet)
 
-        // Podpowiedź z tych samych danych, z których liczy ją `bodyMetrics`
-        // w trakcie — bez celu nie ma podpowiedzi, a kalorie ustawią się
-        // same przy wyborze celu (`calorieSuggestionToken`).
-        let storedCalorieGoal = protectedStore.integer(forKey: "settings.diet.calorieGoal")
-        let seedMetrics: BodyMetrics? = storedActivity.flatMap { level in
-            BodyMetrics(
-                heightCm: storedHeight,
-                weightKg: storedWeight,
-                yearOfBirth: storedYear,
-                activityRaw: level.rawValue,
-                sexRaw: storedSex
+        // Kalorie: ręcznie przesunięte są w szkicu; inaczej podpowiedź z tych
+        // samych danych, z których liczy ją `bodyMetrics` w trakcie — bez celu
+        // nie ma podpowiedzi, a kalorie ustawią się same przy wyborze celu
+        // (`calorieSuggestionToken`).
+        let draftKcal: Int? = answered >= 2 ? draft?.calorieGoal : nil
+        let seedMetrics: BodyMetrics? = {
+            guard let resolvedHeight, let resolvedWeight, let resolvedActivity else { return nil }
+            return BodyMetrics(
+                heightCm: resolvedHeight,
+                weightKg: resolvedWeight,
+                yearOfBirth: resolvedYear,
+                activityRaw: resolvedActivity.rawValue,
+                sexRaw: resolvedSex?.rawValue ?? ""
             )
-        }
+        }()
         let seedSuggestion: Int? = resolvedGoal?.suggestedCalories(for: seedMetrics)
-        let initialKcal = storedCalorieGoal > 0
-            ? storedCalorieGoal
-            : (seedSuggestion ?? UserGoal.healthy.suggestedCalories)
-        _calorieGoal = State(initialValue: initialKcal)
-        _calorieAdjustedManually = State(
-            initialValue: storedCalorieGoal > 0 && seedSuggestion != nil && storedCalorieGoal != seedSuggestion
+        _calorieGoal = State(
+            initialValue: draftKcal ?? seedSuggestion ?? UserGoal.healthy.suggestedCalories
         )
+        _calorieAdjustedManually = State(initialValue: draftKcal != nil)
 
-        let storedAllergensRaw = protectedStore.string(forKey: "settings.diet.allergens") ?? ""
-        let storedTokens = storedAllergensRaw
-            .split(separator: ",")
-            .map { String($0).trimmingCharacters(in: .whitespaces).lowercased() }
-            .filter { !$0.isEmpty }
+        // Alergeny: z zaliczonego kroku 3 w szkicu; wcześniej z kopii (to, co
+        // konto już ma, zaznaczone na start — jak dotąd).
+        let storedTokens: [String]
+        if answered >= 3, let draftAllergens = draft?.allergens {
+            storedTokens = draftAllergens
+        } else {
+            storedTokens = (protectedStore.string(forKey: "settings.diet.allergens") ?? "")
+                .split(separator: ",")
+                .map { String($0).trimmingCharacters(in: .whitespaces).lowercased() }
+                .filter { !$0.isEmpty }
+        }
         _allergens = State(initialValue: Set(storedTokens.compactMap { Allergen(rawValue: $0) }))
         _unknownAllergens = State(
             initialValue: Array(Set(storedTokens.filter { Allergen(rawValue: $0) == nil })).sorted()
@@ -556,9 +578,12 @@ struct WelcomeView: View {
         let store = sessionStore
         // Krok zaliczony — PRZED zapisem, bo `savePreferencesStep` czyta
         // z `answeredStep`, co już padło (alergeny dopiero po kroku 3).
-        if (1...3).contains(step), step > answeredStep {
-            answeredStep = step
-            UserDefaults.standard.set(step, forKey: WelcomeProgress.answeredStepKey)
+        // Szkic z odpowiedziami i numerem kroku idzie do pliku od razu,
+        // synchronicznie i przed `advance()` — niezależnie od kolejki zapisów
+        // na serwer (7.10.2026, Codex).
+        if (1...3).contains(step) {
+            answeredStep = max(answeredStep, step)
+            saveDraft(userId: store.currentUserId)
         }
         retryPendingSaves(store)
         switch step {
@@ -599,6 +624,27 @@ struct WelcomeView: View {
         default:
             break
         }
+    }
+
+    /// Stan kroków 1–3 jako szkic (`WelcomeDraft`). Kalorie tylko ręcznie
+    /// przesunięte — inaczej przy wznowieniu liczą się z podpowiedzi.
+    private func saveDraft(userId: String?) {
+        guard let userId, !userId.isEmpty else { return }
+        WelcomeDraft(
+            userId: userId,
+            answeredStep: answeredStep,
+            name: trimmedName,
+            yearOfBirth: isYearAnswered ? yearOfBirth : nil,
+            heightCm: heightCm,
+            weightKg: weightKg,
+            sex: sex?.rawValue,
+            sexDeclined: sex == nil && sexDeclined,
+            goal: goal?.rawValue,
+            activityLevel: activity?.rawValue,
+            diet: diet?.rawValue,
+            allergens: Array(Set(allergens.map(\.rawValue)).union(unknownAllergens)).sorted(),
+            calorieGoal: calorieAdjustedManually ? calorieGoal : nil
+        ).save()
     }
 
     private func advance() {
@@ -680,10 +726,6 @@ struct WelcomeView: View {
 /// i polityka, `AuthFooterView`; zgoda Asystenta też pyta o 16). Rok liczony
 /// jak wszędzie w aplikacji: bieżący rok minus rok urodzenia.
 enum WelcomeProgress {
-    /// Ostatni krok kreatora zaliczony „Dalej”. Kasowany razem z sesją
-    /// (`SessionStore.clearPersistedSession`), jak `TourCompletion`.
-    static let answeredStepKey = "onboarding.wizardAnsweredStep"
-
     static let ageRange = 16...110
     static let heightRange = 120...230
     static let weightRange: ClosedRange<Double> = 30...250
@@ -691,6 +733,73 @@ enum WelcomeProgress {
     static func isYearAnswered(_ yearOfBirth: Int, now: Date = Date()) -> Bool {
         let currentYear = Calendar.current.component(.year, from: now)
         return ageRange.contains(currentYear - yearOfBirth)
+    }
+}
+
+/// Szkic kreatora (7.10.2026, Codex): odpowiedzi kroków 1–3 i numer
+/// ostatniego kroku zaliczonego „Dalej”, zapisane RAZEM i synchronicznie.
+///
+/// Po co: zapisy na serwer (i do kopii profilu/preferencji) idą w tle przez
+/// kolejki `SessionStore` — zabicie aplikacji tuż po „Dalej” mogło zostawić
+/// zaliczony krok przy starej kopii (np. serwerowe „Bez diety” zamiast
+/// wybranej diety). Wznowienie czyta więc szkic, nie kopię.
+///
+/// W chronionym magazynie (dane zdrowotne — nie `UserDefaults`), jako JSON
+/// pod jednym kluczem, zwykłym `set` (bez znacznika edycji z ręki — nie
+/// miesza się z licznikami strażnika). Kasowany po zakończeniu onboardingu
+/// (`SessionStore.persistOnboardingCompletedAt`) i przy wylogowaniu /
+/// usunięciu konta (`SCProtectedSettings.removeAll`). Szkic innego konta
+/// (`userId`) jest pomijany.
+nonisolated struct WelcomeDraft: Codable, Equatable {
+    static let storageKey = "onboarding.draft"
+
+    var userId: String
+    var answeredStep: Int
+    var name: String
+    /// `nil` = rok jeszcze niepodany (koło na bieżącym roku).
+    var yearOfBirth: Int?
+    var heightCm: Int?
+    var weightKg: Double?
+    /// `Sex.rawValue`.
+    var sex: String?
+    var sexDeclined: Bool
+    /// `UserGoal.rawValue`.
+    var goal: String?
+    /// `ActivityLevel.rawValue`.
+    var activityLevel: Int?
+    /// `DietPreference.rawValue`.
+    var diet: String?
+    /// Surowe wartości, także nieznane temu buildowi.
+    var allergens: [String]
+    /// Tylko ręcznie przesunięty suwak; `nil` = podpowiedź z danych.
+    var calorieGoal: Int?
+}
+
+extension WelcomeDraft {
+    /// Szkic tego konta albo `nil` (brak, uszkodzony, cudzy).
+    @MainActor
+    static func load(forUserId userId: String?) -> WelcomeDraft? {
+        guard let userId, !userId.isEmpty,
+              let json = SCProtectedSettings.shared.string(forKey: storageKey),
+              let data = json.data(using: .utf8),
+              let draft = try? JSONDecoder().decode(WelcomeDraft.self, from: data),
+              draft.userId == userId
+        else { return nil }
+        return draft
+    }
+
+    /// Zapis synchroniczny (plik atomowy w `SCProtectedSettings`).
+    @MainActor
+    func save() {
+        guard let data = try? JSONEncoder().encode(self),
+              let json = String(data: data, encoding: .utf8)
+        else { return }
+        SCProtectedSettings.shared.set(json, forKey: Self.storageKey)
+    }
+
+    @MainActor
+    static func clear() {
+        SCProtectedSettings.shared.removeObject(forKey: storageKey)
     }
 }
 

@@ -239,6 +239,9 @@ final class SessionStore {
         if let raw, !raw.isEmpty {
             defaults.set(raw, forKey: Keys.onboardingCompletedAt)
             onboardingCompletedAt = Self.parseOnboardingDate(raw)
+            // Onboarding zamknięty — szkic kreatora nie ma już czego wznawiać
+            // (7.10.2026). Wylogowanie kasuje go razem z chronionym plikiem.
+            WelcomeDraft.clear()
         } else {
             defaults.removeObject(forKey: Keys.onboardingCompletedAt)
             onboardingCompletedAt = nil
@@ -2333,9 +2336,6 @@ final class SessionStore {
         // wpadałaby prosto w pytania o wzrost i alergeny, bo flaga
         // z poprzedniej sesji nadal leżałaby w `UserDefaults`.
         defaults.removeObject(forKey: TourCompletion.storageKey)
-        // Postęp kreatora tak samo (7.10.2026): bez tego kolejne konto
-        // zastałoby cel i dietę „zaliczone” przez poprzednie.
-        defaults.removeObject(forKey: WelcomeProgress.answeredStepKey)
         clearPersistedProfileFields()
         clearPersistedPreferences()
         // Cały chroniony plik (profil, dieta, e-mail, imię — 7.10.2026), nie
