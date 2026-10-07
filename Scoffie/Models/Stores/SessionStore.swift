@@ -273,6 +273,15 @@ final class SessionStore {
             await self?.refreshHouseholdMembers(force: true)
             await self?.refreshPendingInvitations()
         }
+        // Odczyt preferencji przy starcie sesji padł — bez potwierdzonej
+        // kopii ekran diety nie zapisze zmian, a Przepisy nie znają alergenów
+        // (7.10.2026). Ponawiamy przy każdym powrocie, dopóki się nie uda.
+        if isAuthenticated, let userId = currentUserId, !userId.isEmpty,
+           preferencesConfirmedForUserId != userId {
+            Task { @MainActor [weak self] in
+                await self?.loadUserPreferences()
+            }
+        }
         if let recipeCatalogStore {
             Task {
                 await recipeCatalogStore.reload()
@@ -576,6 +585,7 @@ final class SessionStore {
         isAuthenticated = false
         authError = nil
         currentUserId = nil
+        preferencesConfirmedForUserId = nil
         CrashReporting.setUser(id: currentUserId)
         currentHouseholdId = nil
         currentHouseholdName = nil
@@ -2690,8 +2700,9 @@ final class SessionStore {
     /// AppStorage. Silent on failure — local cache stays as fallback so
     /// the UI keeps working offline.
     @MainActor
-    func loadUserPreferences() async {
-        guard let userId = currentUserId, !userId.isEmpty else { return }
+    @discardableResult
+    func loadUserPreferences() async -> Bool {
+        guard let userId = currentUserId, !userId.isEmpty else { return false }
         let socket = sessionSocket()
 
         do {
@@ -2700,7 +2711,7 @@ final class SessionStore {
                 payload: ["userId": userId],
                 as: WsEnvelope<BackendUserPreferencesDTO>.self
             )
-            guard envelope.ok, let prefs = envelope.data else { return }
+            guard envelope.ok, let prefs = envelope.data else { return false }
 
             let defaults = UserDefaults.standard
             // Przez `backendValue`, nie przez `lowercased()` — patrz komentarz
@@ -2752,13 +2763,61 @@ final class SessionStore {
             // nie preferencją. Kolumny w bazie zostają — `syncNotification-
             // Preferences` trzyma je w ryzach przy każdym starcie sesji.
 
-            if hasLegacyRestrictions {
-                await saveUserPreferences(excludedIngredientIds: [], clearMaxPrepTime: true)
+            // Lokalna kopia = wiersz z serwera: od teraz wolno wysyłać z niej
+            // pełny zestaw (`ensurePreferencesBaseline`, 7.10.2026). Tylko dla
+            // konta, które wciąż jest zalogowane — odpowiedź mogła przyjść po
+            // wylogowaniu.
+            if currentUserId == userId {
+                preferencesConfirmedForUserId = userId
             }
+
+            if hasLegacyRestrictions {
+                await saveUserPreferences(
+                    excludedIngredientIds: [],
+                    clearMaxPrepTime: true,
+                    confirmBaselineFirst: false
+                )
+            }
+            return true
         } catch {
             // Swallow — preferences are non-critical, AppStorage default
-            // applies. Will retry on the next session bootstrap.
+            // applies. Ponowienie: przy wejściu na pierwszy plan
+            // (`refreshRealtimeStoresOnForeground`) i przed każdym zapisem
+            // pełnego zestawu (`ensurePreferencesBaseline`).
+            return false
         }
+    }
+
+    /// Wynik `ensurePreferencesBaseline`.
+    enum PreferencesBaseline {
+        /// Lokalna kopia potwierdzona odczytem z serwera — można wysyłać.
+        case confirmed
+        /// Kopia była niepotwierdzona i właśnie wczytała się z serwera. Zapis
+        /// zbudowany na starej kopii NIE wychodzi — ekran pokazuje teraz
+        /// prawdziwe wartości, użytkownik powtarza zmianę.
+        case reloaded
+        /// Nie udało się wczytać — nic nie wysyłamy.
+        case unavailable
+    }
+
+    /// Strażnik przed wysłaniem pustych alergenów (7.10.2026, Codex do audytu
+    /// 2.5). Chroniony plik ustawień nie jedzie w kopii zapasowej, a Keychain
+    /// przeżywa reinstalację — sesja potrafi więc wstać z PUSTĄ lokalną kopią
+    /// diety, a odczyt `users:preferences:get` przy starcie bywa nieudany
+    /// (sieć). Ekran diety wysyła zawsze pełny zestaw, więc zmiana samych
+    /// kalorii wysłałaby `allergens: []` i skasowała alergeny z konta.
+    /// Pełny zestaw wychodzi więc tylko z kopii potwierdzonej odczytem z
+    /// serwera w TYM procesie dla TEGO konta; w przeciwnym razie najpierw
+    /// odczyt. Ten sam błąd istniał przed 7.10.2026 przy reinstalacji
+    /// (Keychain zostaje, `UserDefaults` nie) i przy nieudanym odczycie po
+    /// zalogowaniu na nowym telefonie.
+    @MainActor
+    func ensurePreferencesBaseline() async -> PreferencesBaseline {
+        guard let userId = currentUserId, !userId.isEmpty else { return .unavailable }
+        if preferencesConfirmedForUserId == userId { return .confirmed }
+        let loaded = await loadUserPreferences()
+        guard loaded, preferencesConfirmedForUserId == userId else { return .unavailable }
+        return .reloaded
     }
 
     /// Push the supplied preferences slice to the backend. Pass only the
@@ -2789,9 +2848,19 @@ final class SessionStore {
         /// Wysyła jawne `null` na wszystkie trzy makra — czyli „przestań
         /// trzymać moje wartości i licz za mnie". Bez tego nie dałoby się
         /// wrócić do automatu, bo `nil` w parametrze znaczy „nie ruszaj".
-        clearMacroOverrides: Bool = false
+        clearMacroOverrides: Bool = false,
+        /// `false` tylko dla zapisu, który NIE pochodzi z lokalnej kopii
+        /// preferencji: kreator (formularz, który użytkownik właśnie wypełnił)
+        /// i sprzątanie „Czego nie jem” po udanym odczycie. Patrz
+        /// `ensurePreferencesBaseline`.
+        confirmBaselineFirst: Bool = true
     ) async -> Bool {
         guard let userId = currentUserId, !userId.isEmpty else { return false }
+        // Zestaw zbudowany na niepotwierdzonej kopii (np. puste alergeny po
+        // odtworzeniu telefonu) nie ma prawa nadpisać konta (7.10.2026).
+        if confirmBaselineFirst, await ensurePreferencesBaseline() != .confirmed {
+            return false
+        }
 
         // Mirror to AppStorage so the welcome flow survives a kill-restart
         // mid-flow and SettingsView reads the latest values without a
@@ -3244,6 +3313,12 @@ final class SessionStore {
     private static let minProactiveRefreshDelay: TimeInterval = 60
     /// Sesja czeka na dostępny Keychain (patrz `restoreSession`).
     private var restoreDeferredUntilKeychainAvailable = false
+    /// Konto, którego preferencje (dieta, alergeny, kcal, cel, makra,
+    /// aktywność) wczytały się w tym procesie z serwera — patrz
+    /// `ensurePreferencesBaseline` (7.10.2026). Celowo tylko w pamięci:
+    /// każdy start sesji potwierdza kopię od nowa, a plik ustawień i tak
+    /// nie przeżywa kopii zapasowej ani reinstalacji.
+    private var preferencesConfirmedForUserId: String?
     /// Seria odmów socketu po udanych refreshach — hamulec na wypadek, gdy
     /// serwer odrzuca także świeże tokeny (rozjazd konfiguracji): backoff,
     /// a po `maxSocketAuthRetries` czekamy na następny foreground.

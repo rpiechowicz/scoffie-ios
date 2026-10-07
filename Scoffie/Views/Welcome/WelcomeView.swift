@@ -562,7 +562,11 @@ struct WelcomeView: View {
             calorieGoal: calorieGoal,
             allergens: allergenRaws,
             goal: goal.rawValue,
-            activityLevel: activity.rawValue
+            activityLevel: activity.rawValue,
+            // Formularz kreatora to świadoma decyzja użytkownika, nie lokalna
+            // kopia — nie czeka na odczyt z serwera (nowe konto i tak ma tam
+            // domyślny wiersz). 7.10.2026, patrz `ensurePreferencesBaseline`.
+            confirmBaselineFirst: false
         )
         pendingPreferencesRetry = !ok
         refreshSaveWarning()

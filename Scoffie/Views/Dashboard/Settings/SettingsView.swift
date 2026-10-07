@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
+    @Environment(\.toasts) private var toasts
 
     @AppStorage("settings.theme") private var themeRawValue: String = AppTheme.system.rawValue
     @AppStorage("settings.notifications.enabled") private var notificationsEnabled: Bool = true
@@ -1340,6 +1341,22 @@ struct SettingsView: View {
             }
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
+            // Ten ekran wysyła PEŁNY zestaw (z alergenami) — tylko z kopii
+            // potwierdzonej odczytem z serwera (7.10.2026). Po odtworzeniu
+            // telefonu kopia bywa pusta i zmiana kalorii skasowałaby alergeny.
+            switch await sessionStore.ensurePreferencesBaseline() {
+            case .confirmed:
+                break
+            case .reloaded:
+                toasts.info(
+                    "Wczytano Twoje ustawienia",
+                    "Ostatnia zmiana nie została zapisana — wprowadź ją jeszcze raz."
+                )
+                return
+            case .unavailable:
+                toasts.error("Nie udało się wczytać Twoich ustawień", "Spróbuj ponownie.")
+                return
+            }
             await sessionStore.saveUserPreferences(
                 diet: currentDiet.rawValue,
                 calorieGoal: calorieGoal,
