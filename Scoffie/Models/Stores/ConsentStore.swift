@@ -101,10 +101,14 @@ final class ConsentStore {
             return nil
         } catch {
             // Kod błędu do komunikatu: przy diagnozie „nie zapisuje się" liczy
-            // się, czy to VALIDATION_ERROR, UNAUTHORIZED czy brak sieci.
+            // się, czy to VALIDATION_ERROR, UNAUTHORIZED czy brak sieci. Tylko
+            // w DEBUG — w wydaniu surowy tekst serwera i kod nie idą na ekran
+            // (audyt bezpieczeństwa 5.09.2026, pkt 2.5; zamknięte 7.10.2026).
+            #if DEBUG
             if case let BackendAPIError.backend(code, status, message) = error {
                 return "\(message ?? UserFacingErrorMapper.message(from: error)) [\(code) \(status)]"
             }
+            #endif
             return UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
