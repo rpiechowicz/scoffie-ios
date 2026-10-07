@@ -57,6 +57,12 @@ struct WelcomeView: View {
     @State private var weightKg: Double
     /// Surowa wartość płci jak w „Twoich danych” — „” = „Nie podaję”.
     @State private var sexRaw: String
+    /// „Nie podaję” wybrane w tym przejściu kreatora (np. „Kobieta” → Dalej →
+    /// Wstecz → „Nie podaję”) — zapis wysyła wtedy jawny `null`
+    /// (`saveProfile(clearSex:)`), inaczej serwer zostawiał starą płeć.
+    /// Niepotwierdzone skasowanie ponawia sam `saveProfile`
+    /// (`sexClearPending`), jak w „Twoich danych” (7.10.2026).
+    @State private var clearsSex = false
     @State private var goal: UserGoal
     @State private var activity: ActivityLevel
     @State private var diet: DietPreference
@@ -266,6 +272,15 @@ struct WelcomeView: View {
         // na tej samej wartości) przypina je z powrotem.
         .onChange(of: calorieGoal) { _, newValue in
             calorieAdjustedManually = newValue != suggestedCalories
+        }
+        // Jak w `ProfileDetailsSheet`: dopiero zmiana na „Nie podaję” kasuje
+        // płeć — puste pole od startu (konto bez płci) niczego nie kasuje.
+        .onChange(of: sexRaw) { previous, current in
+            if current.isEmpty, !previous.isEmpty {
+                clearsSex = true
+            } else if !current.isEmpty {
+                clearsSex = false
+            }
         }
     }
 
@@ -560,6 +575,7 @@ struct WelcomeView: View {
             heightCm: heightCm,
             weightKg: weightKg,
             sex: sexRaw.isEmpty ? nil : sexRaw,
+            clearSex: sexRaw.isEmpty && clearsSex,
             // Formularz kreatora, nie lokalna kopia — bez czekania na `users:me`
             // (7.10.2026, `ensureProfileBaseline`).
             confirmBaselineFirst: false
