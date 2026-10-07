@@ -2954,6 +2954,29 @@ final class SessionStore {
         return untouched
     }
 
+    /// Czy listy przepisów znają dietę i alergeny (7.10.2026, Codex runda 4).
+    enum PreferencesAvailability {
+        /// Jest lokalna kopia albo potwierdzony odczyt — zwykły stan.
+        case ready
+        /// Brak lokalnej kopii, odczyt z serwera trwa.
+        case loading
+        /// Brak lokalnej kopii, ostatni odczyt się nie udał.
+        case unavailable
+    }
+
+    /// Bez lokalnej kopii diety (odtworzony telefon, reinstalacja — plik
+    /// ustawień nie jedzie w kopii zapasowej) puste alergeny NIE znaczą „bez
+    /// alergii”. Listy przepisów mówią to wprost (`RecipePreferencesNotice`).
+    /// Po aktualizacji aplikacji kopia jest (migracja), więc `.ready` od razu;
+    /// bez zalogowanego konta też `.ready` — nie ma czego pokazywać.
+    var preferencesAvailability: PreferencesAvailability {
+        guard let userId = currentUserId, !userId.isEmpty else { return .ready }
+        if preferencesConfirmedForUserId == userId || SCProtectedSettings.shared.hasLocalPreferences {
+            return .ready
+        }
+        return preferencesReadTask != nil ? .loading : .unavailable
+    }
+
     /// Wynik `ensurePreferencesBaseline` / `ensureProfileBaseline`.
     enum ServerBaseline {
         /// Lokalna kopia potwierdzona odczytem z serwera — można wysyłać.

@@ -196,6 +196,14 @@ final class SCProtectedSettings {
         }
     }
 
+    /// Czy na telefonie jest jakakolwiek kopia diety — klucz alergenów zapisany
+    /// (także pusty, gdy serwer powiedział „bez alergenów”). Brak po odtworzeniu
+    /// telefonu albo reinstalacji: plik nie jedzie w kopii zapasowej. Odczyt
+    /// w `body` rejestruje zależność (7.10.2026, Codex runda 4).
+    var hasLocalPreferences: Bool {
+        value(forKey: "settings.diet.allergens") != nil
+    }
+
     // MARK: - Zapis (jak `UserDefaults`)
 
     func set(_ value: Int, forKey key: String) {

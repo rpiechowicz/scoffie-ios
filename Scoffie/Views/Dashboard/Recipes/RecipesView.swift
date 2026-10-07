@@ -473,6 +473,14 @@ struct RecipesView: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .topLeading)))
                 }
 
+                // Alergie jeszcze nieznane (brak kopii diety) — lista ich nie
+                // odsiewa i mówi to wprost (7.10.2026).
+                RecipePreferencesNotice(
+                    isPersonalizationEnabled: isPersonalizationEnabled,
+                    horizontalPadding: pageHorizontalPadding,
+                    bottomPadding: 14
+                )
+
                 // Zakładki tylko tam, gdzie jest z czego wybierać — nie nad
                 // pustym stanem (Rafał 4.10.2026).
                 if showsScopeTabs {

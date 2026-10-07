@@ -110,6 +110,9 @@ struct RecipeCategoryScreen: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .topLeading)))
                     }
 
+                    // Alergie jeszcze nieznane — patrz `RecipePreferencesNotice`.
+                    RecipePreferencesNotice(isPersonalizationEnabled: isPersonalizationEnabled)
+
                     if let filtersRow = filtersContextRow {
                         RecipeListContextCard(rows: [filtersRow])
                             .padding(.horizontal, 20)

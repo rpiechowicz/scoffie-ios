@@ -522,6 +522,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   TYLKO wysłane pola, i tylko te nietknięte od wysłania (`mergeSavedValues`); potwierdza kopię tylko PEŁNY zestaw
   (wszystkie pola diety / sylwetka + imię). Arkusze diety i „Twoich danych” zapisują same tylko po `userEditGeneration` —
   wartości wpisane przez odczyt nie odpalają zapisu.
+  Brak kopii diety ≠ brak alergii: `SessionStore.preferencesAvailability` (`.ready` = jest klucz alergenów w pliku
+  albo potwierdzony odczyt; inaczej `.loading` / `.unavailable`) i `RecipePreferencesNotice` (`RecipeListKit`) nad
+  listą w Przepisach, kategorii i `PlanSlotPickerSheet` — „Wczytuję Twoje alergie…” albo „Nie udało się wczytać…
+  — przepisy bez dopasowania” + „Spróbuj ponownie”. Nowa lista dopasowanych przepisów = wstaw ten sam komunikat.
 
 ## Kontrakty z backendem (nie zmieniać jednostronnie)
 - **Minimalna wersja** (2.10.2026): `Components/SCAppUpdateGate.swift` pyta `GET /public/app-version?platform=ios&version=`

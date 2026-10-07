@@ -348,6 +348,13 @@ struct PlanSlotPickerSheet: View {
                 // stanem nie ma — ten mówi o diecie sam; „Bez dopasowania”
                 // stoi zawsze, gdy dopasowanie wyłączono (jak żeton na
                 // Przepisach).
+                // Alergie jeszcze nieznane — wybór do zjedzenia nie może udawać,
+                // że alergeny są odsiane (7.10.2026, `RecipePreferencesNotice`).
+                RecipePreferencesNotice(
+                    isPersonalizationEnabled: isPersonalizationEnabled,
+                    bottomPadding: 8
+                )
+
                 let context = contextRows(listIsEmpty: rows.isEmpty)
                 if !context.isEmpty {
                     RecipeListContextCard(rows: context)
