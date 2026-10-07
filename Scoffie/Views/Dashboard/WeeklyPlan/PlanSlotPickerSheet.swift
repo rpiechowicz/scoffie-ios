@@ -309,6 +309,11 @@ struct PlanSlotPickerSheet: View {
             onClose: { dismiss() }
         ) {
             RecipeListFilterButton(count: activeFilterCount, accent: accent) {
+                // Fraza z pola od razu, bez czekania na debounce: Filtry
+                // liczą indeks raz, z puli w chwili otwarcia — wpisana przed
+                // chwilą fraza zostawiłaby je przy starej puli (Codex 7.10.2026).
+                searchDebounceTask?.cancel()
+                debouncedSearch = searchText
                 isFilterPagePresented = true
             }
         }
