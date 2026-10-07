@@ -25,13 +25,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Bez tego skan „całej historii" widzi jeden commit.
           fetch-depth: 0
           persist-credentials: false
-      # Przypięte do commita, nie do ruchomego taga `v2` — akcja dostaje
-      # GITHUB_TOKEN. SHA = tag v2 z 13.09.2026.
+      # Przypięte do commita, nie do ruchomego taga — akcja dostaje
+      # GITHUB_TOKEN. SHA = tag v3.0.0 (`git ls-remote` 7.10.2026).
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
