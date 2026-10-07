@@ -21,7 +21,8 @@ import SwiftUI
 /// tło pod przyciskami, których lokalny build nie miał.
 ///
 /// Dawniej ten sam pomysł żył w kilku kopiach: `AssistantStickyFooter`
-/// (wprowadzenie asystenta), `AssistantSheetFooter` (arkusze asystenta),
+/// (wprowadzenie asystenta), `AssistantSheetFooter` (arkusze asystenta;
+/// obie nakładki usunięte 7.10.2026),
 /// szklana kapsuła filtrów przepisów i własne stopki „Dodaj do planu”,
 /// „Wybierz posiłek”, „Na dziś” z kreską nad przyciskiem. Teraz wszystkie
 /// idą przez ten widok — także kreator, przewodnik i wprowadzenie Asystenta
