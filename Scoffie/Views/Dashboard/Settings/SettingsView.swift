@@ -117,9 +117,9 @@ struct SettingsView: View {
     private static let householdNameMinLength = SessionStore.householdNameLengthRange.lowerBound
     private static let householdNameMaxLength = SessionStore.householdNameLengthRange.upperBound
 
-    /// Domyślny cel — ten sam, do którego wraca „Wyczyść preferencje”. Skala
-    /// i krok suwaka mieszkają we wspólnym `DietPreferencesForm` (7.10.2026).
-    private static let calorieGoalDefault: Int = DietPreferencesForm.calorieGoalDefault
+    // Skala, krok i wartość domyślna celu kalorii mieszkają we wspólnym
+    // `DietPreferencesForm` (7.10.2026) — „Wyczyść preferencje” wraca do
+    // `DietPreferencesForm.calorieGoalDefault`.
 
     /// Strona wsparcia — scoffie-web `src/pages/support/index.astro`
     /// (w menu strony „Pomoc”, `/support/`).
@@ -1391,7 +1391,7 @@ struct SettingsView: View {
     private var hasCustomisedPreferences: Bool {
         currentDiet != .none
             || currentGoal != .healthy
-            || calorieGoal != Self.calorieGoalDefault
+            || calorieGoal != DietPreferencesForm.calorieGoalDefault
             // Po tokenach, nie po rozpoznanych chipach: użytkownik, którego
             // jedyne alergeny pochodzą z nowszego buildu, też ma co czyścić.
             || !allergenTokens.isEmpty
@@ -1448,7 +1448,7 @@ struct SettingsView: View {
             // obowiązuje: „Wyczyść" to jawna decyzja i kasuje też wartości,
             // których ten build nie umie narysować.
             allergensRaw = ""
-            calorieGoal = Self.calorieGoalDefault
+            calorieGoal = DietPreferencesForm.calorieGoalDefault
             goalRaw = UserGoal.healthy.rawValue
             proteinOverride = -1
             fatOverride = -1
