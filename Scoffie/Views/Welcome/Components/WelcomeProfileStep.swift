@@ -11,13 +11,16 @@ import SwiftUI
 // Dawne pola tekstowe wzrostu i wagi, poziome koło lat i chipy odpadły.
 //
 // Wartości trzyma `WelcomeView` (`@State`); zapis na serwer idzie przy „Dalej”.
+// Wszystkie odpowiedzi wymagane (7.10.2026): `nil` = jeszcze bez odpowiedzi,
+// brak pokazuje `ProfileBodyForm(answers:)` terakotą, „Dalej” czeka.
 struct WelcomeProfileStep: View {
     @Binding var name: String
-    @Binding var sexRaw: String
+    /// `nil` = bez odpowiedzi, „” = „Nie podaję”.
+    @Binding var sexRaw: String?
     @Binding var yearOfBirth: Int
-    @Binding var heightCm: Int
-    @Binding var weightKg: Double
-    @Binding var activity: ActivityLevel
+    @Binding var heightCm: Int?
+    @Binding var weightKg: Double?
+    @Binding var activity: ActivityLevel?
     let avatarUrl: String?
     /// Ziarno awatara — id konta, jak w Ustawieniach.
     let seed: String
@@ -54,7 +57,7 @@ struct WelcomeProfileStep: View {
             .padding(.bottom, 18)
 
             ProfileBodyForm(
-                sexRaw: $sexRaw,
+                answers: $sexRaw,
                 yearOfBirth: $yearOfBirth,
                 heightCm: $heightCm,
                 weightKg: $weightKg,

@@ -208,6 +208,22 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   strony przewodnika bez `padding(footerHeight)`). Nowa rzecz w kreatorze = najpierw w Ustawieniach jako komponent
   z trybem, potem użyć w kroku — nie rysować kopii. USUNIĘTE: `WelcomeStep1…4*`, `WelcomeSection`, `WelcomeOptionRow`,
   `welcomeCard()`, `YearWheelPicker`, `MealDayTimesCard`, `BodyMetricsSummaryRow`.
+- Kreator WYMUSZA odpowiedzi (7.10.2026, Rafał: „inaczej button będzie dalej wyłączony”; reguły z #360, który
+  stał na starym kreatorze, przeniesione na nowy): krok 1 — imię, rok (koło startuje na bieżącym roku, wiek
+  `ProfileField.acceptedAges` 16…110), wzrost i waga (puste = `nil`, „Wybierz”; otwarcie wiersza wpisuje wartość,
+  na której stoi koło), płeć ALBO kafel „Nie podaję” (`nil` = brak odpowiedzi, „” = „Nie podaję”; kasuje płeć tylko
+  po stuknięciu: przy „Dalej” synchronicznie `markSexClearPending`, wspólny `sexClearPending` z „Twoimi danymi”)
+  i treningi; krok 2 — cel i dieta („Bez diety” to odpowiedź), alergeny opcjonalne; kroki 3–4 bez zmian. Tryb
+  w klockach Ustawień: `ProfileBodyForm(answers:…)` / `DietPreferencesForm(…answers:…)` (`requiresAnswers`; Ustawienia
+  idą przez `init` z wartościami zwykłymi i nic się u nich nie zmienia). Brak = tytuł wiersza
+  (`EditorialSettingsRow(titleColor:)`) albo etykieta sekcji (`EditorialSheetSectionLabel(color:)`) w terakocie,
+  nic więcej; `SCIconTilePicker` z opcjonalnym `Value` i `nil` nie zapala kafla. Wynik kcal/BMI w kroku 1 zakryty
+  (`redacted`) do podania roku, wzrostu i wagi; kalorie i makro w kroku 2 — do wyboru celu. Cel/aktywność/dieta są
+  w magazynie ZAWSZE (start sesji wpisuje domyślny wiersz serwera), a zapis na serwer idzie w tle, więc wznowienie
+  czyta SZKIC (`WelcomeDraft`: odpowiedzi kroków 1–2 + zaliczony krok + `userId`, JSON pod `onboarding.draft`
+  w `SCProtectedSettings`, zapisywany synchronicznie przy „Dalej” przed `advance()`), nie kopię. Szkic znika po
+  zakończeniu onboardingu (`persistOnboardingCompletedAt`) i z `removeAll` przy wylogowaniu; szkic innego konta
+  jest pomijany. Zapis wysyła tylko odpowiedzi (alergeny dopiero po kroku 2).
 - **Ustawienia**: zgoda na powiadomienia NIGDY przy starcie — `NotificationPermission.requestIfNotAsked()` w kontekście:
   Ustawienia → Powiadomienia („Włącz powiadomienia” / „Wyłączone w ustawieniach iOS” + „Otwórz ustawienia”), po wysłaniu
   zaproszenia domownika (`SCShareSheet(message:)`, `completed`), po dołączeniu z zaproszenia (pulpit odsłonięty,

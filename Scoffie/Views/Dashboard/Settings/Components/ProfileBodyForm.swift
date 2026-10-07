@@ -11,6 +11,13 @@ import SwiftUI
 // Teraz oba miejsca stoją na tych samych klockach i różnią się tylko tym, kto
 // trzyma wartości i kiedy je zapisuje: arkusz — `@ProtectedSetting` i zapis
 // z debounce, kreator — `@State` i zapis przy „Dalej”.
+//
+// Kreator WYMAGA odpowiedzi (7.10.2026, Rafał: „wymuszanie, aby user podał
+// dane wszystkie”, przeniesione z #360 na nowy kreator): `requiresAnswers`
+// pokazuje braki — tytuł wiersza i etykieta treningów w terakocie, „Wybierz”
+// zamiast wartości, wynik zakryty do podania roku, wzrostu i wagi. Wartości
+// kreatora są opcjonalne (`nil` = jeszcze bez odpowiedzi). Ustawienia idą
+// przez drugi `init` z wartościami zwykłymi — u nich nic się nie zmienia.
 
 // MARK: - Wiersze Sylwetki
 
@@ -27,6 +34,15 @@ enum ProfileField: String, CaseIterable, Identifiable {
     static let heights = 120...230
     static let kilograms = 30...250
     static let weights: ClosedRange<Double> = 30...250
+    /// Wiek, który kreator przyjmuje jako odpowiedź (7.10.2026): od 16 lat,
+    /// bo od tylu jest aplikacja (regulamin, `AuthFooterView`; zgoda Asystenta
+    /// też pyta o 16). Liczony jak wszędzie: bieżący rok minus rok urodzenia.
+    static let acceptedAges = 16...110
+
+    static func isYearAccepted(_ yearOfBirth: Int, now: Date = Date()) -> Bool {
+        let currentYear = Calendar.current.component(.year, from: now)
+        return acceptedAges.contains(currentYear - yearOfBirth)
+    }
 
     var title: String {
         switch self {
@@ -127,17 +143,22 @@ final class ProfilePickerGate {
 /// przeciągnięcie albo ten sam wiersz. Wartość wchodzi od razu (koło — gdy
 /// stanie), więc nie ma czego zatwierdzać.
 struct ProfileBodyForm: View {
-    @Binding var sexRaw: String
+    /// `nil` = płeć jeszcze bez odpowiedzi (tylko kreator), „” = „Nie podaję”.
+    @Binding var sexRaw: String?
     @Binding var yearOfBirth: Int
-    @Binding var heightCm: Int
-    @Binding var weightKg: Double
-    @Binding var activity: ActivityLevel
+    /// `nil` = jeszcze bez odpowiedzi (tylko kreator).
+    @Binding var heightCm: Int?
+    @Binding var weightKg: Double?
+    @Binding var activity: ActivityLevel?
     /// Stan małego arkusza — trzyma go rodzic, bo jego okna („Imię”, „Usuń
     /// konto”) idą przez `gate.present(_:)`.
     let gate: ProfilePickerGate
+    /// Kreator (7.10.2026): braki w terakocie i wynik zakryty do kompletu.
+    let requiresAnswers: Bool
 
     @Environment(\.colorScheme) private var scheme
 
+    /// Ustawienia → „Twoje dane”: wartości zawsze są, braków nie ma.
     init(
         sexRaw: Binding<String>,
         yearOfBirth: Binding<Int>,
@@ -146,29 +167,74 @@ struct ProfileBodyForm: View {
         activity: Binding<ActivityLevel>,
         gate: ProfilePickerGate
     ) {
+        _sexRaw = Binding<String?>(sexRaw)
+        _yearOfBirth = yearOfBirth
+        _heightCm = Binding<Int?>(heightCm)
+        _weightKg = Binding<Double?>(weightKg)
+        _activity = Binding<ActivityLevel?>(activity)
+        self.gate = gate
+        self.requiresAnswers = false
+    }
+
+    /// Kreator: wartości opcjonalne, `nil` = jeszcze bez odpowiedzi.
+    init(
+        answers sexRaw: Binding<String?>,
+        yearOfBirth: Binding<Int>,
+        heightCm: Binding<Int?>,
+        weightKg: Binding<Double?>,
+        activity: Binding<ActivityLevel?>,
+        gate: ProfilePickerGate
+    ) {
         _sexRaw = sexRaw
         _yearOfBirth = yearOfBirth
         _heightCm = heightCm
         _weightKg = weightKg
         _activity = activity
         self.gate = gate
+        self.requiresAnswers = true
     }
 
     static var currentYear: Int { Calendar.current.component(.year, from: Date()) }
     static var yearRange: ClosedRange<Int> { 1900...currentYear }
 
-    private var sex: Sex? { Sex(rawValue: sexRaw) }
+    // MARK: - Braki (tylko kreator)
+
+    /// Wiersz bez odpowiedzi — w Ustawieniach nigdy.
+    private func isMissing(_ field: ProfileField) -> Bool {
+        guard requiresAnswers else { return false }
+        switch field {
+        case .sex:    return sexRaw == nil
+        case .year:   return !ProfileField.isYearAccepted(yearOfBirth)
+        case .height: return heightCm == nil
+        case .weight: return weightKg == nil
+        }
+    }
+
+    private var isActivityMissing: Bool { requiresAnswers && activity == nil }
+
+    /// Wynik liczy się z podanych danych, nie z wartości startowych —
+    /// do tego czasu zakryty (`redacted`), jak w #360.
+    private var isResultPending: Bool {
+        isMissing(.year) || isMissing(.height) || isMissing(.weight)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             resultCard
+                .redacted(reason: isResultPending ? .placeholder : [])
+                .accessibilityHidden(isResultPending)
+                .animation(.smooth(duration: 0.2), value: isResultPending)
 
             EditorialSheetSectionLabel(title: "Sylwetka")
                 .padding(.top, 22)
             bodyCard
 
-            EditorialSheetSectionLabel(title: "Treningi w tygodniu")
-                .padding(.top, 22)
+            EditorialSheetSectionLabel(
+                title: "Treningi w tygodniu",
+                color: isActivityMissing ? SCPalette.terracotta : nil
+            )
+            .padding(.top, 22)
+            .animation(.smooth(duration: 0.2), value: isActivityMissing)
             activityCard
 
             Text("Z tych danych liczymy zapotrzebowanie. Zostają na Twoim koncie.")
@@ -183,8 +249,16 @@ struct ProfileBodyForm: View {
                 field: gate.picking ?? gate.shownField,
                 sexRaw: $sexRaw,
                 yearOfBirth: $yearOfBirth,
-                heightCm: $heightCm,
-                weightKg: $weightKg,
+                // Koło zawsze stoi na jakiejś wartości — pusta odpowiedź
+                // kreatora dostaje ją przy otwarciu wiersza (`pick`).
+                heightCm: Binding(
+                    get: { heightCm ?? BodyMetrics.defaultHeightCm },
+                    set: { heightCm = $0 }
+                ),
+                weightKg: Binding(
+                    get: { weightKg ?? BodyMetrics.defaultWeightKg },
+                    set: { weightKg = $0 }
+                ),
                 yearRange: Self.yearRange,
                 onClose: { gate.picking = nil }
             )
@@ -203,11 +277,11 @@ struct ProfileBodyForm: View {
     /// Sylwetka policzona z bieżących wartości. Zawsze jest (`BodyMetrics.preview`).
     private var metrics: BodyMetrics {
         BodyMetrics.preview(
-            heightCm: heightCm,
-            weightKg: weightKg,
+            heightCm: heightCm ?? BodyMetrics.defaultHeightCm,
+            weightKg: weightKg ?? BodyMetrics.defaultWeightKg,
             yearOfBirth: yearOfBirth,
-            activityRaw: activity.rawValue,
-            sexRaw: sexRaw
+            activityRaw: (activity ?? .light).rawValue,
+            sexRaw: sexRaw ?? ""
         )
     }
 
@@ -294,15 +368,36 @@ struct ProfileBodyForm: View {
                     iconColor: field.color,
                     title: field.title,
                     isLast: field == .weight,
-                    action: { gate.pick(field) }
+                    titleColor: isMissing(field) ? SCPalette.terracotta : nil,
+                    action: { pick(field) }
                 ) {
                     rowValue(field)
                 }
+                .animation(.smooth(duration: 0.2), value: isMissing(field))
                 .accessibilityValue(value(for: field))
                 .accessibilityHint("Otwiera wybór")
             }
         }
         .background(card)
+    }
+
+    /// Otwarcie wiersza. Kreator: koło wzrostu i wagi pokazuje wartość od
+    /// razu, więc pusta odpowiedź dostaje ją przy otwarciu — zamknięcie bez
+    /// kręcenia to zgoda na nią (7.10.2026). Rok startuje na bieżącym roku
+    /// (wiek 0), więc zostaje brakiem, dopóki koło się nie ruszy; płeć
+    /// i treningi czekają na stuknięcie kafla.
+    private func pick(_ field: ProfileField) {
+        if requiresAnswers, gate.picking != field {
+            switch field {
+            case .height where heightCm == nil:
+                heightCm = BodyMetrics.defaultHeightCm
+            case .weight where weightKg == nil:
+                weightKg = BodyMetrics.defaultWeightKg
+            default:
+                break
+            }
+        }
+        gate.pick(field)
     }
 
     /// Wartość wiersza w terakocie, dopóki jej wybór stoi w małym arkuszu.
@@ -329,15 +424,24 @@ struct ProfileBodyForm: View {
     private func value(for field: ProfileField) -> String {
         switch field {
         case .sex:
-            return sex?.title ?? "Nie podaję"
+            guard let sexRaw else { return Self.unansweredValue }
+            return Sex(rawValue: sexRaw)?.title ?? "Nie podaję"
         case .year:
+            // Kreator: koło jeszcze na bieżącym roku = bez odpowiedzi.
+            if requiresAnswers, yearOfBirth >= Self.currentYear { return Self.unansweredValue }
             return "\(yearOfBirth) · \(Self.ageLabel(max(Self.currentYear - yearOfBirth, 0)))"
         case .height:
+            guard let heightCm else { return Self.unansweredValue }
             return "\(heightCm) cm"
         case .weight:
+            guard let weightKg else { return Self.unansweredValue }
             return "\(Self.weightText(weightKg)) kg"
         }
     }
+
+    /// Wartość wiersza bez odpowiedzi (tylko kreator).
+    private static let unansweredValue = "Wybierz"
+
 
     private var pickerPresented: Binding<Bool> {
         Binding(
@@ -356,8 +460,9 @@ struct ProfileBodyForm: View {
             .background(card)
     }
 
-    private static let activityChoices: [SCIconTileChoice<ActivityLevel>] = ActivityLevel.allCases.map { level in
-        SCIconTileChoice(
+    /// Wartości opcjonalne — kreator startuje bez wybranego kafla (`nil`).
+    private static let activityChoices: [SCIconTileChoice<ActivityLevel?>] = ActivityLevel.allCases.map { level in
+        SCIconTileChoice<ActivityLevel?>(
             value: level,
             icon: level.tileIcon,
             title: level.label,
@@ -519,7 +624,8 @@ private struct ProfileNameAlert: ViewModifier {
 /// treści zjadałoby przewijanie.
 private struct ProfileFieldPickerSheet: View {
     let field: ProfileField
-    @Binding var sexRaw: String
+    /// `nil` = płeć jeszcze bez odpowiedzi (kreator) — żaden kafel nie świeci.
+    @Binding var sexRaw: String?
     @Binding var yearOfBirth: Int
     @Binding var heightCm: Int
     @Binding var weightKg: Double
@@ -531,10 +637,10 @@ private struct ProfileFieldPickerSheet: View {
     /// Płeć jako kafle — z trzecią opcją „Nie podaję” (wcześniej jedyną drogą
     /// było ponowne stuknięcie wybranej płci). Wszystkie w terakocie: płeć
     /// nie ma skali, którą mógłby nieść kolor.
-    private static let sexChoices: [SCIconTileChoice<String>] = [
-        SCIconTileChoice(value: Sex.female.rawValue, icon: Sex.female.icon, title: Sex.female.title, color: SCPalette.terracotta),
-        SCIconTileChoice(value: Sex.male.rawValue, icon: Sex.male.icon, title: Sex.male.title, color: SCPalette.terracotta),
-        SCIconTileChoice(value: "", icon: "eye.slash", title: "Nie podaję", color: SCPalette.terracotta)
+    private static let sexChoices: [SCIconTileChoice<String?>] = [
+        SCIconTileChoice<String?>(value: Sex.female.rawValue, icon: Sex.female.icon, title: Sex.female.title, color: SCPalette.terracotta),
+        SCIconTileChoice<String?>(value: Sex.male.rawValue, icon: Sex.male.icon, title: Sex.male.title, color: SCPalette.terracotta),
+        SCIconTileChoice<String?>(value: "", icon: "eye.slash", title: "Nie podaję", color: SCPalette.terracotta)
     ]
 
     var body: some View {

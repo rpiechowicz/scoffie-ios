@@ -12,10 +12,14 @@ import SwiftUI
 //
 // Kalorie idą za celem i sylwetką, dopóki nikt nie ruszył suwaka
 // (`WelcomeView.calorieAdjustedManually`); „Ustaw” w karcie wraca do podpowiedzi.
+//
+// Cel i dieta wymagane (7.10.2026): startują bez wyboru (`nil`), a kalorie
+// i makro są zakryte do wyboru celu (`DietPreferencesForm(answers:)`).
+// Alergeny opcjonalne — brak wyboru = brak alergii.
 struct WelcomeDietStep: View {
     @Binding var calorieGoal: Int
-    @Binding var goal: UserGoal
-    @Binding var diet: DietPreference
+    @Binding var goal: UserGoal?
+    @Binding var diet: DietPreference?
     @Binding var allergens: Set<Allergen>
     /// Sylwetka z kroku 1 — podpowiedź kaloryczna i makro.
     let metrics: BodyMetrics?
@@ -31,14 +35,12 @@ struct WelcomeDietStep: View {
             )
             .padding(.bottom, WelcomeLayout.headerSpacing)
 
-            // Katalogu w kreatorze jeszcze nie ma — bez liczby ukrytych przepisów.
             DietPreferencesForm(
                 calorieGoal: $calorieGoal,
-                goal: $goal,
+                answers: $goal,
                 diet: $diet,
                 metrics: metrics,
                 allergens: allergens,
-                allergenHiddenRecipes: nil,
                 onToggleAllergen: { toggle($0) },
                 onClearAllergens: { allergens = [] }
             )

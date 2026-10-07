@@ -17,7 +17,13 @@ import SwiftUI
 // - `onEditAllergens` — Ustawienia wpychają wybór alergenów w stos arkusza;
 //   kreator (`nil`) otwiera go jako arkusz (`AllergenSelectionField`);
 // - `onOpenProfile` — odsyłacz „Twoje dane ›”, gdy sylwetki brakuje; kreator
-//   ma ją zawsze (krok 1), więc go nie podaje.
+//   ma ją zawsze (krok 1), więc go nie podaje;
+// - `requiresAnswers` — kreator WYMAGA celu i diety (7.10.2026, Rafał:
+//   „wymuszanie, aby user podał dane wszystkie”, z #360 na nowy kreator):
+//   startują bez wyboru (`nil`), etykieta sekcji bez odpowiedzi stoi
+//   w terakocie, a kalorie i makro są zakryte, dopóki nie padnie cel — liczą
+//   się z niego. Alergeny zostają opcjonalne. Ustawienia idą przez `init`
+//   z wartościami zwykłymi — u nich nic się nie zmienia.
 
 /// Ręczne nadpisania makro (−1 = „licz za mnie”) — tylko w Ustawieniach.
 struct DietMacroOverrides {
@@ -38,8 +44,9 @@ struct DietMacroOverrides {
 
 struct DietPreferencesForm: View {
     @Binding var calorieGoal: Int
-    @Binding var goal: UserGoal
-    @Binding var diet: DietPreference
+    /// `nil` = jeszcze bez odpowiedzi (tylko kreator).
+    @Binding var goal: UserGoal?
+    @Binding var diet: DietPreference?
     /// Sylwetka z „Twoich danych” — podpowiedź kaloryczna celu i makro.
     /// `nil`, gdy brakuje którejś danej.
     let metrics: BodyMetrics?
@@ -51,9 +58,12 @@ struct DietPreferencesForm: View {
     var onEditAllergens: (() -> Void)?
     var macroOverrides: DietMacroOverrides?
     var onOpenProfile: (() -> Void)?
+    /// Kreator (7.10.2026): cel i dieta wymagane, braki w terakocie.
+    let requiresAnswers: Bool
 
     @Environment(\.colorScheme) private var scheme
 
+    /// Ustawienia → „Dieta i alergeny”: cel i dieta zawsze są.
     init(
         calorieGoal: Binding<Int>,
         goal: Binding<UserGoal>,
@@ -68,8 +78,8 @@ struct DietPreferencesForm: View {
         onOpenProfile: (() -> Void)? = nil
     ) {
         _calorieGoal = calorieGoal
-        _goal = goal
-        _diet = diet
+        _goal = Binding<UserGoal?>(goal)
+        _diet = Binding<DietPreference?>(diet)
         self.metrics = metrics
         self.allergens = allergens
         self.allergenHiddenRecipes = allergenHiddenRecipes
@@ -78,7 +88,42 @@ struct DietPreferencesForm: View {
         self.onEditAllergens = onEditAllergens
         self.macroOverrides = macroOverrides
         self.onOpenProfile = onOpenProfile
+        self.requiresAnswers = false
     }
+
+    /// Kreator: cel i dieta opcjonalne (`nil` = jeszcze bez odpowiedzi), bez
+    /// nadpisań makro, odsyłacza do sylwetki i ekranu alergenów w stosie.
+    init(
+        calorieGoal: Binding<Int>,
+        answers goal: Binding<UserGoal?>,
+        diet: Binding<DietPreference?>,
+        metrics: BodyMetrics?,
+        allergens: Set<Allergen>,
+        onToggleAllergen: @escaping (Allergen) -> Void,
+        onClearAllergens: @escaping () -> Void
+    ) {
+        _calorieGoal = calorieGoal
+        _goal = goal
+        _diet = diet
+        self.metrics = metrics
+        self.allergens = allergens
+        // Katalogu w kreatorze jeszcze nie ma — bez liczby ukrytych przepisów.
+        self.allergenHiddenRecipes = nil
+        self.onToggleAllergen = onToggleAllergen
+        self.onClearAllergens = onClearAllergens
+        self.onEditAllergens = nil
+        self.macroOverrides = nil
+        self.onOpenProfile = nil
+        self.requiresAnswers = true
+    }
+
+    /// Cel, z którego liczą się kalorie i makro. Bez odpowiedzi (kreator)
+    /// liczby są zakryte (`isResultPending`), więc zastępczy cel nie wychodzi
+    /// na ekran.
+    private var resolvedGoal: UserGoal { goal ?? .healthy }
+
+    /// Kreator bez celu — kalorie i makro czekają na niego.
+    private var isResultPending: Bool { requiresAnswers && goal == nil }
 
     // Calorie goal range — 1200 kcal is the lower medical safety bound for
     // adults; 3500 covers heavy training. 50 kcal step keeps the slider
@@ -90,8 +135,14 @@ struct DietPreferencesForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            calorieGoalSection
-            macroSection
+            Group {
+                calorieGoalSection
+                macroSection
+            }
+            .redacted(reason: isResultPending ? .placeholder : [])
+            .allowsHitTesting(!isResultPending)
+            .accessibilityHidden(isResultPending)
+            .animation(.smooth(duration: 0.2), value: isResultPending)
             goalPickerSection
             dietPickerSection
             allergensSection
@@ -101,7 +152,7 @@ struct DietPreferencesForm: View {
     // MARK: - Kalorie
 
     private var suggestedCalories: Int {
-        goal.suggestedCalories(for: metrics)
+        resolvedGoal.suggestedCalories(for: metrics)
     }
 
     /// Karta „Kalorie”: wiersz „Dzienny cel” z dużą liczbą po prawej, suwak
@@ -137,7 +188,7 @@ struct DietPreferencesForm: View {
     /// Kreator idzie za celem sam, dopóki nikt nie ruszył suwaka, więc u niego
     /// podpowiedź pokazuje się dopiero po ręcznej zmianie.
     private var showsCalorieSuggestion: Bool {
-        goal != .plan && calorieGoal != suggestedCalories
+        goal != nil && resolvedGoal != .plan && calorieGoal != suggestedCalories
     }
 
     /// Dwa warianty: policzony z sylwetki (wtedy mówimy skąd) i awaryjny,
@@ -147,7 +198,7 @@ struct DietPreferencesForm: View {
         guard metrics != nil else {
             return "Dla tego celu zwykle wychodzi \(suggestedCalories) kcal"
         }
-        return "Dla celu „\(goal.title)” wychodzi \(suggestedCalories) kcal"
+        return "Dla celu „\(resolvedGoal.title)” wychodzi \(suggestedCalories) kcal"
     }
 
     /// Podpowiedź na dole karty kalorii: żarówka, zdanie i „Ustaw”. Bez
@@ -244,7 +295,7 @@ struct DietPreferencesForm: View {
     private var effectiveMacros: MacroTargets? {
         DailyNutritionTargets.resolve(
             calorieGoal: calorieGoal,
-            goal: goal,
+            goal: resolvedGoal,
             metrics: metrics,
             proteinOverride: macroOverrides?.protein.wrappedValue ?? -1,
             fatOverride: macroOverrides?.fat.wrappedValue ?? -1,
@@ -513,7 +564,11 @@ struct DietPreferencesForm: View {
 
     private var goalPickerSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            EditorialSheetSectionLabel(title: "Twój cel")
+            EditorialSheetSectionLabel(
+                title: "Twój cel",
+                color: requiresAnswers && goal == nil ? SCPalette.terracotta : nil
+            )
+            .animation(.smooth(duration: 0.2), value: goal == nil)
 
             VStack(spacing: 0) {
                 ForEach(Array(UserGoal.allCases.enumerated()), id: \.element.id) { idx, candidate in
@@ -565,7 +620,11 @@ struct DietPreferencesForm: View {
 
     private var dietPickerSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            EditorialSheetSectionLabel(title: "Sposób odżywiania")
+            EditorialSheetSectionLabel(
+                title: "Sposób odżywiania",
+                color: requiresAnswers && diet == nil ? SCPalette.terracotta : nil
+            )
+            .animation(.smooth(duration: 0.2), value: diet == nil)
 
             VStack(spacing: 0) {
                 ForEach(Array(DietPreference.allCases.enumerated()), id: \.element.id) { idx, candidate in

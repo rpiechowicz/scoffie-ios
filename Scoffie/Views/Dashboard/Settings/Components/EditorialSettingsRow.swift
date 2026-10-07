@@ -21,6 +21,9 @@ struct EditorialSettingsRow<Trailing: View>: View {
     /// jest sprawą wiersza (notatka, cała wiadomość do wysłania, zdanie
     /// zgody). Domyślnie jedna linia, jak w Ustawieniach.
     var wrapsText: Bool = false
+    /// Kolor tytułu; `nil` = zwykły (`scLabel`). Kreator barwi tu brakującą
+    /// odpowiedź na terakotę (7.10.2026) — układ wiersza bez zmian.
+    var titleColor: Color? = nil
     var action: (() -> Void)? = nil
     @ViewBuilder var trailing: () -> Trailing
 
@@ -58,7 +61,7 @@ struct EditorialSettingsRow<Trailing: View>: View {
                 Text(title)
                     .font(.sc(size: 15, weight: .semibold))
                     .tracking(-0.3)
-                    .foregroundStyle(Color.scLabel(scheme))
+                    .foregroundStyle(titleColor ?? Color.scLabel(scheme))
                     .lineLimit(wrapsText ? nil : 1)
                     .fixedSize(horizontal: false, vertical: wrapsText)
 
