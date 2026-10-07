@@ -307,9 +307,8 @@ struct ScoffieApp: App {
         }
         // No household → welcome flow. New users start at step 1 (full
         // onboarding); users who already finished onboarding but have no
-        // household land on the last step (`WelcomeView.householdOnlyStep`,
-        // household creation only). Routing logic in `rootScreen(_:)`
-        // decides the initial step.
+        // household land on step 5 (household creation only). Routing
+        // logic in `rootScreen(_:)` decides the initial step.
         if sessionStore.currentHouseholdId?.isEmpty ?? true {
             return .welcome
         }
@@ -540,8 +539,8 @@ struct ScoffieApp: App {
             WelcomeFlowView(
                 initialDisplayName: SCProtectedSettings.shared.string(forKey: "settings.user.displayName") ?? "",
                 // Jak przy logowaniu: dom już jest, korzeń zaraz przejdzie
-                // na pulpit — przycisk ostatniego kroku (`householdOnlyStep`) nie
-                // wraca na moment do stanu spoczynku pod zasłoną.
+                // na pulpit — przycisk kroku 5 nie wraca na moment do stanu
+                // spoczynku pod zasłoną.
                 isCreatingHousehold: sessionStore.isSigningIn
                     || !(sessionStore.currentHouseholdId?.isEmpty ?? true),
                 errorMessage: sessionStore.authError,

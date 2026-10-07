@@ -541,7 +541,7 @@ final class SessionStore {
             // onboarding, zaczyna od kroku gospodarstwa, a członkostwo
             // nieobecne w odpowiedzi auth prowadzi prosto na pulpit. Czekamy
             // na nie pod spinnerem logowania — dociągnięte po wejściu
-            // przestawiało kreator (przewodnik → krok gospodarstwa) albo cały korzeń
+            // przestawiało kreator (przewodnik → krok 5) albo cały korzeń
             // drugi raz, już na oczach użytkownika.
             await restoreHouseholdBeforeEntering()
         } else {
