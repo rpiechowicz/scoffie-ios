@@ -2845,26 +2845,9 @@ final class SessionStore {
     @discardableResult
     private func applyPreferencesSnapshot(_ prefs: BackendUserPreferencesDTO) -> Bool {
         let defaults = UserDefaults.standard
-        // Przez `backendValue`, nie przez `lowercased()` — patrz komentarz
-        // przy `DietPreference.backendValue`.
-        if let diet = DietPreference(backendValue: prefs.dietPreference) {
-            SCProtectedSettings.shared.set(diet.rawValue, forKey: PreferencesKeys.diet)
+        for (key, value) in Self.preferencesLocalValues(prefs) {
+            SCProtectedSettings.shared.setValue(value, forKey: key)
         }
-        SCProtectedSettings.shared.set(prefs.calorieGoal, forKey: PreferencesKeys.calorieGoal)
-        SCProtectedSettings.shared.set(
-            prefs.allergens
-                .map { $0.lowercased() }
-                .sorted()
-                .joined(separator: ","),
-            forKey: PreferencesKeys.allergens
-        )
-        SCProtectedSettings.shared.set(prefs.goal.lowercased(), forKey: PreferencesKeys.goal)
-        SCProtectedSettings.shared.set(prefs.activityLevel, forKey: PreferencesKeys.activityLevel)
-        // −1 to sentinel „licz za mnie" po stronie iOS; backend trzyma
-        // tam `null`. Tłumaczenie w obie strony siedzi wyłącznie tutaj.
-        SCProtectedSettings.shared.set(prefs.proteinG ?? -1, forKey: PreferencesKeys.proteinG)
-        SCProtectedSettings.shared.set(prefs.fatG ?? -1, forKey: PreferencesKeys.fatG)
-        SCProtectedSettings.shared.set(prefs.carbsG ?? -1, forKey: PreferencesKeys.carbsG)
 
         // „Czego nie jem” (wykluczone składniki i limit czasu na danie)
         // zniknęło z aplikacji 23.09.2026 — wykluczanie składników żyje
@@ -2895,6 +2878,80 @@ final class SessionStore {
         // Preferences` trzyma je w ryzach przy każdym starcie sesji.
 
         return hasLegacyRestrictions
+    }
+
+    /// Wiersz preferencji z serwera w postaci lokalnej kopii — JEDNO miejsce
+    /// tłumaczenia (odczyt i odpowiedź na zapis). Wartość `nil` = usuń klucz;
+    /// brak klucza w słowniku = nie ruszaj (np. nieznana dieta).
+    private static func preferencesLocalValues(_ prefs: BackendUserPreferencesDTO) -> [String: SCProtectedValue?] {
+        var values: [String: SCProtectedValue?] = [:]
+        // Przez `backendValue`, nie przez `lowercased()` — patrz komentarz
+        // przy `DietPreference.backendValue`.
+        if let diet = DietPreference(backendValue: prefs.dietPreference) {
+            values.updateValue(SCProtectedValue.string(diet.rawValue), forKey: PreferencesKeys.diet)
+        }
+        values.updateValue(SCProtectedValue.int(prefs.calorieGoal), forKey: PreferencesKeys.calorieGoal)
+        values.updateValue(
+            SCProtectedValue.string(prefs.allergens.map { $0.lowercased() }.sorted().joined(separator: ",")),
+            forKey: PreferencesKeys.allergens
+        )
+        values.updateValue(SCProtectedValue.string(prefs.goal.lowercased()), forKey: PreferencesKeys.goal)
+        values.updateValue(SCProtectedValue.int(prefs.activityLevel), forKey: PreferencesKeys.activityLevel)
+        // −1 to sentinel „licz za mnie" po stronie iOS; backend trzyma
+        // tam `null`. Tłumaczenie w obie strony siedzi wyłącznie tutaj.
+        values.updateValue(SCProtectedValue.int(prefs.proteinG ?? -1), forKey: PreferencesKeys.proteinG)
+        values.updateValue(SCProtectedValue.int(prefs.fatG ?? -1), forKey: PreferencesKeys.fatG)
+        values.updateValue(SCProtectedValue.int(prefs.carbsG ?? -1), forKey: PreferencesKeys.carbsG)
+        return values
+    }
+
+    /// Pole w `data` zapisu preferencji → klucz lokalnej kopii.
+    private static let preferencesPayloadKeys: [String: String] = [
+        "dietPreference": PreferencesKeys.diet,
+        "calorieGoal": PreferencesKeys.calorieGoal,
+        "allergens": PreferencesKeys.allergens,
+        "goal": PreferencesKeys.goal,
+        "activityLevel": PreferencesKeys.activityLevel,
+        "proteinG": PreferencesKeys.proteinG,
+        "fatG": PreferencesKeys.fatG,
+        "carbsG": PreferencesKeys.carbsG,
+    ]
+
+    /// Lokalne wartości podanych kluczy w chwili wysłania zapisu.
+    private static func protectedValues(of keys: [String]) -> [String: SCProtectedValue?] {
+        var values: [String: SCProtectedValue?] = [:]
+        for key in keys {
+            // `updateValue`, nie `values[key] = …` — przypisanie `nil` przez
+            // indeks USUWA klucz, a tu `nil` („brak wartości”) też jest stanem.
+            values.updateValue(SCProtectedSettings.shared.value(forKey: key), forKey: key)
+        }
+        return values
+    }
+
+    /// Odpowiedź na udany zapis (7.10.2026, Codex runda 3): wpisuje wartości
+    /// serwera TYLKO dla kluczy, które ten zapis wysłał, i tylko tam, gdzie
+    /// lokalna wartość od wysłania się nie zmieniła. Reszta wiersza z
+    /// odpowiedzi jest ignorowana — częściowy zapis (np. sama aktywność z
+    /// „Twoich danych”) nie może nadpisać niezapisanej jeszcze zmiany alergenów.
+    /// Zwraca, czy WSZYSTKIE wysłane klucze były od wysłania nietknięte.
+    @MainActor
+    @discardableResult
+    private func mergeSavedValues(
+        sent: [String: SCProtectedValue?],
+        server: [String: SCProtectedValue?]
+    ) -> Bool {
+        let store = SCProtectedSettings.shared
+        var untouched = true
+        for (key, sentValue) in sent {
+            guard store.value(forKey: key) == sentValue else {
+                untouched = false
+                continue
+            }
+            if let serverValue = server[key] {
+                store.setValue(serverValue, forKey: key)
+            }
+        }
+        return untouched
     }
 
     /// Wynik `ensurePreferencesBaseline` / `ensureProfileBaseline`.
@@ -3063,7 +3120,10 @@ final class SessionStore {
             }
         }
         guard !data.isEmpty else { return true }
-        let generationAtSend = SCProtectedSettings.shared.changeGeneration(.preferences)
+        let sentKeys = data.keys.compactMap { Self.preferencesPayloadKeys[$0] }
+        let sentValues = Self.protectedValues(of: sentKeys)
+        // Pełny zestaw = wszystkie pola diety; tylko on może potwierdzić kopię.
+        let isFullSet = Set(sentKeys) == Set(Self.preferencesPayloadKeys.values)
 
         let socket = sessionSocket()
 
@@ -3073,14 +3133,18 @@ final class SessionStore {
                 payload: ["userId": userId, "data": data],
                 as: WsEnvelope<BackendUserPreferencesDTO>.self
             )
-            // Serwer oddaje cały wiersz po zapisie. Bez nowszej zmiany w
-            // międzyczasie lokalna kopia = to, co serwer właśnie przyjął —
-            // wpisujemy wiersz i to też jest potwierdzenie (7.10.2026; tak
-            // potwierdza się kreator). Nowsza zmiana = odpowiedź pomijamy.
-            if envelope.ok, let saved = envelope.data, currentUserId == userId,
-               SCProtectedSettings.shared.changeGeneration(.preferences) == generationAtSend {
-                applyPreferencesSnapshot(saved)
-                preferencesConfirmedForUserId = userId
+            // Z odpowiedzi tylko WYSŁANE pola, nietknięte od wysłania
+            // (`mergeSavedValues`). Potwierdzenie kopii daje wyłącznie pełny
+            // zestaw, którego żadne pole się w międzyczasie nie zmieniło —
+            // wtedy lokalne = to, co serwer właśnie przyjął (7.10.2026).
+            if envelope.ok, let saved = envelope.data, currentUserId == userId {
+                let untouched = mergeSavedValues(
+                    sent: sentValues,
+                    server: Self.preferencesLocalValues(saved)
+                )
+                if isFullSet, untouched {
+                    preferencesConfirmedForUserId = userId
+                }
             }
             // Odrzucenie (np. `VALIDATION_ERROR` na nieznanym alergenie) też
             // dekoduje się poprawnie — bez tego logu wyglądało jak udany zapis,
@@ -3233,7 +3297,15 @@ final class SessionStore {
             UserDefaults.standard.removeObject(forKey: ProfileKeys.sexClearPending)
         }
         guard !data.isEmpty else { return true }
-        let generationAtSend = SCProtectedSettings.shared.changeGeneration(.profile)
+        var sentProfileKeys: [String] = []
+        if data["displayName"] != nil { sentProfileKeys.append(Keys.displayName) }
+        if data["yearOfBirth"] != nil { sentProfileKeys.append(ProfileKeys.yearOfBirth) }
+        if data["heightCm"] != nil { sentProfileKeys.append(ProfileKeys.heightCm) }
+        if data["weightKg"] != nil { sentProfileKeys.append(ProfileKeys.weightKg) }
+        if data["sex"] != nil { sentProfileKeys.append(ProfileKeys.sex) }
+        let sentValues = Self.protectedValues(of: sentProfileKeys)
+        // Pełny zestaw sylwetki i imienia — tylko on może potwierdzić kopię.
+        let isFullSet = sentProfileKeys.count == 5
 
         let socket = sessionSocket()
 
@@ -3247,20 +3319,28 @@ final class SessionStore {
                UserDefaults.standard.string(forKey: ProfileKeys.sexClearPending) == clearToken {
                 UserDefaults.standard.removeObject(forKey: ProfileKeys.sexClearPending)
             }
-            // Serwer oddaje cały profil po zapisie. Bez nowszej zmiany w
-            // międzyczasie: wpisujemy go (lokalne = przyjęte przez serwer)
-            // i potwierdzamy kopię — tak potwierdza się kreator (7.10.2026).
-            // Po fladze `sexClearPending`, którą `persistProfileFields` szanuje.
-            if envelope.ok, let saved = envelope.data, currentUserId == userId,
-               SCProtectedSettings.shared.changeGeneration(.profile) == generationAtSend {
-                SCProtectedSettings.shared.set(saved.displayName, forKey: Keys.displayName)
-                persistProfileFields(
-                    yearOfBirth: saved.yearOfBirth,
-                    heightCm: saved.heightCm,
-                    weightKg: saved.weightKg,
-                    sex: saved.sex
-                )
-                profileConfirmedForUserId = userId
+            // Z odpowiedzi tylko WYSŁANE pola, nietknięte od wysłania — jak
+            // przy preferencjach (7.10.2026, Codex runda 3). Płeć: nowsze
+            // „Nie podaję” zmieniło lokalną wartość, więc zostaje nietknięte
+            // (a jego `sexClearPending` żyje dalej). Potwierdza tylko pełny
+            // zestaw bez zmian w międzyczasie.
+            if envelope.ok, let saved = envelope.data, currentUserId == userId {
+                var server: [String: SCProtectedValue?] = [:]
+                server.updateValue(SCProtectedValue.string(saved.displayName), forKey: Keys.displayName)
+                if let year = saved.yearOfBirth {
+                    server.updateValue(SCProtectedValue.int(year), forKey: ProfileKeys.yearOfBirth)
+                }
+                if let height = saved.heightCm {
+                    server.updateValue(SCProtectedValue.int(height), forKey: ProfileKeys.heightCm)
+                }
+                if let weight = saved.weightKg {
+                    server.updateValue(SCProtectedValue.double(weight), forKey: ProfileKeys.weightKg)
+                }
+                server.updateValue(saved.sex.map { SCProtectedValue.string($0.lowercased()) }, forKey: ProfileKeys.sex)
+                let untouched = mergeSavedValues(sent: sentValues, server: server)
+                if isFullSet, untouched {
+                    profileConfirmedForUserId = userId
+                }
             }
             return envelope.ok
         } catch {
