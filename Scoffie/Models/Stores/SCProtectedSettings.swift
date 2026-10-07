@@ -262,13 +262,56 @@ final class SCProtectedSettings {
         save()
     }
 
+    // MARK: - Liczniki zmian (7.10.2026, Codex runda 2)
+    //
+    // Odczyt z serwera (`users:preferences:get`, `users:me`) trwa i może wrócić
+    // PO edycji albo zapisie — wtedy jego migawka jest starsza niż to, co jest
+    // na telefonie, i nie wolno nią nadpisać lokalnych wartości. Odczyt
+    // zapamiętuje `changeGeneration` przy starcie i porównuje po powrocie.
+    // `userEditGeneration` liczy tylko edycje z ręki (zapis przez
+    // `@ProtectedSetting`) — arkusze zapisują automatycznie tylko po nich, nie
+    // po wartościach wpisanych przez odczyt z serwera.
+
+    /// Dieta (`settings.diet.*`, także aktywność) albo sylwetka i konto.
+    enum EditDomain {
+        case preferences
+        case profile
+    }
+
+    static func domain(forKey key: String) -> EditDomain {
+        key.hasPrefix("settings.diet.") ? .preferences : .profile
+    }
+
+    private var userEdits: [EditDomain: Int] = [:]
+    private var localSaves: [EditDomain: Int] = [:]
+
+    /// Edycje z ręki (widoki przez `@ProtectedSetting`).
+    func userEditGeneration(_ domain: EditDomain) -> Int {
+        userEdits[domain, default: 0]
+    }
+
+    /// Edycje z ręki + zapisy wysłane przez `SessionStore`.
+    func changeGeneration(_ domain: EditDomain) -> Int {
+        userEdits[domain, default: 0] &+ localSaves[domain, default: 0]
+    }
+
+    /// `SessionStore` zaczyna zapis na serwer (`saveUserPreferences`,
+    /// `saveProfile`) — trwające odczyty są od tej chwili nieaktualne.
+    func noteLocalSave(_ domain: EditDomain) {
+        localSaves[domain, default: 0] &+= 1
+    }
+
     /// Zapis wspólny dla `set`/`removeObject` i `@ProtectedSetting`.
-    func setValue(_ newValue: SCProtectedValue?, forKey key: String) {
+    /// `isUserEdit` — zapis z widoku (`@ProtectedSetting`), czyli z ręki.
+    func setValue(_ newValue: SCProtectedValue?, forKey key: String, isUserEdit: Bool = false) {
         loadIfNeeded()
         let entry = self.slot(forKey: key)
         // Ta sama wartość — bez przebudowy widoków i bez zapisu pliku.
         guard entry.value != newValue else { return }
         entry.value = newValue
+        if isUserEdit {
+            userEdits[Self.domain(forKey: key), default: 0] &+= 1
+        }
         if isLoaded {
             save()
         } else {
@@ -438,7 +481,8 @@ struct ProtectedSetting<Value>: DynamicProperty {
             return decode(stored) ?? defaultValue
         }
         nonmutating set {
-            SCProtectedSettings.shared.setValue(encode(newValue), forKey: key)
+            // Zapis z widoku = edycja z ręki (liczniki zmian, 7.10.2026).
+            SCProtectedSettings.shared.setValue(encode(newValue), forKey: key, isUserEdit: true)
         }
     }
 

@@ -98,6 +98,10 @@ struct SettingsView: View {
     /// Flagi zeruje `onAppear` arkusza, więc każde otwarcie ma swój
     /// „pierwszy strzał" do pominięcia.
     @State private var didObserveDietPreferencesToken = false
+    /// Licznik edycji diety z ręki przy ostatnim zapisie — zmiana wartości
+    /// BEZ nowej edycji (odczyt z serwera wpisał wiersz) nie wysyła niczego
+    /// z powrotem (7.10.2026, Codex runda 2).
+    @State private var savedDietEditGeneration = 0
     @State private var didObserveNotificationToken = false
     /// Domownik wskazany do usunięcia — nie-nil otwiera alert potwierdzenia.
     @State private var memberToRemove: HouseholdMemberSnapshot?
@@ -1335,12 +1339,17 @@ struct SettingsView: View {
         // arkusza) jest pomijane — patrz `didObserveDietPreferencesToken`.
         .onAppear { didObserveDietPreferencesToken = false }
         .task(id: dietPreferencesSyncToken) {
+            let editGeneration = SCProtectedSettings.shared.userEditGeneration(.preferences)
             guard didObserveDietPreferencesToken else {
                 didObserveDietPreferencesToken = true
+                savedDietEditGeneration = editGeneration
                 return
             }
+            // Wartości zmienił odczyt z serwera, nie użytkownik — nic nie wysyłamy.
+            guard editGeneration != savedDietEditGeneration else { return }
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
+            savedDietEditGeneration = SCProtectedSettings.shared.userEditGeneration(.preferences)
             // Ten ekran wysyła PEŁNY zestaw (z alergenami) — tylko z kopii
             // potwierdzonej odczytem z serwera (7.10.2026). Po odtworzeniu
             // telefonu kopia bywa pusta i zmiana kalorii skasowałaby alergeny.
@@ -1357,6 +1366,9 @@ struct SettingsView: View {
                 toasts.error("Nie udało się wczytać Twoich ustawień", "Spróbuj ponownie.")
                 return
             }
+            // Odczyt jest wspólny i nie anuluje się z tym zadaniem — nowsza
+            // edycja w międzyczasie ma już własne zadanie zapisu.
+            guard !Task.isCancelled else { return }
             await sessionStore.saveUserPreferences(
                 diet: currentDiet.rawValue,
                 calorieGoal: calorieGoal,

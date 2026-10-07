@@ -516,6 +516,11 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   `restoreHouseholdIfNeeded`), „Twoje dane” sprawdzają oba przez `serverCopiesReady`. Wyjątek
   `confirmBaselineFirst: false`: kreator i sprzątanie po odczycie. Oba odczyty ponawia foreground; potwierdzenia
   tylko w pamięci, przypięte do id konta, zerowane w `logout()`.
+  Wyścig migawek: odczyt (`loadUserPreferences`, `users:me` w `restoreHouseholdIfNeeded`) to JEDNO wspólne zadanie na
+  konto; zapamiętuje `SCProtectedSettings.changeGeneration` i po powrocie nie nadpisuje (ani nie potwierdza), jeśli
+  w międzyczasie była edycja z ręki (`@ProtectedSetting`) albo zapis (`noteLocalSave`). Udany zapis wpisuje wiersz
+  z odpowiedzi i też potwierdza. Arkusze diety i „Twoich danych” zapisują same tylko po `userEditGeneration` —
+  wartości wpisane przez odczyt nie odpalają zapisu.
 
 ## Kontrakty z backendem (nie zmieniać jednostronnie)
 - **Minimalna wersja** (2.10.2026): `Components/SCAppUpdateGate.swift` pyta `GET /public/app-version?platform=ios&version=`

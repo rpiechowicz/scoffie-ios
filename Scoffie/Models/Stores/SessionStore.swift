@@ -594,6 +594,12 @@ final class SessionStore {
         currentUserId = nil
         preferencesConfirmedForUserId = nil
         profileConfirmedForUserId = nil
+        // Trwające odczyty dokończą się same, ale ich wynik nie należy już do
+        // nikogo (sprawdzają `currentUserId`); nowa sesja zaczyna własne.
+        preferencesReadTask = nil
+        preferencesReadUserId = nil
+        householdRestoreTask = nil
+        householdRestoreUserId = nil
         CrashReporting.setUser(id: currentUserId)
         currentHouseholdId = nil
         currentHouseholdName = nil
@@ -2081,10 +2087,47 @@ final class SessionStore {
     /// aplikacja była wyłączona i zdarzenie socketowe przepadło. Bez tej
     /// drugiej gałęzi aplikacja startowała do „ducha": widoków gospodarstwa,
     /// w którym backend odrzucał każde zapytanie.
+    ///
+    /// Jeden `users:me` naraz na konto (7.10.2026, Codex runda 2) — start
+    /// sesji, logowanie, powrót na pierwszy plan i `ensureProfileBaseline`
+    /// czekają na to samo zadanie (ten sam wyścig migawek co przy diecie).
     private func restoreHouseholdIfNeeded() async {
         guard let userId = currentUserId, !userId.isEmpty else { return }
+        // Anulowanie czekającego (limit 4 s w `restoreHouseholdBeforeEntering`)
+        // przechodzi na wspólne zadanie — jak wtedy, gdy `users:me` szło
+        // w zadaniu dziecku: ponowienia `emitWithAck` kończą się na `sleep`.
+        if let running = householdRestoreTask, householdRestoreUserId == userId {
+            await withTaskCancellationHandler {
+                await running.value
+            } onCancel: {
+                running.cancel()
+            }
+            return
+        }
+        let task = Task { @MainActor [weak self] () -> Void in
+            guard let self else { return }
+            await self.performHouseholdRestore(userId: userId)
+        }
+        householdRestoreTask = task
+        householdRestoreUserId = userId
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+        if householdRestoreTask == task {
+            householdRestoreTask = nil
+            householdRestoreUserId = nil
+        }
+    }
+
+    /// Właściwe `users:me` — tylko przez `restoreHouseholdIfNeeded`. Nie czeka
+    /// na nic, co czeka na nie samo (`bootstrapSession` tylko odpala zadania).
+    private func performHouseholdRestore(userId: String) async {
         let persistedHouseholdId =
             (currentHouseholdId?.isEmpty == false) ? currentHouseholdId : nil
+        let protectedStore = SCProtectedSettings.shared
+        let profileGenerationAtStart = protectedStore.changeGeneration(.profile)
 
         do {
             let socketClient = sessionSocket()
@@ -2097,25 +2140,32 @@ final class SessionStore {
             guard envelope.ok, let user = envelope.data else {
                 return
             }
+            // Wylogowanie / zmiana konta w trakcie — odpowiedź nie jest już nasza.
+            guard currentUserId == userId else { return }
 
             let defaults = UserDefaults.standard
-            SCProtectedSettings.shared.set(user.displayName, forKey: Keys.displayName)
-            SCProtectedSettings.shared.set(user.email ?? "", forKey: Keys.email)
-            if let avatarUrl = user.avatarUrl, !avatarUrl.isEmpty {
-                SCProtectedSettings.shared.set(avatarUrl, forKey: Keys.avatarUrl)
-            } else {
-                SCProtectedSettings.shared.removeObject(forKey: Keys.avatarUrl)
-            }
-            persistProfileFields(
-                yearOfBirth: user.yearOfBirth,
-                heightCm: user.heightCm,
-                weightKg: user.weightKg,
-                sex: user.sex
-            )
-            // Sylwetka i imię = serwer: „Twoje dane” mogą wysyłać pełny zestaw
-            // (`ensureProfileBaseline`, 7.10.2026).
-            if currentUserId == userId {
+            // Sylwetkę i imię wpisujemy tylko, gdy w trakcie odczytu nie było
+            // edycji ani zapisu „Twoich danych” — inaczej starsza migawka
+            // nadpisałaby nowszą zmianę (7.10.2026). Wtedy też bez potwierdzenia.
+            if protectedStore.changeGeneration(.profile) == profileGenerationAtStart {
+                SCProtectedSettings.shared.set(user.displayName, forKey: Keys.displayName)
+                SCProtectedSettings.shared.set(user.email ?? "", forKey: Keys.email)
+                if let avatarUrl = user.avatarUrl, !avatarUrl.isEmpty {
+                    SCProtectedSettings.shared.set(avatarUrl, forKey: Keys.avatarUrl)
+                } else {
+                    SCProtectedSettings.shared.removeObject(forKey: Keys.avatarUrl)
+                }
+                persistProfileFields(
+                    yearOfBirth: user.yearOfBirth,
+                    heightCm: user.heightCm,
+                    weightKg: user.weightKg,
+                    sex: user.sex
+                )
+                // Sylwetka i imię = serwer: „Twoje dane” mogą wysyłać pełny
+                // zestaw (`ensureProfileBaseline`, 7.10.2026).
                 profileConfirmedForUserId = userId
+            } else {
+                debugLog("[SessionStore] users:me — sylwetka starsza niż lokalna zmiana, pomijam")
             }
             defaults.set(user.avatarColor ?? -1, forKey: Keys.avatarColor)
             persistOnboardingCompletedAt(user.onboardingCompletedAt)
@@ -2712,10 +2762,39 @@ final class SessionStore {
     /// Pull the user's preferences row from the backend and write into
     /// AppStorage. Silent on failure — local cache stays as fallback so
     /// the UI keeps working offline.
+    ///
+    /// Jeden odczyt naraz na konto (7.10.2026, Codex runda 2): start sesji,
+    /// powrót na pierwszy plan i `ensurePreferencesBaseline` czekają na TO SAMO
+    /// zadanie. Dwa równoległe odczyty dawały dwie migawki, a spóźniona starsza
+    /// nadpisywała nowszą edycję i arkusz diety odsyłał ją na serwer.
     @MainActor
     @discardableResult
     func loadUserPreferences() async -> Bool {
         guard let userId = currentUserId, !userId.isEmpty else { return false }
+        if let running = preferencesReadTask, preferencesReadUserId == userId {
+            return await running.value
+        }
+        let task = Task { @MainActor [weak self] () -> Bool in
+            guard let self else { return false }
+            return await self.performPreferencesRead(userId: userId)
+        }
+        preferencesReadTask = task
+        preferencesReadUserId = userId
+        let loaded = await task.value
+        if preferencesReadTask == task {
+            preferencesReadTask = nil
+            preferencesReadUserId = nil
+        }
+        return loaded
+    }
+
+    /// Właściwy odczyt — woła go tylko `loadUserPreferences` (jedno zadanie).
+    /// Nie woła `ensurePreferencesBaseline` (ani nic, co czeka na odczyt),
+    /// więc zadanie nigdy nie czeka samo na siebie.
+    @MainActor
+    private func performPreferencesRead(userId: String) async -> Bool {
+        let protectedStore = SCProtectedSettings.shared
+        let generationAtStart = protectedStore.changeGeneration(.preferences)
         let socket = sessionSocket()
 
         do {
@@ -2725,64 +2804,21 @@ final class SessionStore {
                 as: WsEnvelope<BackendUserPreferencesDTO>.self
             )
             guard envelope.ok, let prefs = envelope.data else { return false }
-
-            let defaults = UserDefaults.standard
-            // Przez `backendValue`, nie przez `lowercased()` — patrz komentarz
-            // przy `DietPreference.backendValue`.
-            if let diet = DietPreference(backendValue: prefs.dietPreference) {
-                SCProtectedSettings.shared.set(diet.rawValue, forKey: PreferencesKeys.diet)
+            // Odpowiedź po wylogowaniu / zmianie konta nie jest już nasza.
+            guard currentUserId == userId else { return false }
+            // W trakcie odczytu była edycja albo zapis — migawka serwera jest
+            // starsza niż telefon. Nie nadpisujemy i NIE potwierdzamy (lokalne
+            // wartości nie pochodzą z tej odpowiedzi); potwierdzi je udany zapis.
+            guard protectedStore.changeGeneration(.preferences) == generationAtStart else {
+                debugLog("[SessionStore] users:preferences:get — odpowiedź starsza niż lokalna zmiana, pomijam")
+                return false
             }
-            SCProtectedSettings.shared.set(prefs.calorieGoal, forKey: PreferencesKeys.calorieGoal)
-            SCProtectedSettings.shared.set(
-                prefs.allergens
-                    .map { $0.lowercased() }
-                    .sorted()
-                    .joined(separator: ","),
-                forKey: PreferencesKeys.allergens
-            )
-            SCProtectedSettings.shared.set(prefs.goal.lowercased(), forKey: PreferencesKeys.goal)
-            SCProtectedSettings.shared.set(prefs.activityLevel, forKey: PreferencesKeys.activityLevel)
-            // −1 to sentinel „licz za mnie" po stronie iOS; backend trzyma
-            // tam `null`. Tłumaczenie w obie strony siedzi wyłącznie tutaj.
-            SCProtectedSettings.shared.set(prefs.proteinG ?? -1, forKey: PreferencesKeys.proteinG)
-            SCProtectedSettings.shared.set(prefs.fatG ?? -1, forKey: PreferencesKeys.fatG)
-            SCProtectedSettings.shared.set(prefs.carbsG ?? -1, forKey: PreferencesKeys.carbsG)
 
-            // „Czego nie jem” (wykluczone składniki i limit czasu na danie)
-            // zniknęło z aplikacji 23.09.2026 — wykluczanie składników żyje
-            // teraz w filtrach przepisów. Kolumny na serwerze zostały, a
-            // walidator planu dalej odrzuca przez nie dania; bez ekranu nikt
-            // by takiej blokady nie zobaczył ani nie zdjął. Sprzątamy więc
-            // wartości zapisane wcześniej: lokalnie od razu, na serwerze
-            // jednym zapisem na końcu odczytu.
-            defaults.removeObject(forKey: PreferencesKeys.excludedIngredients)
-            defaults.removeObject(forKey: PreferencesKeys.maxPrepTimeMinutes)
-            let hasLegacyRestrictions = !(prefs.excludedIngredientIds ?? []).isEmpty
-                || prefs.maxPrepTimeMinutes != nil
-
-            // Przełączniki powiadomień są teraz danymi konta, nie ustawieniem
-            // urządzenia: to serwer decyduje, czy wysłać pusha, więc to on
-            // trzyma prawdę. Backend sprzed tej zmiany przysyła `nil`
-            // i wtedy nie ruszamy tego, co użytkownik ustawił lokalnie.
-            if let planPush = prefs.pushPlanChanges {
-                defaults.set(planPush, forKey: NotificationKeys.plan)
-            }
-            if let shoppingPush = prefs.pushShoppingList {
-                defaults.set(shoppingPush, forKey: NotificationKeys.shopping)
-            }
-            // `pushHousehold` i `pushQuietHours` celowo nie mają lustra w
-            // ustawieniach: gospodarstwo powiadamia zawsze (steruje nim tylko
-            // główny przełącznik), a cisza nocna jest zachowaniem aplikacji,
-            // nie preferencją. Kolumny w bazie zostają — `syncNotification-
-            // Preferences` trzyma je w ryzach przy każdym starcie sesji.
+            let hasLegacyRestrictions = applyPreferencesSnapshot(prefs)
 
             // Lokalna kopia = wiersz z serwera: od teraz wolno wysyłać z niej
-            // pełny zestaw (`ensurePreferencesBaseline`, 7.10.2026). Tylko dla
-            // konta, które wciąż jest zalogowane — odpowiedź mogła przyjść po
-            // wylogowaniu.
-            if currentUserId == userId {
-                preferencesConfirmedForUserId = userId
-            }
+            // pełny zestaw (`ensurePreferencesBaseline`, 7.10.2026).
+            preferencesConfirmedForUserId = userId
 
             if hasLegacyRestrictions {
                 await saveUserPreferences(
@@ -2799,6 +2835,66 @@ final class SessionStore {
             // pełnego zestawu (`ensurePreferencesBaseline`).
             return false
         }
+    }
+
+    /// Wpisuje wiersz preferencji z serwera do lokalnej kopii (odczyt albo
+    /// odpowiedź na udany zapis). Zwraca, czy na serwerze zostały wygaszone
+    /// ograniczenia „Czego nie jem” do skasowania. Bez liczników edycji —
+    /// to hydratacja, nie zmiana z ręki, więc arkusze nie zapisują jej z powrotem.
+    @MainActor
+    @discardableResult
+    private func applyPreferencesSnapshot(_ prefs: BackendUserPreferencesDTO) -> Bool {
+        let defaults = UserDefaults.standard
+        // Przez `backendValue`, nie przez `lowercased()` — patrz komentarz
+        // przy `DietPreference.backendValue`.
+        if let diet = DietPreference(backendValue: prefs.dietPreference) {
+            SCProtectedSettings.shared.set(diet.rawValue, forKey: PreferencesKeys.diet)
+        }
+        SCProtectedSettings.shared.set(prefs.calorieGoal, forKey: PreferencesKeys.calorieGoal)
+        SCProtectedSettings.shared.set(
+            prefs.allergens
+                .map { $0.lowercased() }
+                .sorted()
+                .joined(separator: ","),
+            forKey: PreferencesKeys.allergens
+        )
+        SCProtectedSettings.shared.set(prefs.goal.lowercased(), forKey: PreferencesKeys.goal)
+        SCProtectedSettings.shared.set(prefs.activityLevel, forKey: PreferencesKeys.activityLevel)
+        // −1 to sentinel „licz za mnie" po stronie iOS; backend trzyma
+        // tam `null`. Tłumaczenie w obie strony siedzi wyłącznie tutaj.
+        SCProtectedSettings.shared.set(prefs.proteinG ?? -1, forKey: PreferencesKeys.proteinG)
+        SCProtectedSettings.shared.set(prefs.fatG ?? -1, forKey: PreferencesKeys.fatG)
+        SCProtectedSettings.shared.set(prefs.carbsG ?? -1, forKey: PreferencesKeys.carbsG)
+
+        // „Czego nie jem” (wykluczone składniki i limit czasu na danie)
+        // zniknęło z aplikacji 23.09.2026 — wykluczanie składników żyje
+        // teraz w filtrach przepisów. Kolumny na serwerze zostały, a
+        // walidator planu dalej odrzuca przez nie dania; bez ekranu nikt
+        // by takiej blokady nie zobaczył ani nie zdjął. Sprzątamy więc
+        // wartości zapisane wcześniej: lokalnie od razu, na serwerze
+        // jednym zapisem na końcu odczytu.
+        defaults.removeObject(forKey: PreferencesKeys.excludedIngredients)
+        defaults.removeObject(forKey: PreferencesKeys.maxPrepTimeMinutes)
+        let hasLegacyRestrictions = !(prefs.excludedIngredientIds ?? []).isEmpty
+            || prefs.maxPrepTimeMinutes != nil
+
+        // Przełączniki powiadomień są teraz danymi konta, nie ustawieniem
+        // urządzenia: to serwer decyduje, czy wysłać pusha, więc to on
+        // trzyma prawdę. Backend sprzed tej zmiany przysyła `nil`
+        // i wtedy nie ruszamy tego, co użytkownik ustawił lokalnie.
+        if let planPush = prefs.pushPlanChanges {
+            defaults.set(planPush, forKey: NotificationKeys.plan)
+        }
+        if let shoppingPush = prefs.pushShoppingList {
+            defaults.set(shoppingPush, forKey: NotificationKeys.shopping)
+        }
+        // `pushHousehold` i `pushQuietHours` celowo nie mają lustra w
+        // ustawieniach: gospodarstwo powiadamia zawsze (steruje nim tylko
+        // główny przełącznik), a cisza nocna jest zachowaniem aplikacji,
+        // nie preferencją. Kolumny w bazie zostają — `syncNotification-
+        // Preferences` trzyma je w ryzach przy każdym starcie sesji.
+
+        return hasLegacyRestrictions
     }
 
     /// Wynik `ensurePreferencesBaseline` / `ensureProfileBaseline`.
@@ -2888,6 +2984,8 @@ final class SessionStore {
         if confirmBaselineFirst, await ensurePreferencesBaseline() != .confirmed {
             return false
         }
+        // Trwające odczyty są od teraz starsze niż telefon (7.10.2026).
+        SCProtectedSettings.shared.noteLocalSave(.preferences)
 
         // Mirror to AppStorage so the welcome flow survives a kill-restart
         // mid-flow and SettingsView reads the latest values without a
@@ -2965,6 +3063,7 @@ final class SessionStore {
             }
         }
         guard !data.isEmpty else { return true }
+        let generationAtSend = SCProtectedSettings.shared.changeGeneration(.preferences)
 
         let socket = sessionSocket()
 
@@ -2974,6 +3073,15 @@ final class SessionStore {
                 payload: ["userId": userId, "data": data],
                 as: WsEnvelope<BackendUserPreferencesDTO>.self
             )
+            // Serwer oddaje cały wiersz po zapisie. Bez nowszej zmiany w
+            // międzyczasie lokalna kopia = to, co serwer właśnie przyjął —
+            // wpisujemy wiersz i to też jest potwierdzenie (7.10.2026; tak
+            // potwierdza się kreator). Nowsza zmiana = odpowiedź pomijamy.
+            if envelope.ok, let saved = envelope.data, currentUserId == userId,
+               SCProtectedSettings.shared.changeGeneration(.preferences) == generationAtSend {
+                applyPreferencesSnapshot(saved)
+                preferencesConfirmedForUserId = userId
+            }
             // Odrzucenie (np. `VALIDATION_ERROR` na nieznanym alergenie) też
             // dekoduje się poprawnie — bez tego logu wyglądało jak udany zapis,
             // a AppStorage trzymał wartość, której serwer nie przyjął.
@@ -3077,6 +3185,8 @@ final class SessionStore {
         if confirmBaselineFirst, await ensureProfileBaseline() != .confirmed {
             return false
         }
+        // Trwające `users:me` są od teraz starsze niż telefon (7.10.2026).
+        SCProtectedSettings.shared.noteLocalSave(.profile)
 
         var data: [String: Any] = [:]
         if let displayName {
@@ -3123,6 +3233,7 @@ final class SessionStore {
             UserDefaults.standard.removeObject(forKey: ProfileKeys.sexClearPending)
         }
         guard !data.isEmpty else { return true }
+        let generationAtSend = SCProtectedSettings.shared.changeGeneration(.profile)
 
         let socket = sessionSocket()
 
@@ -3135,6 +3246,21 @@ final class SessionStore {
             if envelope.ok, let clearToken,
                UserDefaults.standard.string(forKey: ProfileKeys.sexClearPending) == clearToken {
                 UserDefaults.standard.removeObject(forKey: ProfileKeys.sexClearPending)
+            }
+            // Serwer oddaje cały profil po zapisie. Bez nowszej zmiany w
+            // międzyczasie: wpisujemy go (lokalne = przyjęte przez serwer)
+            // i potwierdzamy kopię — tak potwierdza się kreator (7.10.2026).
+            // Po fladze `sexClearPending`, którą `persistProfileFields` szanuje.
+            if envelope.ok, let saved = envelope.data, currentUserId == userId,
+               SCProtectedSettings.shared.changeGeneration(.profile) == generationAtSend {
+                SCProtectedSettings.shared.set(saved.displayName, forKey: Keys.displayName)
+                persistProfileFields(
+                    yearOfBirth: saved.yearOfBirth,
+                    heightCm: saved.heightCm,
+                    weightKg: saved.weightKg,
+                    sex: saved.sex
+                )
+                profileConfirmedForUserId = userId
             }
             return envelope.ok
         } catch {
@@ -3359,6 +3485,11 @@ final class SessionStore {
     /// Konto, którego sylwetka przyszła w tym procesie z `users:me` — patrz
     /// `ensureProfileBaseline` (7.10.2026). Też tylko w pamięci.
     private var profileConfirmedForUserId: String?
+    /// Trwający odczyt preferencji / `users:me` — jeden na konto (7.10.2026).
+    private var preferencesReadTask: Task<Bool, Never>?
+    private var preferencesReadUserId: String?
+    private var householdRestoreTask: Task<Void, Never>?
+    private var householdRestoreUserId: String?
     /// Seria odmów socketu po udanych refreshach — hamulec na wypadek, gdy
     /// serwer odrzuca także świeże tokeny (rozjazd konfiguracji): backoff,
     /// a po `maxSocketAuthRetries` czekamy na następny foreground.

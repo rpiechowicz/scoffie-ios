@@ -89,6 +89,10 @@ struct ProfileDetailsSheet: View {
     /// (świeże logowanie, zanim `users:me` zdążył przywrócić prawdziwe),
     /// nadpisywały w bazie realną sylwetkę.
     @State private var didObserveInitialToken = false
+    /// Licznik edycji z ręki (sylwetka + aktywność) przy ostatniej obsłużonej
+    /// zmianie — wartości wpisane przez `users:me` / odczyt preferencji nie są
+    /// edycją i nie wysyłają niczego z powrotem (7.10.2026, Codex runda 2).
+    @State private var observedEditGeneration = 0
     @State private var didEditThisSession = false
     /// W tym otwarciu wybrano „Nie podaję” — zapis kasuje płeć na serwerze
     /// (`saveProfile(clearSex:)`), zamiast ją pomijać.
@@ -205,10 +209,15 @@ struct ProfileDetailsSheet: View {
         // to samo pokazanie arkusza (`task(id:)` startuje też bez zmiany id) —
         // nic wtedy nie wysyłamy; każde KOLEJNE to już realna edycja.
         .task(id: profileSyncToken) {
+            let editGeneration = Self.userEditGeneration
             guard didObserveInitialToken else {
                 didObserveInitialToken = true
+                observedEditGeneration = editGeneration
                 return
             }
+            // Wartości zmienił odczyt z serwera, nie użytkownik — nic nie wysyłamy.
+            guard editGeneration != observedEditGeneration else { return }
+            observedEditGeneration = editGeneration
             didEditThisSession = true
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
@@ -592,6 +601,8 @@ struct ProfileDetailsSheet: View {
     /// `users:preferences:update` (tam mieszka `activityLevel`).
     private func pushProfile() async {
         guard await Self.serverCopiesReady(sessionStore, toasts: toasts) else { return }
+        // Nowsza edycja w międzyczasie ma już własne zadanie zapisu.
+        guard !Task.isCancelled else { return }
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         await sessionStore.saveProfile(
@@ -611,6 +622,12 @@ struct ProfileDetailsSheet: View {
     /// odtworzeniu telefonu albo nieudanym odczycie przy starcie kopia to
     /// wartości domyślne — wysłane nadpisałyby prawdziwe dane konta. `false` =
     /// nic nie wysyłać (komunikat już pokazany).
+    /// Edycje z ręki w obu domenach, które ten arkusz zapisuje.
+    private static var userEditGeneration: Int {
+        let store = SCProtectedSettings.shared
+        return store.userEditGeneration(.profile) &+ store.userEditGeneration(.preferences)
+    }
+
     @MainActor
     private static func serverCopiesReady(_ store: SessionStore, toasts: SCToastCenter) async -> Bool {
         let profile = await store.ensureProfileBaseline()
