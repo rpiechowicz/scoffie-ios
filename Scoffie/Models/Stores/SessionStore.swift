@@ -2817,8 +2817,10 @@ final class SessionStore {
             let hasLegacyRestrictions = applyPreferencesSnapshot(prefs)
 
             // Lokalna kopia = wiersz z serwera: od teraz wolno wysyłać z niej
-            // pełny zestaw (`ensurePreferencesBaseline`, 7.10.2026).
+            // pełny zestaw (`ensurePreferencesBaseline`, 7.10.2026), a listy
+            // przepisów mogą jej ufać (`preferencesAvailability`).
             preferencesConfirmedForUserId = userId
+            SCProtectedSettings.shared.markPreferencesTrusted()
 
             if hasLegacyRestrictions {
                 await saveUserPreferences(
@@ -2971,7 +2973,7 @@ final class SessionStore {
     /// bez zalogowanego konta też `.ready` — nie ma czego pokazywać.
     var preferencesAvailability: PreferencesAvailability {
         guard let userId = currentUserId, !userId.isEmpty else { return .ready }
-        if preferencesConfirmedForUserId == userId || SCProtectedSettings.shared.hasLocalPreferences {
+        if preferencesConfirmedForUserId == userId || SCProtectedSettings.shared.hasTrustedPreferences {
             return .ready
         }
         return preferencesReadTask != nil ? .loading : .unavailable
@@ -3167,6 +3169,7 @@ final class SessionStore {
                 )
                 if isFullSet, untouched {
                     preferencesConfirmedForUserId = userId
+                    SCProtectedSettings.shared.markPreferencesTrusted()
                 }
             }
             // Odrzucenie (np. `VALIDATION_ERROR` na nieznanym alergenie) też

@@ -522,8 +522,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   TYLKO wysłane pola, i tylko te nietknięte od wysłania (`mergeSavedValues`); potwierdza kopię tylko PEŁNY zestaw
   (wszystkie pola diety / sylwetka + imię). Arkusze diety i „Twoich danych” zapisują same tylko po `userEditGeneration` —
   wartości wpisane przez odczyt nie odpalają zapisu.
-  Brak kopii diety ≠ brak alergii: `SessionStore.preferencesAvailability` (`.ready` = jest klucz alergenów w pliku
-  albo potwierdzony odczyt; inaczej `.loading` / `.unavailable`) i `RecipePreferencesNotice` (`RecipeListKit`) nad
+  Brak kopii diety ≠ brak alergii: `SessionStore.preferencesAvailability` (`.ready` = ZAUFANA kopia w pliku —
+  znacznik `SCProtectedSettings.trustedPreferencesKey` z migracji, udanego odczytu albo potwierdzonego pełnego zapisu,
+  nigdy z edycji w widoku — albo potwierdzony odczyt; inaczej `.loading` / `.unavailable`) i `RecipePreferencesNotice` (`RecipeListKit`) nad
   listą w Przepisach, kategorii i `PlanSlotPickerSheet` — „Wczytuję Twoje alergie…” albo „Nie udało się wczytać…
   — przepisy bez dopasowania” + „Spróbuj ponownie”. Nowa lista dopasowanych przepisów = wstaw ten sam komunikat.
 

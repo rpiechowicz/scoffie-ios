@@ -196,12 +196,27 @@ final class SCProtectedSettings {
         }
     }
 
-    /// Czy na telefonie jest jakakolwiek kopia diety — klucz alergenów zapisany
-    /// (także pusty, gdy serwer powiedział „bez alergenów”). Brak po odtworzeniu
-    /// telefonu albo reinstalacji: plik nie jedzie w kopii zapasowej. Odczyt
-    /// w `body` rejestruje zależność (7.10.2026, Codex runda 4).
-    var hasLocalPreferences: Bool {
-        value(forKey: "settings.diet.allergens") != nil
+    /// Znacznik ZAUFANEJ kopii diety (7.10.2026, Codex runda 5). Sam klucz
+    /// alergenów nie wystarcza: po logowaniu bez kopii i nieudanym odczycie
+    /// wybranie jednego alergenu w Ustawieniach zapisuje klucz, ale to szkic,
+    /// nie stan konta. Znacznik ustawiają WYŁĄCZNIE: migracja alergenów ze
+    /// starego `UserDefaults` (tamta kopia była pełnym stanem aplikacji),
+    /// udany `users:preferences:get` i potwierdzony pełny zapis
+    /// (`markPreferencesTrusted`). Edycja przez `@ProtectedSetting` — nigdy.
+    /// Kasuje go `removeAll` (wylogowanie). Poza `registeredKeys` — w
+    /// `UserDefaults` nigdy nie istniał.
+    static let trustedPreferencesKey = "protected.diet.trusted"
+
+    /// Czy na telefonie jest zaufana kopia diety (patrz wyżej). Brak po
+    /// odtworzeniu telefonu albo reinstalacji: plik nie jedzie w kopii
+    /// zapasowej. Odczyt w `body` rejestruje zależność.
+    var hasTrustedPreferences: Bool {
+        value(forKey: Self.trustedPreferencesKey) != nil
+    }
+
+    /// Kopia diety = stan konta (odczyt z serwera albo potwierdzony pełny zapis).
+    func markPreferencesTrusted() {
+        setValue(.int(1), forKey: Self.trustedPreferencesKey)
     }
 
     // MARK: - Zapis (jak `UserDefaults`)
@@ -397,6 +412,12 @@ final class SCProtectedSettings {
                 if let text = defaults.string(forKey: key) {
                     entry.value = .string(text)
                 }
+            }
+            // Alergeny przeniesione ze starej wersji = zaufana kopia diety
+            // (tamta aplikacja trzymała pełny stan konta). Zapis pliku idzie
+            // i tak, bo `found` nie jest puste.
+            if key == "settings.diet.allergens", entry.value != nil {
+                self.slot(forKey: Self.trustedPreferencesKey).value = .int(1)
             }
         }
         return found
