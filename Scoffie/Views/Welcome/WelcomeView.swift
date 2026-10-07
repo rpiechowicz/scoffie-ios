@@ -62,7 +62,9 @@ struct WelcomeView: View {
     @State private var sexDeclined: Bool
     /// „Nie podaję” stuknięte w tym kreatorze — dopiero wtedy zapis kasuje
     /// płeć na serwerze (`saveProfile(clearSex:)`), jak `clearsSex`
-    /// w „Twoich danych”. Odtworzone przy wznowieniu niczego nie kasuje.
+    /// w „Twoich danych”. Odtworzone przy wznowieniu samo niczego nie kasuje —
+    /// zatwierdzone wcześniej skasowanie niesie `sexClearPending`
+    /// (`SessionStore.markSexClearPending`, ustawiany przy „Dalej”).
     @State private var clearsSex = false
     @State private var goal: UserGoal?
     @State private var activity: ActivityLevel?
@@ -584,6 +586,14 @@ struct WelcomeView: View {
         if (1...3).contains(step) {
             answeredStep = max(answeredStep, step)
             saveDraft(userId: store.currentUserId)
+        }
+        // „Nie podaję” stuknięte w tym kreatorze: zamiar skasowania płci też
+        // synchronicznie, wspólnym znacznikiem z „Twoich danych”
+        // (`sexClearPending`) — zapis w tle czeka w kolejce i zabicie aplikacji
+        // gubiło żądanie (Codex runda 2). Po wznowieniu `clearsSex` jest
+        // `false`, ale znacznik sam dokłada `null` do następnego zapisu profilu.
+        if step == 1, sex == nil, sexDeclined, clearsSex {
+            store.markSexClearPending()
         }
         retryPendingSaves(store)
         switch step {

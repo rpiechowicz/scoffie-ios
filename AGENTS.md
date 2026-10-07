@@ -1311,7 +1311,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   w stopce ma szerokość z treści — „11/11” nie łamie się.
 - Kreator WYMUSZA odpowiedzi (7.10.2026, Rafał: „inaczej button będzie dalej wyłączony”): krok 1 — imię,
   rok (koło startuje na bieżącym roku, wiek 16…110), wzrost 120…230 i waga 30…250 (pola puste = `nil`,
-  szara podpowiedź), płeć ALBO trzeci chip „Nie podaję” (`clearSex` tylko po stuknięciu); krok 2 — cel
+  szara podpowiedź), płeć ALBO trzeci chip „Nie podaję” (kasuje płeć tylko po stuknięciu: przy „Dalej”
+  synchronicznie `markSexClearPending`, wspólny `sexClearPending` z „Twoimi danymi”); krok 2 — cel
   i aktywność; krok 3 — dieta („Bez diety” to odpowiedź), alergeny opcjonalne; kroki 4–5 bez zmian.
   Zakresy w `WelcomeProgress`. Brak = etykieta pola/sekcji w terakocie (`WelcomeSection(isMissing:)`),
   nic więcej; wynik BMI/kcal w kroku 1 zakryty (`redacted`) do podania danych. Cel/aktywność/dieta są
