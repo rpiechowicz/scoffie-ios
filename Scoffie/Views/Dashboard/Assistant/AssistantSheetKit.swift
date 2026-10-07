@@ -26,6 +26,9 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
     var accent: Color = SCPalette.terracotta
     /// Półarkusz: mniejszy nagłówek (`EditorialSheetHeader(compact:)`).
     var compact: Bool = false
+    /// Stopka tylko, gdy jest co w niej pokazać (Pamięć bez notatek nie ma
+    /// „Usuń wszystkie”) — inaczej `safeAreaBar` zostawiał pusty pas na dole.
+    var showsFooter: Bool = true
     var onClose: () -> Void
     @ViewBuilder var action: () -> Action
     @ViewBuilder var footer: () -> Footer
@@ -56,7 +59,7 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
                 // Stopka przez `safeAreaInset` (`scSheetFooter`), nie nad listą
                 // w `ZStack` — treść kończy się nad nią sama, bez 140 pt zapasu.
                 // Arkusz bez stopki nie dostaje nawet pustej płyty na dole.
-                if Footer.self == EmptyView.self {
+                if !hasFooter {
                     list
                 } else {
                     list.scSheetFooter(horizontalPadding: 16) { footer() }
@@ -64,6 +67,8 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
             }
         }
     }
+
+    private var hasFooter: Bool { showsFooter && Footer.self != EmptyView.self }
 
     private var list: some View {
         ScrollView {
@@ -73,7 +78,7 @@ struct AssistantSheetScaffold<Content: View, Action: View, Footer: View>: View {
             }
             // Stopka rezerwuje miejsce na swój cień sama (`scSheetFooter`),
             // więc przy stopce wystarczy krótki oddech.
-            .padding(.bottom, Footer.self == EmptyView.self ? 24 : 8)
+            .padding(.bottom, hasFooter ? 8 : 24)
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
@@ -90,6 +95,7 @@ extension AssistantSheetScaffold where Action == EmptyView {
         icon: String? = nil,
         accent: Color = SCPalette.terracotta,
         compact: Bool = false,
+        showsFooter: Bool = true,
         onClose: @escaping () -> Void,
         @ViewBuilder footer: @escaping () -> Footer,
         @ViewBuilder content: @escaping () -> Content
@@ -101,6 +107,7 @@ extension AssistantSheetScaffold where Action == EmptyView {
             icon: icon,
             accent: accent,
             compact: compact,
+            showsFooter: showsFooter,
             onClose: onClose,
             action: { EmptyView() },
             footer: footer,

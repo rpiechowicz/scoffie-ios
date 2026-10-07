@@ -30,6 +30,7 @@ struct AssistantMemorySheet: View {
                 subtitle: store.memory.isEmpty ? nil : "\(store.memory.count) z \(Self.memoryLimit) notatek",
                 // Glif „Pamięci domu” z menu ⋯.
                 icon: "brain.head.profile.fill",
+                showsFooter: !store.memory.isEmpty,
                 onClose: { dismiss() },
                 footer: {
                     if !store.memory.isEmpty {
