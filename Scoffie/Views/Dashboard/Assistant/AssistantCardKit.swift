@@ -113,8 +113,6 @@ private struct AssistantCardShadow: ViewModifier {
 
 enum AssistantCardMetrics {
     static let radius: CGFloat = 24
-    /// Promień zgrupowanej listy (arkusze).
-    static let listRadius: CGFloat = 20
     /// Wcięcie treści od krawędzi karty.
     static let inset: CGFloat = 18
     static let headTop: CGFloat = 16
@@ -1292,7 +1290,7 @@ struct AssistantProposalFooter: View {
         switch status {
         case .pending where state.canApply:
             // Zapis w szałwii — kolorze „zapisane”, tym samym co zgoda
-            // w stopce przeglądu propozycji (`ProposalAcceptButton`).
+            // w stopce przeglądu propozycji (`AssistantPrimaryButton(tint:)`).
             AssistantCardActions(
                 primary: AssistantCardAction(title: applyLabel, icon: applyIcon) { onApply(false) },
                 secondary: AssistantCardAction(title: reviseLabel, icon: reviseIcon, action: onRevise),

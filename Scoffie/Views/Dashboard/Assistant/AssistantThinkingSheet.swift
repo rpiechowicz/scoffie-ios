@@ -12,12 +12,15 @@ import SwiftUI
 /// Nagłówek: tytuł = co tura zrobiła (`ThinkingHeadline`), stała ikona
 /// przebiegu, czas kapsułką obok krzyżyka. Nazwa narzędzia NIE wychodzi na
 /// ekran; służy tylko do wyboru glifu.
+///
+/// 7.10.2026: oś stoi od razu w całości — kaskada wierszy przy otwarciu
+/// (`scReveal`) odpadła („ruch mówi, że coś się zmieniło, nie dekoruje
+/// otwarcia”; `SCReveal` zostaje Gotuj).
 struct AssistantThinkingSheet: View {
     let thinking: AgentThinkingSummary
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
-    @State private var appeared = false
 
     private var headline: ThinkingHeadline { ThinkingHeadline(thinking.steps) }
     private var entries: [ThinkingEntry] { ThinkingEntry.timeline(thinking) }
@@ -40,7 +43,6 @@ struct AssistantThinkingSheet: View {
                         isFirst: index == 0,
                         isLast: index == entries.count - 1
                     )
-                    .scReveal(appeared, order: min(index, 8))
                 }
             }
             .padding(.horizontal, 4)
@@ -51,10 +53,6 @@ struct AssistantThinkingSheet: View {
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(40)
         .presentationBackground(Color.scPageBase(scheme))
-        .task {
-            try? await Task.sleep(for: .milliseconds(60))
-            appeared = true
-        }
     }
 
     /// Czas tury obok krzyżyka — w wysokości krążka zamykania.

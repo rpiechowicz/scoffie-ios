@@ -7,6 +7,13 @@ import SwiftUI
 /// Jedno zgłoszenie na odpowiedź (27.09.2026): gdy już jest
 /// (`message.report`), arkusz otwiera się jako „Popraw zgłoszenie” z tym
 /// samym powodem i komentarzem, a wysłanie je poprawia — drugiego nie ma.
+///
+/// 7.10.2026 (nowy język arkuszy): szkielet arkuszy Asystenta
+/// (`AssistantSheetScaffold` — przypięty nagłówek, stopka w `safeAreaBar`),
+/// powody jako lista Ustawień (`EditorialSettingsCardGroup` +
+/// `EditorialSettingsRow`: kafelek powodu, nazwa, opis w podpisie,
+/// `SCRadioMark`), a „Wyślij zgłoszenie” to `EditorialPrimaryActionButton`
+/// w stopce zamiast własnej kapsuły na końcu przewijanej treści.
 struct AssistantReportSheet: View {
     let message: AgentChatMessage
     /// Oddaje komunikat błędu albo `nil` przy sukcesie.
@@ -24,124 +31,103 @@ struct AssistantReportSheet: View {
 
     private var isEditing: Bool { message.report != nil }
 
-    private static let reasons: [(code: String, title: String, detail: String)] = [
-        ("WRONG", "Błąd merytoryczny", "Zły przepis, zła liczba, zignorowany alergen."),
-        ("UNSAFE", "Może zaszkodzić zdrowiu", "Rada, której nie powinno się stosować."),
-        ("OFFENSIVE", "Obraźliwe albo nie na temat", "Treść niezwiązana z planowaniem posiłków."),
-        ("OTHER", "Coś innego", "Opisz w komentarzu."),
+    private struct Reason {
+        let code: String
+        let title: String
+        let detail: String
+        let icon: String
+        let color: Color
+    }
+
+    private static let reasons: [Reason] = [
+        Reason(code: "WRONG", title: "Błąd merytoryczny", detail: "Zły przepis, zła liczba, zignorowany alergen.", icon: "exclamationmark.triangle.fill", color: SCPalette.butter),
+        Reason(code: "UNSAFE", title: "Może zaszkodzić zdrowiu", detail: "Rada, której nie powinno się stosować.", icon: "cross.case.fill", color: SCPalette.terracotta),
+        Reason(code: "OFFENSIVE", title: "Obraźliwe albo nie na temat", detail: "Treść niezwiązana z planowaniem posiłków.", icon: "hand.raised.fill", color: SCPalette.indigo),
+        Reason(code: "OTHER", title: "Coś innego", detail: "Opisz w komentarzu.", icon: "ellipsis", color: SettingsAccent.slate),
     ]
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Nagłówek przypięty nad treścią, jak w pozostałych arkuszach —
-                // przy otwartej klawiaturze krzyżyk nie ucieka w górę.
-                // Flaga — ta sama, co „Zgłoś odpowiedź” w menu dymka.
-                EditorialSheetHeader(
-                    eyebrow: "Asystent",
-                    title: isEditing ? "Popraw zgłoszenie" : "Zgłoś odpowiedź",
-                    icon: "flag.fill"
-                ) {
-                    dismiss()
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 12)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        Text(message.text)
-                            .font(.sc(size: 13))
-                            .lineLimit(4)
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .padding(14)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scTileBg(scheme)))
-                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
-
-                        EditorialSheetSectionLabel(title: "Co jest nie tak")
-                        VStack(spacing: 0) {
-                            ForEach(Array(Self.reasons.enumerated()), id: \.element.code) { index, item in
-                                Button {
-                                    reason = item.code
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(item.title)
-                                                .font(.sc(size: 14.5, weight: .semibold))
-                                                .foregroundStyle(Color.scLabel(scheme))
-                                            Text(item.detail)
-                                                .font(.sc(size: 12.5))
-                                                .foregroundStyle(Color.scMuted(scheme))
-                                        }
-                                        Spacer(minLength: 0)
-                                        SCRadioMark(isOn: reason == item.code)
-                                    }
-                                    .padding(14)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityAddTraits(reason == item.code ? [.isSelected] : [])
-                                if index < Self.reasons.count - 1 {
-                                    Rectangle().fill(Color.scRule(scheme)).frame(height: 1)
-                                }
-                            }
-                        }
+            // Nagłówek przypięty nad treścią — przy otwartej klawiaturze
+            // krzyżyk nie ucieka w górę. Flaga — ta sama, co „Zgłoś
+            // odpowiedź” w menu dymka.
+            AssistantSheetScaffold(
+                title: isEditing ? "Popraw zgłoszenie" : "Zgłoś odpowiedź",
+                icon: "flag.fill",
+                onClose: { dismiss() },
+                footer: { footer }
+            ) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(message.text)
+                        .font(.sc(size: 13))
+                        .lineLimit(4)
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.scTileBg(scheme)))
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
 
-                        EditorialSheetSectionLabel(title: "Komentarz (opcjonalnie)")
-                        TextField("Co powinno być inaczej?", text: $comment, axis: .vertical)
-                            .lineLimit(3...6)
-                            .font(.sc(size: 14.5))
-                            .padding(14)
-                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.scTileBg(scheme)))
-                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
-
-                        if let errorMessage {
-                            SCInlineErrorText(errorMessage)
-                        }
-
-                        let reportTone: Color = isDone ? SCPalette.sage : SCPalette.terracotta
-                        Button(action: submit) {
-                            HStack(spacing: 8) {
-                                if isSending {
-                                    ProgressView().controlSize(.small).tint(reportTone)
-                                } else {
-                                    Image(systemName: isDone ? "checkmark" : "flag.fill")
-                                        .font(.sc(size: 14, weight: .bold))
-                                }
-                                Text(isDone ? (isEditing ? "Poprawiono" : "Zgłoszono") : (isEditing ? "Zapisz zmiany" : "Wyślij zgłoszenie"))
-                                    .font(.sc(size: 15, weight: .bold))
+                    EditorialSheetSectionLabel(title: "Co jest nie tak")
+                        .padding(.top, 20)
+                    EditorialSettingsCardGroup {
+                        ForEach(Array(Self.reasons.enumerated()), id: \.element.code) { index, item in
+                            EditorialSettingsRow(
+                                icon: item.icon,
+                                iconColor: item.color,
+                                title: item.title,
+                                subtitle: item.detail,
+                                isLast: index == Self.reasons.count - 1,
+                                action: { reason = item.code }
+                            ) {
+                                SCRadioMark(isOn: reason == item.code)
                             }
-                            .foregroundStyle(reportTone)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .scSoftCapsule(reportTone)
+                            .accessibilityAddTraits(reason == item.code ? [.isSelected] : [])
                         }
-                        .buttonStyle(.plain)
-                        .disabled(isSending || isDone)
-
-                        Text(isEditing
-                             ? "Poprawione zgłoszenie zastąpi poprzednie i wróci do administratora. Nie zmienia planu ani rozmowy."
-                             : "Zgłoszenie trafia do administratora razem z treścią tej odpowiedzi. Nie zmienia planu ani rozmowy.")
-                            .font(.sc(size: 12))
-                            .foregroundStyle(Color.scFaint(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 6)
-                    .padding(.bottom, 28)
+
+                    EditorialSheetSectionLabel(title: "Komentarz (opcjonalnie)")
+                        .padding(.top, 20)
+                    TextField("Co powinno być inaczej?", text: $comment, axis: .vertical)
+                        .lineLimit(3...6)
+                        .font(.sc(size: 15))
+                        .tint(SCPalette.terracotta)
+                        .padding(14)
+                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.scTileBg(scheme)))
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+
+                    if let errorMessage {
+                        SCInlineErrorText(errorMessage)
+                            .padding(.horizontal, 6)
+                            .padding(.top, 10)
+                    }
+
+                    Text(isEditing
+                         ? "Poprawione zgłoszenie zastąpi poprzednie i wróci do administratora. Nie zmienia planu ani rozmowy."
+                         : "Zgłoszenie trafia do administratora razem z treścią tej odpowiedzi. Nie zmienia planu ani rozmowy.")
+                        .font(.sc(size: 12.5))
+                        .foregroundStyle(Color.scFaint(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 6)
+                        .padding(.top, 10)
                 }
-                .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.interactively)
-                .scScrollEdgeFade()
+                .padding(.top, 12)
             }
-            .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
         .presentationDragIndicator(.visible)
         .onAppear(perform: prefillExistingReport)
+    }
+
+    /// Jeden przycisk w stopce — po wysłaniu w szałwii z ptaszkiem, zanim
+    /// arkusz zjedzie.
+    private var footer: some View {
+        EditorialPrimaryActionButton(
+            title: isDone ? (isEditing ? "Poprawiono" : "Zgłoszono") : (isEditing ? "Zapisz zmiany" : "Wyślij zgłoszenie"),
+            icon: isDone ? "checkmark" : "flag.fill",
+            accent: isDone ? SCPalette.sage : SCPalette.terracotta,
+            isLoading: isSending,
+            action: submit
+        )
     }
 
     /// Istniejące zgłoszenie wchodzi do pól RAZ, przy pierwszym pojawieniu się.
@@ -158,7 +144,7 @@ struct AssistantReportSheet: View {
     }
 
     private func submit() {
-        guard !isSending else { return }
+        guard !isSending, !isDone else { return }
         isSending = true
         errorMessage = nil
         let trimmed = comment.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -168,7 +154,9 @@ struct AssistantReportSheet: View {
             if let failure {
                 errorMessage = failure
             } else {
-                isDone = true
+                // Tytuł roluje się na „Zgłoszono” (`numericText` w przycisku
+                // działa tylko w animowanej transakcji).
+                withAnimation(SCMotion.textRoll) { isDone = true }
                 try? await Task.sleep(for: .milliseconds(700))
                 dismiss()
             }

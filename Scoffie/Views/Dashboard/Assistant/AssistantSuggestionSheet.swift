@@ -19,6 +19,12 @@ import SwiftUI
 ///
 /// Kciuk w dół otwiera ten arkusz sam; istniejąca podpowiedź otwiera się
 /// z „⋯” („Popraw podpowiedź”) z wypełnionymi polami.
+///
+/// 7.10.2026 (nowy język arkuszy): powody to lista Ustawień —
+/// `EditorialSettingsCardGroup` + `EditorialSettingsRow` (pełny kafelek
+/// w kolorze powodu, nazwa, `SCCheckbox`) zamiast własnej karty z krążkami
+/// w tincie i kreską `AssistantLook.hair`; pole w karcie o tym samym
+/// promieniu (18) co lista.
 struct AssistantSuggestionSheet: View {
     let message: AgentChatMessage
     /// Oddaje komunikat błędu albo `nil` przy sukcesie.
@@ -43,33 +49,23 @@ struct AssistantSuggestionSheet: View {
     /// Poprawiamy podpowiedź, która już jest (z „⋯”).
     private var isEditing: Bool { message.feedback == .down && message.feedbackNote != nil }
 
-    private enum Tone { case butter, indigo, terra, sage }
-
     private struct Reason: Identifiable {
         let id: String
         let title: String
         let icon: String
-        let tone: Tone
+        /// Kolor kafelka — głęboki wariant palety, jak w Ustawieniach.
+        let color: Color
     }
 
     /// Powody — `AGENT_FEEDBACK_DOWN_TAGS` na serwerze. Bez linijki opisu pod
     /// nazwą, więc nazwy mówią same za siebie: „Za dużo tekstu” i „Za długo
     /// czekałem” zamiast dwuznacznych „Za długo” / „Za wolno”.
     private static let reasons: [Reason] = [
-        Reason(id: "NOT_WHAT_I_ASKED", title: "Nie o to pytałem", icon: "questionmark.bubble", tone: .indigo),
-        Reason(id: "BAD_DISHES", title: "Nietrafione dania", icon: "fork.knife", tone: .terra),
-        Reason(id: "TOO_LONG", title: "Za dużo tekstu", icon: "text.alignleft", tone: .butter),
-        Reason(id: "TOO_SLOW", title: "Za długo czekałem", icon: "tortoise", tone: .sage),
+        Reason(id: "NOT_WHAT_I_ASKED", title: "Nie o to pytałem", icon: "questionmark.bubble.fill", color: SCPalette.indigo),
+        Reason(id: "BAD_DISHES", title: "Nietrafione dania", icon: "fork.knife", color: SCPalette.terracotta),
+        Reason(id: "TOO_LONG", title: "Za dużo tekstu", icon: "text.alignleft", color: SCPalette.butter),
+        Reason(id: "TOO_SLOW", title: "Za długo czekałem", icon: "tortoise.fill", color: SCPalette.sage),
     ]
-
-    private func color(_ tone: Tone) -> Color {
-        switch tone {
-        case .butter: return AssistantLook.butter(scheme)
-        case .indigo: return AssistantLook.indigo(scheme)
-        case .terra: return AssistantLook.terra(scheme)
-        case .sage: return AssistantLook.sage(scheme)
-        }
-    }
 
     private var accent: Color { AssistantLook.terra(scheme) }
 
@@ -115,58 +111,33 @@ struct AssistantSuggestionSheet: View {
     // MARK: - Powody
 
     private var reasonList: some View {
-        let shape = RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
-        return VStack(spacing: 0) {
+        EditorialSettingsCardGroup {
             ForEach(Array(Self.reasons.enumerated()), id: \.element.id) { index, reason in
-                if index > 0 {
-                    Rectangle()
-                        .fill(AssistantLook.hair(scheme))
-                        .frame(height: 1)
-                        .padding(.leading, 58)
-                }
-                row(reason)
+                row(reason, isLast: index == Self.reasons.count - 1)
             }
         }
-        .background(shape.fill(Color.scTileBg(scheme)))
-        .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
     }
 
-    private func row(_ reason: Reason) -> some View {
+    private func row(_ reason: Reason, isLast: Bool) -> some View {
         let isOn = tags.contains(reason.id)
-        let reasonColor = color(reason.tone)
-        return Button {
-            if isOn { tags.remove(reason.id) } else { tags.insert(reason.id) }
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle().fill(reasonColor.opacity(scheme == .dark ? 0.18 : 0.13))
-                    Image(systemName: reason.icon)
-                        .font(.sc(size: 13.5, weight: .semibold))
-                        .foregroundStyle(reasonColor)
-                }
-                .frame(width: 32, height: 32)
-                .accessibilityHidden(true)
-
-                Text(reason.title)
-                    .font(.sc(size: 15.5, weight: .semibold))
-                    .tracking(-0.2)
-                    .foregroundStyle(AssistantLook.ink(scheme))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                SCCheckbox(on: isOn, accent: accent, size: 22)
+        return EditorialSettingsRow(
+            icon: reason.icon,
+            iconColor: reason.color,
+            title: reason.title,
+            isLast: isLast,
+            action: {
+                if isOn { tags.remove(reason.id) } else { tags.insert(reason.id) }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
+        ) {
+            SCCheckbox(on: isOn, accent: accent, size: 22)
         }
-        .buttonStyle(.plain)
         .accessibilityAddTraits(isOn ? [.isSelected] : [])
     }
 
     // MARK: - Komentarz
 
     private var commentField: some View {
-        let shape = RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
         return VStack(alignment: .trailing, spacing: 8) {
             TextField(
                 "Jak powinno być? Np. krócej, obiad do 30 minut",

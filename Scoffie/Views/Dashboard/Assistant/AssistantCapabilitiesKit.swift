@@ -1,10 +1,12 @@
 import SwiftUI
 
 // Klocki arkusza „Co potrafi Asystent” (menu ⋯) i kilku arkuszy planów:
-// akcenty, kafelek ikony, karta na żetonach aplikacji, stopka i dane
-// umiejętności. Od wprowadzenia v2 (24.09.2026) bez podglądów rozmowy
-// i miniatur kart — pokazywały je tylko dawne karty „Poznaj”, zastąpione
-// żywymi scenkami w `AssistantIntroPages.swift`.
+// akcenty, karta na żetonach aplikacji i dane umiejętności. Od wprowadzenia
+// v2 (24.09.2026) bez podglądów rozmowy i miniatur kart — pokazywały je tylko
+// dawne karty „Poznaj”, zastąpione żywymi scenkami w `AssistantIntroPages.swift`.
+// 7.10.2026: bez kafelka w tincie (`AssistantIconTile`), stopki
+// (`AssistantStickyFooter`) i przycisku tekstowego (`AssistantTextButton`) —
+// nikt ich już nie używał; wiersz „Co potrafi” stoi na `EditorialSettingsRow`.
 
 // MARK: - Ton i kolory
 
@@ -18,36 +20,6 @@ enum AssistantAccent {
         case .indigo: return SCPalette.indigo
         case .butter: return SCPalette.butter
         }
-    }
-
-    func tint(_ scheme: ColorScheme) -> Color {
-        switch self {
-        case .terracotta: return Color.scAccentTint(scheme)
-        case .sage: return Color.scSageTint(scheme)
-        case .indigo: return Color.scIndigoTint(scheme)
-        case .butter: return Color.scButterTint(scheme)
-        }
-    }
-}
-
-/// Kafelek z ikoną w tinacie akcentu — jak w Ustawieniach.
-struct AssistantIconTile: View {
-    let icon: String
-    let accent: AssistantAccent
-    var size: CGFloat = 32
-    var radius: CGFloat = 10
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: radius, style: .continuous)
-            .fill(accent.tint(scheme))
-            .frame(width: size, height: size)
-            .overlay(
-                Image(systemName: icon)
-                    .font(.sc(size: size * 0.5, weight: .semibold))
-                    .foregroundStyle(accent.color)
-            )
     }
 }
 
@@ -67,44 +39,6 @@ struct AssistantSurfaceCard<Content: View>: View {
             // akordeonu) to prostokąty — bez przycięcia wystawały z rogów.
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
-    }
-}
-
-/// Stopka przyklejona do dołu: treść chowa się pod miękkim gradientem tła,
-/// jak w kreatorze „Poznajmy się". Wewnątrz przyciski w stylu `SCSoftButton`.
-struct AssistantStickyFooter<Content: View>: View {
-    /// Kolor tła ekranu pod stopką. Musi być DOKŁADNIE ten sam, co tło
-    /// arkusza — inaczej nad przyciskiem wraca twarda linia. Domyślnie
-    /// `scPageBase`; szczegóły posiłku mają własne, cieplejsze tło.
-    var base: Color? = nil
-    @ViewBuilder var content: () -> Content
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        // Wzór, z którego wyrosła wspólna stopka arkuszy — teraz jest nią.
-        SCSheetFooter(base: base, content: content)
-    }
-}
-
-/// Drugorzędny przycisk stopki — tekst bez wypełnienia, obok `SCSoftButton`.
-struct AssistantTextButton: View {
-    let title: String
-    var role: ButtonRole? = nil
-    let action: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        Button(role: role, action: action) {
-            Text(title)
-                .font(.sc(size: 15, weight: .semibold))
-                .foregroundStyle(role == .destructive ? SCPalette.terracotta : Color.scMuted(scheme))
-                .frame(maxWidth: .infinity)
-                .frame(height: 40)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 

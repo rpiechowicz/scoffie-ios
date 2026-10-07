@@ -1,10 +1,17 @@
 import SwiftUI
 
-/// „15 · Rozmowy” — 1:1 z makietą: nagłówek `Asystent · Rozmowy` z krążkiem
-/// „nowa rozmowa” i X, grupy Dziś / Wczoraj / W tym tygodniu / Wcześniej,
-/// wiersz = tytuł, podgląd ostatniej odpowiedzi, godzina po prawej;
-/// rozmowa z biegnącą turą ma plakietkę „W toku”. Szukanie przypięte do
-/// dołu. Usuwanie przez przytrzymanie wiersza.
+/// „15 · Rozmowy” — nagłówek `Asystent · Rozmowy` z krążkiem „nowa rozmowa”
+/// i X, grupy Dziś / Wczoraj / W tym tygodniu / Wcześniej, wiersz = tytuł,
+/// podgląd ostatniej odpowiedzi, godzina po prawej; rozmowa z biegnącą turą
+/// ma plakietkę „W toku”. Usuwanie przez przytrzymanie wiersza.
+///
+/// 7.10.2026 (Rafał: „popraw widoki i sheet dla asystenta zgodnie z nowym
+/// design”): układ list arkuszy aplikacji — nagłówek i WSPÓLNE pole szukania
+/// przypięte nad listą (`RecipeListSheetTop` + `SCSearchField`, jak „Wybierz
+/// przepis”), grupy jako etykieta + karta Ustawień, wiersz
+/// `EditorialSettingsRow` z kafelkiem i podglądem w podpisie, pusty stan
+/// `RecipeListEmptyState`. Dawna własna pigułka szukania na dole (krem, dwa
+/// cienie, `AssistantLook`) i wiersze `AssistantRow` odpadły.
 struct AssistantConversationsSheet: View {
     let store: AgentStore
 
@@ -13,45 +20,40 @@ struct AssistantConversationsSheet: View {
 
     @State private var pendingDeletion: AgentConversationDTO?
     @State private var query = ""
-    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         NavigationStack {
-            AssistantSheetScaffold(
-                title: "Rozmowy",
-                // Ten sam zegar, co „Historia rozmów” w menu ⋯.
-                icon: "clock.fill",
-                onClose: { dismiss() },
-                action: {
-                    // Ten sam krążek, co krzyżyk obok (`SCSheetIconButton`) —
-                    // dwa przyciski w nagłówku to jeden komplet.
-                    SCSheetIconButton(
-                        systemName: "square.and.pencil",
-                        tint: SCPalette.terracotta,
-                        accessibilityLabel: "Nowa rozmowa"
-                    ) {
-                        Task {
-                            await store.startNewConversation()
-                            dismiss()
-                        }
-                    }
-                },
-                footer: { searchBar }
-            ) {
-                if store.historyConversations.isEmpty && !store.isLoadingConversations {
-                    emptyState
-                } else if groups.isEmpty && !query.isEmpty {
-                    noResults
-                } else {
-                    ForEach(groups, id: \.label) { group in
-                        AssistantGroup(title: group.label) {
-                            ForEach(Array(group.items.enumerated()), id: \.element.id) { index, conversation in
-                                row(conversation, first: index == 0)
+            VStack(alignment: .leading, spacing: 0) {
+                top
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if store.historyConversations.isEmpty && !store.isLoadingConversations {
+                            emptyState
+                                .padding(.top, 8)
+                        } else if groups.isEmpty && !query.isEmpty {
+                            noResults
+                        } else {
+                            ForEach(Array(groups.enumerated()), id: \.element.label) { index, group in
+                                EditorialSheetSectionLabel(title: group.label)
+                                    .padding(.top, index == 0 ? 8 : 20)
+                                EditorialSettingsCardGroup {
+                                    ForEach(Array(group.items.enumerated()), id: \.element.id) { itemIndex, conversation in
+                                        row(conversation, isLast: itemIndex == group.items.count - 1)
+                                    }
+                                }
                             }
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 28)
                 }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                // Treść gaśnie pod przypiętym nagłówkiem zamiast kreski.
+                .scScrollEdgeFade()
             }
+            .background(SCPageBackground(scheme: scheme).ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .alert(
                 "Usunąć tę rozmowę?",
@@ -74,39 +76,46 @@ struct AssistantConversationsSheet: View {
         .task { await store.refreshConversations() }
     }
 
-    // MARK: - Szukanie
+    // MARK: - Nagłówek i szukanie
 
-    /// `SearchBar`: pigułka 48 na dole, jak w aplikacji.
-    private var searchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.sc(size: 16, weight: .semibold))
-                .foregroundStyle(AssistantLook.faint(scheme))
-            TextField("Szukaj w rozmowach", text: $query)
-                .font(.sc(size: 16))
-                .tracking(-0.2)
-                .foregroundStyle(AssistantLook.ink(scheme))
-                .focused($isSearchFocused)
-                .submitLabel(.search)
-                .autocorrectionDisabled()
-            if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.sc(size: 15))
-                        .foregroundStyle(AssistantLook.faint(scheme))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Wyczyść szukanie")
+    /// Nagłówek i pole szukania przypięte nad listą — ten sam klocek, co
+    /// w „Wybierz przepis” i liście kategorii. Bez rozmów pole nie ma czego
+    /// szukać, więc stoi sam nagłówek.
+    @ViewBuilder
+    private var top: some View {
+        if store.historyConversations.isEmpty {
+            header
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 8)
+        } else {
+            RecipeListSheetTop(searchPrompt: "Szukaj w rozmowach", searchText: $query) {
+                header
             }
         }
-        .padding(.horizontal, 18)
-        .frame(height: 48)
-        .background(Capsule().fill(AssistantLook.input(scheme)))
-        .overlay(Capsule().stroke(AssistantLook.cardStroke(scheme), lineWidth: 1))
-        .shadow(color: Color.black.opacity(scheme == .dark ? 0 : 0.04), radius: 1, y: 1)
-        .shadow(color: Color(red: 90 / 255, green: 50 / 255, blue: 30 / 255).opacity(scheme == .dark ? 0 : 0.10), radius: 12, y: 8)
+    }
+
+    private var header: some View {
+        EditorialSheetHeader(
+            eyebrow: "Asystent",
+            title: "Rozmowy",
+            // Ten sam zegar, co „Historia rozmów” w menu ⋯.
+            icon: "clock.fill",
+            onClose: { dismiss() }
+        ) {
+            // Ten sam krążek, co krzyżyk obok (`SCSheetIconButton`) —
+            // dwa przyciski w nagłówku to jeden komplet.
+            SCSheetIconButton(
+                systemName: "square.and.pencil",
+                tint: SCPalette.terracotta,
+                accessibilityLabel: "Nowa rozmowa"
+            ) {
+                Task {
+                    await store.startNewConversation()
+                    dismiss()
+                }
+            }
+        }
     }
 
     // MARK: - Grupy
@@ -163,8 +172,10 @@ struct AssistantConversationsSheet: View {
         ) != nil
     }
 
-    /// `HistRow`: tytuł · podgląd ostatniej odpowiedzi · godzina i „W toku”.
-    private func row(_ conversation: AgentConversationDTO, first: Bool) -> some View {
+    /// Wiersz rozmowy: kafelek (terakota — kolor Asystenta z jego wiersza
+    /// w Ustawieniach; pusta rozmowa szara) · tytuł · podgląd ostatniej
+    /// odpowiedzi w podpisie · godzina i „W toku” po prawej.
+    private func row(_ conversation: AgentConversationDTO, isLast: Bool) -> some View {
         let isRunning = conversation.activeTurnId != nil
         let isEmpty = conversation.title == nil
         let preview = conversation.preview.flatMap { text -> String? in
@@ -172,39 +183,32 @@ struct AssistantConversationsSheet: View {
             guard !trimmed.isEmpty, trimmed != conversation.title else { return nil }
             return trimmed
         }
-        return Button {
-            Task {
-                await store.select(conversationId: conversation.id)
-                dismiss()
-            }
-        } label: {
-            AssistantRow(
-                title: conversation.title ?? "Nowa rozmowa",
-                subtitle: preview ?? (isEmpty ? "Bez wiadomości" : nil),
-                first: first,
-                titleWeight: isEmpty ? .medium : .semibold,
-                titleColor: isEmpty ? AssistantLook.muted(scheme) : nil,
-                verticalPadding: 12,
-                alignment: .top,
-                leading: { EmptyView() },
-                trailing: {
-                    VStack(alignment: .trailing, spacing: 6) {
-                        if let stamp = Self.stamp(conversation) {
-                            Text(stamp)
-                                .font(.sc(size: 12.5))
-                                .monospacedDigit()
-                                .foregroundStyle(AssistantLook.faint(scheme))
-                        }
-                        if isRunning {
-                            AssistantWorkingChip()
-                        }
-                    }
-                    .fixedSize()
+        return EditorialSettingsRow(
+            icon: isEmpty ? "bubble.left" : "bubble.left.fill",
+            iconColor: isEmpty ? SettingsAccent.slate : SCPalette.terracotta,
+            title: conversation.title ?? "Nowa rozmowa",
+            subtitle: preview ?? (isEmpty ? "Bez wiadomości" : nil),
+            isLast: isLast,
+            action: {
+                Task {
+                    await store.select(conversationId: conversation.id)
+                    dismiss()
                 }
-            )
-            .contentShape(Rectangle())
+            }
+        ) {
+            VStack(alignment: .trailing, spacing: 6) {
+                if let stamp = Self.stamp(conversation) {
+                    Text(stamp)
+                        .font(.sc(size: 12.5))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.scFaint(scheme))
+                }
+                if isRunning {
+                    AssistantWorkingChip()
+                }
+            }
+            .fixedSize()
         }
-        .buttonStyle(PlanPressStyle(scale: 0.985))
         .contextMenu {
             Button(role: .destructive) {
                 pendingDeletion = conversation
@@ -212,51 +216,32 @@ struct AssistantConversationsSheet: View {
                 Label("Usuń rozmowę", systemImage: "trash")
             }
         }
-        .accessibilityElement(children: .combine)
         .accessibilityValue(conversation.id == store.conversationId ? "bieżąca" : (isRunning ? "w toku" : ""))
         .accessibilityHint("Otwiera rozmowę. Przytrzymaj, żeby usunąć.")
     }
 
     // MARK: - Puste stany
 
+    /// Pusty stan list aplikacji (`RecipeListEmptyState`: kafelek powodu,
+    /// tytuł, zdanie) zamiast szarego znaku z własnym krojem.
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            SCMarkShape()
-                .fill(AssistantLook.ink(scheme).opacity(0.28))
-                .frame(width: 30, height: 30)
-                .padding(.top, 36)
-                .accessibilityHidden(true)
-
-            Text("Nie ma jeszcze żadnej rozmowy")
-                .font(.sc(size: 17, weight: .bold))
-                .tracking(-0.3)
-                .foregroundStyle(AssistantLook.ink(scheme))
-
-            Text("Zapytaj asystenta o plan tygodnia — rozmowa zapisze się tutaj i będzie można do niej wrócić.")
-                .font(.sc(size: 14))
-                .lineSpacing(4)
-                .foregroundStyle(AssistantLook.muted(scheme))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 24)
-        .padding(.top, 14)
-        .accessibilityElement(children: .combine)
+        RecipeListEmptyState(
+            icon: "bubble.left.and.bubble.right.fill",
+            title: "Nie ma jeszcze żadnej rozmowy",
+            message: "Zapytaj Asystenta o plan tygodnia — rozmowa zapisze się tutaj i będzie można do niej wrócić."
+        )
     }
 
     private var noResults: some View {
-        VStack(spacing: 6) {
-            Text("Nic nie pasuje do „\(query)”")
-                .font(.sc(size: 15, weight: .semibold))
-                .foregroundStyle(AssistantLook.ink(scheme))
-            Text("Szukam w tytułach i ostatnich wiadomościach.")
-                .font(.sc(size: 13))
-                .foregroundStyle(AssistantLook.muted(scheme))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 38)
-        .accessibilityElement(children: .combine)
+        RecipeListEmptyState(
+            icon: "magnifyingglass",
+            title: "Nic nie pasuje do „\(query)”",
+            message: "Szukam w tytułach i ostatnich wiadomościach.",
+            actions: [
+                RecipeListEmptyState.Action(title: "Wyczyść szukanie", icon: "xmark", run: { query = "" })
+            ]
+        )
+        .padding(.top, 8)
     }
 
     private static func stamp(_ conversation: AgentConversationDTO) -> String? {

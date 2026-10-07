@@ -10,8 +10,17 @@ struct EditorialSettingsRow<Trailing: View>: View {
     let icon: String
     let iconColor: Color
     let title: String
+    /// Linijka pod tytułem (12,5 pt, szara) — wiersz z treścią, a nie samą
+    /// nazwą: rozmowa z podglądem odpowiedzi, notatka pamięci ze źródłem,
+    /// umiejętność Asystenta z przykładem (7.10.2026, arkusze Asystenta na
+    /// klockach Ustawień). Bez niej wiersz jest dokładnie taki jak był.
+    var subtitle: String? = nil
     var value: String? = nil
     var isLast: Bool = false
+    /// Tytuł i podpis łamią się na kolejne linie zamiast ucinać — gdy TREŚĆ
+    /// jest sprawą wiersza (notatka, cała wiadomość do wysłania, zdanie
+    /// zgody). Domyślnie jedna linia, jak w Ustawieniach.
+    var wrapsText: Bool = false
     var action: (() -> Void)? = nil
     @ViewBuilder var trailing: () -> Trailing
 
@@ -39,16 +48,30 @@ struct EditorialSettingsRow<Trailing: View>: View {
         }
     }
 
+    private var hasSubtitle: Bool { !(subtitle ?? "").isEmpty }
+
     private var rowBody: some View {
         HStack(spacing: 12) {
             EditorialSettingsTileIcon(icon: icon, color: iconColor)
 
-            Text(title)
-                .font(.sc(size: 15, weight: .semibold))
-                .tracking(-0.3)
-                .foregroundStyle(Color.scLabel(scheme))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.sc(size: 15, weight: .semibold))
+                    .tracking(-0.3)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .lineLimit(wrapsText ? nil : 1)
+                    .fixedSize(horizontal: false, vertical: wrapsText)
+
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.sc(size: 12.5))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .lineLimit(wrapsText ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: wrapsText)
+                }
+            }
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if let value, !value.isEmpty {
                 Text(value)
@@ -60,7 +83,8 @@ struct EditorialSettingsRow<Trailing: View>: View {
             trailing()
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        // Z podpisem dwie linie — oddech jak w wierszach wyboru diety.
+        .padding(.vertical, hasSubtitle ? 8 : 6)
         .frame(minHeight: 52)
         .contentShape(Rectangle())
     }
@@ -73,15 +97,19 @@ extension EditorialSettingsRow where Trailing == EditorialSettingsChevron {
         icon: String,
         iconColor: Color,
         title: String,
+        subtitle: String? = nil,
         value: String? = nil,
         isLast: Bool = false,
+        wrapsText: Bool = false,
         action: (() -> Void)? = nil
     ) {
         self.icon = icon
         self.iconColor = iconColor
         self.title = title
+        self.subtitle = subtitle
         self.value = value
         self.isLast = isLast
+        self.wrapsText = wrapsText
         self.action = action
         self.trailing = { EditorialSettingsChevron() }
     }
