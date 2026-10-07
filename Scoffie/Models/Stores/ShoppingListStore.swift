@@ -53,19 +53,16 @@ final class ShoppingListStore {
     var isLoading: Bool = false
     var errorMessage: String?
 
+    /// 7.10.2026 (audyt 2.5): katalog offline poza kopią zapasową, nie
+    /// `Documents` — stare pliki przenosi `AppCacheDirectory`.
     private var cacheURL: URL {
-        FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("shopping_list_cache_\(cacheNamespace).json")
+        AppCacheDirectory.url(for: "shopping_list_cache_\(cacheNamespace).json")
     }
 
     /// Usunięcie konta / wylogowanie: lista z dysku nie zostaje (art. 17).
+    /// Także ze starego `Documents` (7.10.2026), gdyby migracja go nie przeniosła.
     static func clearCache() {
-        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return }
-        for name in names where name.hasPrefix("shopping_list_cache_") && name.hasSuffix(".json") {
-            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
-        }
+        AppCacheDirectory.removeFiles { $0.hasPrefix("shopping_list_cache_") && $0.hasSuffix(".json") }
     }
 
     init(repository: ShoppingListRepository, currentUserId: String = "", cacheNamespace: String = "default") {

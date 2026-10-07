@@ -34,15 +34,25 @@ extension Color {
 
 // MARK: - Bezpiecznik: pliki store'u tylko w katalogu tymczasowym
 
-// `MealCalendarStore` zapisuje `meal_plans_<ns>.json` w Documents i przy starcie
-// kasuje `saved_plan.json`. Skrypt ustawia `CFFIXED_USER_HOME` na katalog
-// tymczasowy; bez tego sprawdzian NIE rusza — nie dotykamy prawdziwego Documents.
+// `MealCalendarStore` zapisuje `meal_plans_<ns>.json` w `Application Support/
+// ScoffieCache` (od 7.10.2026, `AppCacheDirectory`; przenosi tam też stare
+// pliki z Documents) i przy starcie kasuje `saved_plan.json` w Documents.
+// Skrypt ustawia `CFFIXED_USER_HOME` na katalog tymczasowy; bez tego sprawdzian
+// NIE rusza — nie dotykamy prawdziwego Documents ani Application Support.
 let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
 guard let fixedHome = ProcessInfo.processInfo.environment["CFFIXED_USER_HOME"],
       !fixedHome.isEmpty,
       documents.resolvingSymlinksInPath().path
           .hasPrefix(URL(fileURLWithPath: fixedHome).resolvingSymlinksInPath().path) else {
     print("PRZERWANE: uruchom przez Scripts/plan-store-check.sh (Documents musi być w katalogu tymczasowym, jest: \(documents.path))")
+    exit(2)
+}
+// Application Support liczony BEZ `AppCacheDirectory` (ten od razu tworzy
+// katalog) — musi leżeć w tym samym katalogu domowym co sprawdzone Documents.
+let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+guard applicationSupport.standardizedFileURL.path
+    .hasPrefix(documents.deletingLastPathComponent().standardizedFileURL.path + "/") else {
+    print("PRZERWANE: Application Support poza katalogiem tymczasowym (jest: \(applicationSupport.path))")
     exit(2)
 }
 try? FileManager.default.createDirectory(at: documents, withIntermediateDirectories: true)
