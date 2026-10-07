@@ -1,8 +1,8 @@
 import Foundation
 
 // Filtry „tylko w tej kategorii” — sekcja kategorii w arkuszu „Filtry” na
-// Przepisach (ekran kategorii albo jej zakładka w wynikach) i filtry wyboru
-// przepisu do planu (`RecipePlanFilterPage`). Każda kategoria ma swoje
+// Przepisach (ekran kategorii albo jej zakładka w wynikach), także w wyborze
+// przepisu do planu (ten sam arkusz, 7.10.2026). Każda kategoria ma swoje
 // aspekty: śniadanie wybiera się po smaku i rodzaju dania, obiad po
 // rodzaju dania i mięsie, przekąskę po smaku, rodzaju i porze.
 //
@@ -66,8 +66,7 @@ struct RecipeCategoryFilter: Equatable {
 
     var isActive: Bool { picks.values.contains { !$0.isEmpty } }
 
-    /// Liczba zaznaczonych opcji — plakietka na strzałce sekcji Przepisów
-    /// i na przycisku filtrów wyboru do planu.
+    /// Liczba zaznaczonych opcji — plakietka na strzałce sekcji Przepisów.
     var activeCount: Int { picks.values.reduce(0) { $0 + $1.count } }
 
     func contains(_ option: String, in kind: RecipeFacetKind) -> Bool {
@@ -145,14 +144,6 @@ enum RecipeCategoryFacets {
         case .all, .favourite:
             return []
         }
-    }
-
-    /// Aspekty listy przepisów: w liście kategorii wszystkie, w wyborze
-    /// przepisu do planu bez „Pory w planie” — pora jest tam już wybrana.
-    static func facets(forPicking category: RecipesCategory, slot: MealSlot?) -> [RecipeFacet] {
-        let all = facets(for: category)
-        guard slot != nil else { return all }
-        return all.filter { $0.kind != .slot }
     }
 
     private static let tasteFacet = RecipeFacet(kind: .taste, title: "Smak", options: [

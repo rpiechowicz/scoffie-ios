@@ -93,8 +93,12 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   i „Thermomixa”; po dwa: główny i zapas), automat `RecipeCoverPicker` tylko, gdy wybranego nie ma w puli albo ukrywa go profil. „Filtry” działają
   NA ŻYWO (bez szkicu i „Pokaż”), stopka „N z M przepisów” + tekstowe „Gotowe” (lupa odpadła). Filtry kategorii =
   sekcja „Filtrów”, gdy lista stoi w kategorii (ekran albo zakładka wyników, `scope`), bez kuchni i okazji kategorii;
-  bez zakresu — wiersze „Filtry kategorii”. Podstrony Filtrów („Więcej filtrów”, Wyklucz składniki → dział) i filtry
-  „Wybierz przepis” (`RecipePlanFilterPage`) = push z systemowym „wstecz” i „Wyczyść”. „Wyczyść” wszędzie =
+  bez zakresu — wiersze „Filtry kategorii”. Podstrony Filtrów („Więcej filtrów”, Wyklucz składniki → dział) = push
+  z systemowym „wstecz” i „Wyczyść”. „Wybierz przepis” w Planie ma TE SAME Filtry (7.10.2026; `RecipePlanFilterPage`
+  USUNIĘTE): `RecipeFilterSheet(scope: slot.baseCategory, slot:, isPushed: true, onDone:)` wepchnięty w stos arkusza
+  wyboru (pasek: „wstecz”, „Filtry”, różdżka, „Wyczyść”; „Gotowe” wraca do listy), bez „Pory w planie”, własna
+  instancja `RecipeFilterOptions` (świeża przy każdym otwarciu); aspekty kategorii pory liczą się dla KAŻDEGO dania
+  listy (`facetCategory` w `RecipeFilterIndex` i `matches(_:facetCategory:)`); „Ulubione” = kafelek Cech. „Wyczyść” wszędzie =
   `RecipeFilterOptions.reset(in: scope)`; nagłówek wyników i karta kategorii = `summaryLabels(in:)` (z filtrami
   kategorii); plakietka = `activeCount(in:)`. `RecipeCategorySheetView` i `RecipeCategoryFilterSheet` USUNIĘTE.
   Wyłączone dopasowanie (dieta + alergeny) trzyma TYLKO do końca uruchomienia
@@ -1035,14 +1039,16 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (runda 10: karta z kafelkiem POWODU w tincie — lupa, filtry, serce, dieta, ikona pory — tytuł, zdanie
   i akcja, która powód zdejmuje, jako `EditorialPrimaryActionButton`; druga akcja tekstem). W wyborze do
   planu: akcent i ikona PORY
-  (`slot.cozyAccent`, `slot.icon`), data i godzina w `subtitle`, filtry kategorii `slot.baseCategory`
-  bez aspektu „Pora w planie” (`RecipeCategoryFacets.facets(forPicking:slot:)`, arkusz filtrów
-  z `slot:`; wartości dań z INNYCH kategorii liczone w aspektach kategorii pory —
-  `RecipeFilterFactsCache.facetValues(for:in:)`); „Ulubione” to kafelek „Twoje przepisy” w tym arkuszu
-  (`favouritesOnly:`, plakietka filtrów liczy go jako jeden filtr). Lista to ZAWSZE przepisy tej pory
+  (`slot.cozyAccent`, `slot.icon`), data i godzina w `subtitle`; filtry = TE SAME „Filtry” co na
+  Przepisach (7.10.2026, akapit „Przepisy” u góry): `RecipeFilterSheet(scope: slot.baseCategory, slot:,
+  isPushed: true)` bez aspektu „Pora w planie”; wartości dań z INNYCH kategorii liczone w aspektach
+  kategorii pory (`RecipeFilterFactsCache.facts(for:in:)`, `RecipeFilterIndex(facetCategory:)`,
+  `RecipeFilterOptions.matches(_:facetCategory:)`); „Ulubione” = kafelek Cech; plakietka = `activeCount(in:)`.
+  Lista to ZAWSZE przepisy tej pory
   (`fits(slot)`) — „Wszystkie pory” usunięte w rundzie 10 („nie chcę jeść obiadu na śniadanie”).
   „Dla kogo” (`PlanAudienceChips`, w domu jednoosobowym jedno zdanie) stoi w STOPCE nad przyciskiem —
-  tam, gdzie zapada decyzja. Filtry wyboru do planu są własne (nie z Przepisów).
+  tam, gdzie zapada decyzja. STAN filtrów wyboru do planu jest własny (osobna instancja
+  `RecipeFilterOptions`, nie stan Przepisów), ale arkusz i model wspólne.
 - „Dodaj do planu” ze szczegółów (`AddToPlanSheet`, od nowa w rundzie 14 — „paskudny, zrób porządnie”; od 6.10.2026
   ekran stosu szczegółów, `isPushed`): TYLKO znane klocki. Nagłówek = zdjęcie dania (`EditorialRecipeCover` 52 pt)
   + nazwa + fakty (czas, kcal); „Dodaj do planu” i „wstecz” w pasku systemu (w samodzielnym arkuszu — tylko podgląd —
