@@ -518,12 +518,15 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   tylko w pamięci, przypięte do id konta, zerowane w `logout()`.
   Wyścig migawek: odczyt (`loadUserPreferences`, `users:me` w `restoreHouseholdIfNeeded`) to JEDNO wspólne zadanie na
   konto; zapamiętuje `SCProtectedSettings.changeGeneration` i po powrocie nie nadpisuje (ani nie potwierdza), jeśli
-  w międzyczasie była edycja z ręki (`@ProtectedSetting`) albo zapis (`noteLocalSave`). Odpowiedź na zapis wpisuje
-  TYLKO wysłane pola, i tylko te nietknięte od wysłania (`mergeSavedValues`); potwierdza kopię tylko PEŁNY zestaw
-  (wszystkie pola diety / sylwetka + imię). Arkusze diety i „Twoich danych” zapisują same tylko po `userEditGeneration` —
+  w międzyczasie była edycja z ręki (`@ProtectedSetting`) albo zapis (`noteLocalSave`). Zapisy i odczyty jednej domeny
+  (dieta: `users:preferences:update`/`get`; profil: `users:profile:update`/`users:me`) idą przez kolejkę
+  `SessionSyncQueue` — odczyt nigdy obok zapisu w locie, zapisy po kolei; strażnik `ensure…` stoi PRZED wejściem do
+  kolejki zapisu. Odpowiedź na zapis wpisuje TYLKO wysłane pola, i tylko te nietknięte od wysłania (`mergeSavedValues`);
+  zapis z alergenami i dietą ustawia znacznik zaufanej kopii (bramkę pełnego zapisu daje tylko odczyt), profil
+  potwierdza zapis sylwetki + imienia. Arkusze diety i „Twoich danych” zapisują same tylko po `userEditGeneration` —
   wartości wpisane przez odczyt nie odpalają zapisu.
   Brak kopii diety ≠ brak alergii: `SessionStore.preferencesAvailability` (`.ready` = ZAUFANA kopia w pliku —
-  znacznik `SCProtectedSettings.trustedPreferencesKey` z migracji, udanego odczytu albo potwierdzonego pełnego zapisu,
+  znacznik `SCProtectedSettings.trustedPreferencesKey` z migracji, udanego odczytu albo udanego zapisu alergenów i diety,
   nigdy z edycji w widoku — albo potwierdzony odczyt; inaczej `.loading` / `.unavailable`) i `RecipePreferencesNotice` (`RecipeListKit`) nad
   listą w Przepisach, kategorii i `PlanSlotPickerSheet` — „Wczytuję Twoje alergie…” albo „Nie udało się wczytać…
   — przepisy bez dopasowania” + „Spróbuj ponownie”. Nowa lista dopasowanych przepisów = wstaw ten sam komunikat.

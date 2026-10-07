@@ -201,7 +201,7 @@ final class SCProtectedSettings {
     /// wybranie jednego alergenu w Ustawieniach zapisuje klucz, ale to szkic,
     /// nie stan konta. Znacznik ustawiają WYŁĄCZNIE: migracja alergenów ze
     /// starego `UserDefaults` (tamta kopia była pełnym stanem aplikacji),
-    /// udany `users:preferences:get` i potwierdzony pełny zapis
+    /// udany `users:preferences:get` i udany zapis alergenów i diety
     /// (`markPreferencesTrusted`). Edycja przez `@ProtectedSetting` — nigdy.
     /// Kasuje go `removeAll` (wylogowanie). Poza `registeredKeys` — w
     /// `UserDefaults` nigdy nie istniał.
@@ -214,7 +214,7 @@ final class SCProtectedSettings {
         value(forKey: Self.trustedPreferencesKey) != nil
     }
 
-    /// Kopia diety = stan konta (odczyt z serwera albo potwierdzony pełny zapis).
+    /// Kopia diety = stan konta (odczyt z serwera albo udany zapis alergenów i diety).
     func markPreferencesTrusted() {
         setValue(.int(1), forKey: Self.trustedPreferencesKey)
     }

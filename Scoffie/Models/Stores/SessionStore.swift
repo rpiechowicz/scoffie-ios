@@ -37,6 +37,16 @@ final class SessionStore {
 
     private let baseURL = AppEnvironment.apiBaseURL
 
+    /// Kolejki domen (7.10.2026, przegląd gałęzi): zapis i odczyt diety
+    /// (`users:preferences:update` / `get`) idą po kolei, tak samo zapis
+    /// profilu i `users:me`. Odczyt nie biegnie więc równolegle z zapisem
+    /// w locie (np. ponawianym po zgubionym ack), a dwa zapisy nie dojdą do
+    /// serwera w odwrotnej kolejności. Strażniki `ensure…Baseline` stoją PRZED
+    /// wejściem do kolejki zapisu — odczyt, na który czekają, sam wchodzi do
+    /// kolejki, więc nic nie czeka na siebie.
+    private let preferencesSyncQueue = SessionSyncQueue()
+    private let profileSyncQueue = SessionSyncQueue()
+
     /// Aktualny access token z Keychain. Używać do autoryzacji HTTP requestów.
     var currentAccessToken: String? {
         KeychainService.get(forKey: Keys.accessToken)
@@ -2124,6 +2134,11 @@ final class SessionStore {
     /// Właściwe `users:me` — tylko przez `restoreHouseholdIfNeeded`. Nie czeka
     /// na nic, co czeka na nie samo (`bootstrapSession` tylko odpala zadania).
     private func performHouseholdRestore(userId: String) async {
+        // W kolejce profilu: zapis „Twoich danych” w locie kończy się przed
+        // `users:me` (7.10.2026). W środku nic nie czeka na tę kolejkę
+        // (`bootstrapSession` tylko odpala zadania).
+        await profileSyncQueue.enter()
+        defer { profileSyncQueue.leave() }
         let persistedHouseholdId =
             (currentHouseholdId?.isEmpty == false) ? currentHouseholdId : nil
         let protectedStore = SCProtectedSettings.shared
@@ -2793,6 +2808,27 @@ final class SessionStore {
     /// więc zadanie nigdy nie czeka samo na siebie.
     @MainActor
     private func performPreferencesRead(userId: String) async -> Bool {
+        // W kolejce diety: zapis w locie kończy się, zanim odczyt zapyta
+        // serwer. Sprzątanie „Czego nie jem” to zapis — idzie PO wyjściu
+        // z kolejki (inaczej czekałoby na samo siebie).
+        await preferencesSyncQueue.enter()
+        let outcome = await readPreferencesInQueue(userId: userId)
+        preferencesSyncQueue.leave()
+        guard let hasLegacyRestrictions = outcome else { return false }
+        if hasLegacyRestrictions {
+            await saveUserPreferences(
+                excludedIngredientIds: [],
+                clearMaxPrepTime: true,
+                confirmBaselineFirst: false
+            )
+        }
+        return true
+    }
+
+    /// Sam odczyt, już w kolejce. `nil` = nieudany albo pominięty; inaczej:
+    /// czy na serwerze zostały wygaszone ograniczenia „Czego nie jem”.
+    @MainActor
+    private func readPreferencesInQueue(userId: String) async -> Bool? {
         let protectedStore = SCProtectedSettings.shared
         let generationAtStart = protectedStore.changeGeneration(.preferences)
         let socket = sessionSocket()
@@ -2803,15 +2839,15 @@ final class SessionStore {
                 payload: ["userId": userId],
                 as: WsEnvelope<BackendUserPreferencesDTO>.self
             )
-            guard envelope.ok, let prefs = envelope.data else { return false }
+            guard envelope.ok, let prefs = envelope.data else { return nil }
             // Odpowiedź po wylogowaniu / zmianie konta nie jest już nasza.
-            guard currentUserId == userId else { return false }
-            // W trakcie odczytu była edycja albo zapis — migawka serwera jest
+            guard currentUserId == userId else { return nil }
+            // W trakcie odczytu była edycja z ręki — migawka serwera jest
             // starsza niż telefon. Nie nadpisujemy i NIE potwierdzamy (lokalne
-            // wartości nie pochodzą z tej odpowiedzi); potwierdzi je udany zapis.
+            // wartości nie pochodzą z tej odpowiedzi).
             guard protectedStore.changeGeneration(.preferences) == generationAtStart else {
                 debugLog("[SessionStore] users:preferences:get — odpowiedź starsza niż lokalna zmiana, pomijam")
-                return false
+                return nil
             }
 
             let hasLegacyRestrictions = applyPreferencesSnapshot(prefs)
@@ -2821,21 +2857,13 @@ final class SessionStore {
             // przepisów mogą jej ufać (`preferencesAvailability`).
             preferencesConfirmedForUserId = userId
             SCProtectedSettings.shared.markPreferencesTrusted()
-
-            if hasLegacyRestrictions {
-                await saveUserPreferences(
-                    excludedIngredientIds: [],
-                    clearMaxPrepTime: true,
-                    confirmBaselineFirst: false
-                )
-            }
-            return true
+            return hasLegacyRestrictions
         } catch {
             // Swallow — preferences are non-critical, AppStorage default
             // applies. Ponowienie: przy wejściu na pierwszy plan
             // (`refreshRealtimeStoresOnForeground`) i przed każdym zapisem
             // pełnego zestawu (`ensurePreferencesBaseline`).
-            return false
+            return nil
         }
     }
 
@@ -3066,6 +3094,9 @@ final class SessionStore {
         if confirmBaselineFirst, await ensurePreferencesBaseline() != .confirmed {
             return false
         }
+        // Po strażniku, nie przed nim: jego odczyt sam wchodzi do kolejki.
+        await preferencesSyncQueue.enter()
+        defer { preferencesSyncQueue.leave() }
         // Trwające odczyty są od teraz starsze niż telefon (7.10.2026).
         SCProtectedSettings.shared.noteLocalSave(.preferences)
 
@@ -3147,8 +3178,10 @@ final class SessionStore {
         guard !data.isEmpty else { return true }
         let sentKeys = data.keys.compactMap { Self.preferencesPayloadKeys[$0] }
         let sentValues = Self.protectedValues(of: sentKeys)
-        // Pełny zestaw = wszystkie pola diety; tylko on może potwierdzić kopię.
-        let isFullSet = Set(sentKeys) == Set(Self.preferencesPayloadKeys.values)
+        // Zapis z alergenami i dietą (ekran diety, kreator) — to, co chroni
+        // strażnik i czym listy odsiewają przepisy.
+        let sendsAllergensAndDiet = sentKeys.contains(PreferencesKeys.allergens)
+            && sentKeys.contains(PreferencesKeys.diet)
 
         let socket = sessionSocket()
 
@@ -3159,16 +3192,18 @@ final class SessionStore {
                 as: WsEnvelope<BackendUserPreferencesDTO>.self
             )
             // Z odpowiedzi tylko WYSŁANE pola, nietknięte od wysłania
-            // (`mergeSavedValues`). Potwierdzenie kopii daje wyłącznie pełny
-            // zestaw, którego żadne pole się w międzyczasie nie zmieniło —
-            // wtedy lokalne = to, co serwer właśnie przyjął (7.10.2026).
+            // (`mergeSavedValues`). Udany zapis alergenów i diety bez zmiany
+            // od wysłania = kopia alergenów jest stanem konta → znacznik
+            // zaufanej kopii (listy przepisów). Bezpieczne, bo zapisy i odczyty
+            // diety idą po kolei (`preferencesSyncQueue`). Bramki pełnego
+            // zapisu (`preferencesConfirmedForUserId`) to nie zdejmuje — tę
+            // daje tylko odczyt (zapis nie mówi nic o polach, których nie wysłał).
             if envelope.ok, let saved = envelope.data, currentUserId == userId {
                 let untouched = mergeSavedValues(
                     sent: sentValues,
                     server: Self.preferencesLocalValues(saved)
                 )
-                if isFullSet, untouched {
-                    preferencesConfirmedForUserId = userId
+                if sendsAllergensAndDiet, untouched {
                     SCProtectedSettings.shared.markPreferencesTrusted()
                 }
             }
@@ -3275,6 +3310,9 @@ final class SessionStore {
         if confirmBaselineFirst, await ensureProfileBaseline() != .confirmed {
             return false
         }
+        // Po strażniku, nie przed nim: jego `users:me` sam wchodzi do kolejki.
+        await profileSyncQueue.enter()
+        defer { profileSyncQueue.leave() }
         // Trwające `users:me` są od teraz starsze niż telefon (7.10.2026).
         SCProtectedSettings.shared.noteLocalSave(.profile)
 
@@ -3847,5 +3885,31 @@ final class SessionStore {
         guard isAuthenticated || currentUserId != nil else { return }
         logout()
         authError = Self.sessionExpiredMessage
+    }
+}
+
+/// Kolejka FIFO na głównym aktorze: operacje jednej domeny idą po kolei
+/// (7.10.2026) — ten sam wzór co `ImageDecodeGate`, z limitem 1. Kto wszedł
+/// (`enter`), MUSI wyjść (`leave`, najlepiej w `defer`); wyjście oddaje
+/// kolejkę następnemu czekającemu bez zwalniania jej po drodze.
+@MainActor
+private final class SessionSyncQueue {
+    private var isBusy = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    func enter() async {
+        guard isBusy else {
+            isBusy = true
+            return
+        }
+        await withCheckedContinuation { waiting.append($0) }
+    }
+
+    func leave() {
+        if waiting.isEmpty {
+            isBusy = false
+        } else {
+            waiting.removeFirst().resume()
+        }
     }
 }
