@@ -692,6 +692,11 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   próba: „Polecamy „We dwoje”” · wiadomości/mies. + pigułka z ceną) i JEDNA akcja. Kreseczek zużycia
   w karcie nie ma (pełny pasek nic nie mówił) — zostały w panelu powitania, który ma ten sam wiersz
   „co dalej” zamiast osobnej stopki (`AssistantQuotaResetRow` usunięty).
+  7.10.2026 (Rafał: „pozwól mi zamknąć… wyłącz input oraz send… »Zobacz plany« nie działa”): karta ma krzyżyk
+  (`quotaCardDismissed`), po zamknięciu stoi WYŁĄCZONE pole i „Wyślij” z podpowiedzią o puli (`lockedPrompt`: „Darmowe
+  wiadomości wykorzystane” / „Wiadomości wrócą 1 listopada”), a stuknięcie w to pole przywraca kartę. Karta stoi POZA
+  `GlassEffectContainer` pola — w grupie szklany „Zobacz plany” nie przyjmował stuknięć (jak krążek Filtrów, 9af6e15);
+  nie wkładać jej z powrotem do grupy. `PlansSheet` z rozmowy dostaje `onPurchased` → `loadUsage` (blokada schodzi od razu).
 - Przyciski Asystenta (runda 14): stopka karty = `AssistantButtonSize.compact` (42 pt rysowane, 44 dotyk,
   14 semibold), przycisk samodzielny (arkusz, stopka, plany) = `.regular` (46 pt, 15). Para =
   `AssistantActionPair`: równe połowy, gdy oba tytuły się mieszczą, inaczej stos z główną NA DOLE — główna
