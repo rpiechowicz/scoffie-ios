@@ -175,7 +175,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   i popraw maksymalnie pod nowy widok”): CZTERY kroki, każdy na tym samym komponencie co wiersz Ustawień — 1 „Twoje
   dane” (`WelcomeProfileStep` → `ProfileIdentityRow` + `ProfileBodyForm`; treningi przeszły tu z dawnego kroku celu),
   2 „Dieta i alergeny” (`WelcomeDietStep` → `DietPreferencesForm`; dawne kroki „Cel” i „Dieta i kalorie” w jednym, bo
-  cel stoi w arkuszu diety; makro bez stepperów, alergeny w arkuszu), 3 „Posiłki w planie” (`WelcomeMealsStep` →
+  cel stoi w arkuszu diety; makro bez stepperów, za to z „N % kalorii” i paskiem udziału pod wierszem — prośba Rafała
+  z 24.09.2026; alergeny w arkuszu), 3 „Posiłki w planie” (`WelcomeMealsStep` →
   `MealDayAxisList` z `SCStepHeader` w `top:`), 4 „Gospodarstwo” (`WelcomeHouseholdStep` → `HouseholdKit`: skrzynka
   zaproszeń z „Odrzuć”/„Dołącz”, `HouseholdNameField`, `HouseholdMemberRow`, `HouseholdInviteRowLabel(.later)` — bez
   krążka, domu jeszcze nie ma). `WelcomeView.householdOnlyStep` = 4. Nagłówek kroku = `SCStepHeader` w kolorze wiersza
@@ -206,7 +207,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   alergeny; listy celu i diety z kółkiem (dawny układ wygrał z menu), podpisy w jednej linii (krótkie kopie w formularzu,
   `UserGoal`/`DietPreference.subtitle` bez zmian); podpowiedź „Dla celu „…” wychodzi N kcal · Ustaw” w karcie kalorii.
   Od 7.10.2026 sekcje to wspólny `DietPreferencesForm` (Settings/Components) — w Ustawieniach z nadpisaniami makro
-  (`DietMacroOverrides`), wepchniętym wyborem alergenów i odsyłaczem „Twoje dane ›”, w kreatorze bez nich.
+  (`DietMacroOverrides`), wepchniętym wyborem alergenów i odsyłaczem „Twoje dane ›”, w kreatorze bez nich (makro tam
+  jako podgląd: procent kalorii i pasek w kolorze makro).
   Powiadomienia — na górze PODGLĄD powiadomienia (`NotificationPreviewCard`: znak, „SCOFFIE · teraz”, przykład kanału
   w tonie `MealReminderService`; stuknięcie/włączenie kanału podmienia przykład i roluje tekst, wyciszone = szary podgląd
   „Wyciszone”), główny przełącznik jako wiersz (bez zgody „Włącz powiadomienia” / „Wyłączone w ustawieniach iOS ·
@@ -1301,8 +1303,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   klawiaturze (nazwa domu) stopka jedzie nad nią. „Wstecz” w jednej linii z „Dalej”, po lewej
   (`SCStepFooter(backPlacement: .besidePrimary)`) w całym przepływie — od wprowadzenia v2 także u Asystenta.
   Treść kroków kreatora = widoki Ustawień (akapit „Kreator = widoki Ustawień” na górze). Dawne zapisy o kroku 1
-  bez przewijania z kartą „Profil” i `BodyMetricsSummaryRow`, krokach 2–3 z kartą „Aktywność” i paskami makro
-  w procentach oraz dawnym kroku 5 z nazwą w miejscu — NIEAKTUALNE od 7.10.2026. Licznik kroków w stopce ma szerokość
+  bez przewijania z kartą „Profil” i `BodyMetricsSummaryRow`, krokach 2–3 z kartą „Aktywność” i osobną kartą pasków makro
+  w procentach (paski z procentami żyją dalej w wierszach makro kroku „Dieta”) oraz dawnym kroku 5 z nazwą w miejscu — NIEAKTUALNE od 7.10.2026. Licznik kroków w stopce ma szerokość
   z treści — „10/10” nie łamie się.
 - Kreator profilu (`WelcomeView`) od 24.09.2026 BEZ paska nawigacji i BEZ „Wyloguj” (Rafał: „wywal”):
   nagłówek kroku od góry jak w przewodniku (`WelcomeLayout.topInset = TourLayout.top`), górny brzeg

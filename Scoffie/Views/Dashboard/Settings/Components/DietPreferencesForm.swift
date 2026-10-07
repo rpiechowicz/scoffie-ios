@@ -12,7 +12,8 @@ import SwiftUI
 // (cel z długimi podpisami, kalorie z suwakiem nad liczbą, makro jako paski).
 // Teraz to te same sekcje, a różnice to tryby:
 // - `macroOverrides` — Ustawienia nadpisują makro stepperami; kreator (`nil`)
-//   pokazuje sam wynik, bo zapis z kreatora nie wysyła nadpisań;
+//   pokazuje sam wynik z udziałem w kaloriach (procent i pasek), bo zapis
+//   z kreatora nie wysyła nadpisań;
 // - `onEditAllergens` — Ustawienia wpychają wybór alergenów w stos arkusza;
 //   kreator (`nil`) otwiera go jako arkusz (`AllergenSelectionField`);
 // - `onOpenProfile` — odsyłacz „Twoje dane ›”, gdy sylwetki brakuje; kreator
@@ -261,11 +262,12 @@ struct DietPreferencesForm: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 if let macros = effectiveMacros {
-                    macroRow(.protein, value: macros.proteinG, override: macroOverrides?.protein)
+                    let total = max(macros.totalKcal, 1)
+                    macroRow(.protein, value: macros.proteinG, share: Double(macros.proteinKcal) / Double(total), override: macroOverrides?.protein)
                     macroDivider
-                    macroRow(.carbs, value: macros.carbsG, override: macroOverrides?.carbs)
+                    macroRow(.carbs, value: macros.carbsG, share: Double(macros.carbsKcal) / Double(total), override: macroOverrides?.carbs)
                     macroDivider
-                    macroRow(.fat, value: macros.fatG, override: macroOverrides?.fat)
+                    macroRow(.fat, value: macros.fatG, share: Double(macros.fatKcal) / Double(total), override: macroOverrides?.fat)
                     // Kreska nad stopką idzie na pełną szerokość, bo stopka
                     // ma własne tło rozciągnięte od krawędzi do krawędzi —
                     // wcięta kreska kończyła się w innym miejscu niż kolor
@@ -333,11 +335,53 @@ struct DietPreferencesForm: View {
         }
     }
 
-    /// Wiersz makro. Bez `override` (kreator) — sama liczba, bez steppera.
-    private func macroRow(_ macro: Macro, value: Int, override: Binding<Int>?) -> some View {
+    /// Wiersz makro. Bez `override` (kreator) — bez steppera, za to z udziałem
+    /// w kaloriach: „28 % kalorii” i pasek w kolorze makro pod wierszem
+    /// (Rafał 24.09.2026 o kreatorze: „daj tak samo jak było wcześniej” —
+    /// paski z procentami pokazują, do czego posłużyły dane z kroku 1;
+    /// 7.10.2026 przeniesione do wiersza Ustawień).
+    private func macroRow(_ macro: Macro, value: Int, share: Double, override: Binding<Int>?) -> some View {
         let isOverridden = (override?.wrappedValue ?? -1) >= 0
+        let isPreview = override == nil
+        let clampedShare = min(max(share, 0), 1)
+        let percent = Int((clampedShare * 100).rounded())
+        let caption = isPreview
+            ? "\(percent) % kalorii"
+            : (isOverridden ? "Twoja wartość" : "Wyliczone")
 
-        return HStack(spacing: 12) {
+        return VStack(alignment: .leading, spacing: 8) {
+            macroRowLine(macro, value: value, caption: caption, isOverridden: isOverridden, override: override)
+
+            if isPreview {
+                // Pasek od tytułu (kropka 10 + odstęp 12), jak kreska wiersza.
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.scBarTrack(scheme))
+                        Capsule()
+                            .fill(macro.accent)
+                            .frame(width: proxy.size.width * clampedShare)
+                    }
+                }
+                .frame(height: 6)
+                .padding(.leading, 10 + 12)
+                .accessibilityHidden(true)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .animation(.smooth(duration: 0.18), value: value)
+        .animation(.smooth(duration: 0.22), value: clampedShare)
+    }
+
+    private func macroRowLine(
+        _ macro: Macro,
+        value: Int,
+        caption: String,
+        isOverridden: Bool,
+        override: Binding<Int>?
+    ) -> some View {
+        HStack(spacing: 12) {
             Circle()
                 .fill(macro.accent)
                 .frame(width: 10, height: 10)
@@ -347,9 +391,10 @@ struct DietPreferencesForm: View {
                     .font(.sc(size: 14.5, weight: .semibold))
                     .foregroundStyle(Color.scLabel(scheme))
 
-                Text(isOverridden ? "Twoja wartość" : "Wyliczone")
+                Text(caption)
                     .font(.sc(size: 11, weight: .medium))
                     .foregroundStyle(isOverridden ? macro.accent : Color.scFaint(scheme))
+                    .contentTransition(.numericText())
             }
 
             Spacer(minLength: 8)
@@ -371,9 +416,6 @@ struct DietPreferencesForm: View {
                 macroStepper(macro, value: value, override: override)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .animation(.smooth(duration: 0.18), value: value)
     }
 
     /// Minus / plus zamiast pola tekstowego. Makra reguluje się o kilka
