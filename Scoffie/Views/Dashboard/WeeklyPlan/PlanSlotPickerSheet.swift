@@ -8,9 +8,11 @@ import SwiftUI
 /// Przepisach, i stoi na tych samych klockach (`RecipeListKit.swift`):
 /// nagłówek z kafelkiem pory i datą, szukanie, wiersze `EditorialRecipeRow`
 /// — tu z kółkiem wyboru — a w stopce „Dla kogo” nad przyciskiem. Zawężanie
-/// („Ulubione” i filtry kategorii tej pory) mieszka na podstronie wpychanej
-/// przyciskiem filtrów w stos TEGO arkusza (`RecipePlanFilterPage`, 6.10.2026 —
-/// wcześniej drugi arkusz na arkuszu); pigułek pod szukaniem i „Wszystkich pór” nie ma od rundy 10
+/// to TE SAME „Filtry” co na Przepisach (`RecipeFilterSheet` z `scope` =
+/// kategoria pory, model `RecipeFilterOptions`; 7.10.2026 — wcześniej własna
+/// strona `RecipePlanFilterPage` z innym zestawem), wpychane przyciskiem
+/// filtrów w stos TEGO arkusza (`isPushed`, bez arkusza na arkuszu);
+/// pigułek pod szukaniem i „Wszystkich pór” nie ma od rundy 10
 /// (Rafał: „nie chcę jeść obiadu na śniadanie”, „od tego mamy filtry”). Wcześniej
 /// arkusz miał własny nagłówek, własne pole szukania, przełącznik „Pasujące /
 /// Wszystkie / Ulubione” i własne wiersze. Rafał: „żeby wszystko trzymało się
@@ -85,12 +87,12 @@ struct PlanSlotPickerSheet: View {
     @State private var searchText = ""
     @State private var debouncedSearch = ""
     @State private var searchDebounceTask: Task<Void, Never>?
-    /// Tylko ulubione — kafelek „Ulubione” na stronie filtrów (dawniej segment
-    /// „Ulubione”, potem pigułka pod szukaniem).
-    @State private var favouritesOnly = false
-    /// Filtry kategorii tej pory (smak, rodzaj dania, mięso) — te same opcje,
-    /// co sekcja kategorii w Filtrach Przepisów, ale własne dla tego wyboru.
-    @State private var categoryFilter = RecipeCategoryFilter()
+    /// Filtry wyboru — ten sam model i arkusz, co na Przepisach („Ulubione”
+    /// to kafelek w „Więcej filtrów” → „Cechy”), ale WŁASNA instancja: stan
+    /// Przepisów żyje w `RecipesView` i może nieść filtry innej kategorii albo
+    /// „Porę w planie”, które tu po cichu zawężałyby wybór. Każde otwarcie
+    /// wyboru zaczyna od czystych filtrów, jak dotąd.
+    @State private var filters = RecipeFilterOptions()
     /// Strona filtrów wpchnięta w stos arkusza.
     @State private var isFilterPagePresented = false
     @State private var isSaving = false
@@ -113,13 +115,12 @@ struct PlanSlotPickerSheet: View {
     /// temu owsianka („Śniadania") pojawia się także w drugim śniadaniu
     /// i w przekąsce, o ile ma tam ustawiony slot.
     private var scopeCatalog: [Recipe] {
-        let base = recipeCatalogStore.recipes.filter { $0.fits(slot) }
-        return favouritesOnly ? base.filter { $0.favourite } : base
+        recipeCatalogStore.recipes.filter { $0.fits(slot) }
     }
 
-    /// Filtry ze strony filtrów (aspekty i „Ulubione”) — plakietka na przycisku.
+    /// Plakietka na przycisku filtrów — ta sama reguła, co krążek Przepisów.
     private var activeFilterCount: Int {
-        categoryFilter.activeCount + (favouritesOnly ? 1 : 0)
+        filters.activeCount(in: category)
     }
 
     private var personalization: RecipePersonalization {
@@ -138,7 +139,7 @@ struct PlanSlotPickerSheet: View {
         personalization.hiddenCount(in: scopeCatalog)
     }
 
-    /// Pula po dopasowaniu, przed filtrami kategorii i szukaniem.
+    /// Pula po dopasowaniu, przed filtrami i szukaniem.
     ///
     /// Ta sama kolejność, co na Przepisach: najpierw preferencje (dieta
     /// i alergeny odsiewają, cel porządkuje), potem reszta.
@@ -152,24 +153,16 @@ struct PlanSlotPickerSheet: View {
 
     private func visibleRecipes(in pool: [Recipe]) -> [Recipe] {
         var list = pool
-        if categoryFilter.isActive {
-            // W aspektach kategorii PORY, także dla dań z innych kategorii
-            // (owsianka w II śniadaniu) — liczone po kategorii dania
-            // wypadały przy każdym filtrze rodzaju.
-            let filter = categoryFilter
+        if filters.isActive {
+            // Filtry kategorii w aspektach kategorii PORY, także dla dań
+            // z innych kategorii (owsianka w II śniadaniu) — liczone po
+            // kategorii dania przechodziłyby przez każdy filtr rodzaju.
+            // Ta sama reguła liczy „N z M” w Filtrach.
+            let options = filters
             let facetCategory = category
-            list = list.filter {
-                filter.matches(RecipeFilterFactsCache.facetValues(for: $0, in: facetCategory))
-            }
+            list = list.filter { options.matches($0, facetCategory: facetCategory) }
         }
-        let query = trimmedSearch
-        if !query.isEmpty {
-            list = list.filter {
-                $0.name.localizedCaseInsensitiveContains(query) ||
-                $0.description.localizedCaseInsensitiveContains(query)
-            }
-        }
-        return list
+        return RecipeTextSearch.filter(list, query: trimmedSearch)
     }
 
     /// Audytorium w formie, którą rozumie backend. Zwijanie „wszyscy” do
@@ -270,13 +263,19 @@ struct PlanSlotPickerSheet: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $isFilterPagePresented) {
-                RecipePlanFilterPage(
+                // Te same Filtry, co na Przepisach — wepchnięte w stos tego
+                // arkusza, nie arkusz na arkuszu. Pula jak na Przepisach: po
+                // szukaniu, PRZED dopasowaniem (różdżka siedzi w Filtrach)
+                // i przed filtrami. Zmiany działają od razu na listę,
+                // „Gotowe” wraca do niej.
+                RecipeFilterSheet(
+                    filters: $filters,
+                    isPersonalizationEnabled: $isPersonalizationEnabled,
+                    scope: category,
+                    recipes: RecipeTextSearch.filter(scopeCatalog, query: trimmedSearch),
+                    personalization: personalization,
                     slot: slot,
-                    filter: $categoryFilter,
-                    favouritesOnly: $favouritesOnly,
-                    // Pula BEZ „tylko ulubionych” — kafelek „Ulubione” liczy,
-                    // ile z niej zostanie po zaznaczeniu.
-                    recipes: personalization.apply(to: recipeCatalogStore.recipes.filter { $0.fits(slot) }),
+                    isPushed: true,
                     onDone: { isFilterPagePresented = false }
                 )
             }
@@ -411,11 +410,11 @@ struct PlanSlotPickerSheet: View {
     /// — karta z kafelkiem powodu (`RecipeListEmptyState`).
     private func emptyState(poolIsEmpty: Bool) -> some View {
         let forSlot = "na \(slot.accusativeName)"
-        let hasFilters = categoryFilter.isActive || favouritesOnly
+        let hasFilters = filters.isActive(in: category)
+        // „Wyczyść” = ten sam ruch, co w Filtrach (`reset(in:)`).
         let clearFilters = RecipeListEmptyState.Action(title: "Wyczyść filtry") {
             withAnimation(.smooth(duration: 0.2)) {
-                categoryFilter = RecipeCategoryFilter()
-                favouritesOnly = false
+                filters.reset(in: category)
             }
         }
 
@@ -428,7 +427,10 @@ struct PlanSlotPickerSheet: View {
                 actions: hasFilters ? [clearFilters] : []
             )
         }
-        if categoryFilter.isActive, !poolIsEmpty {
+        // Dawny osobny stan „Brak ulubionych” odpadł razem z przełącznikiem
+        // (7.10.2026): „Ulubione” to teraz kafelek Cech w Filtrach, więc
+        // pusta lista po nim jest zwykłym „Nic nie pasuje do filtrów”.
+        if hasFilters, !poolIsEmpty {
             return RecipeListEmptyState(
                 icon: "line.3.horizontal.decrease",
                 accent: accent,
@@ -437,28 +439,14 @@ struct PlanSlotPickerSheet: View {
                 actions: [clearFilters]
             )
         }
-        if favouritesOnly, scopeCatalog.isEmpty {
-            return RecipeListEmptyState(
-                icon: "heart",
-                accent: SCPalette.terracotta,
-                title: "Brak ulubionych \(forSlot)",
-                message: "Przepis dodasz do ulubionych sercem w jego szczegółach.",
-                actions: [
-                    .init(title: "Pokaż wszystkie przepisy", icon: "list.bullet") {
-                        withAnimation(.smooth(duration: 0.2)) { favouritesOnly = false }
-                    }
-                ]
-            )
-        }
         if !scopeCatalog.isEmpty {
             return RecipeListEmptyState(
                 icon: personalization.diet == .none ? "exclamationmark.shield" : personalization.diet.icon,
                 accent: personalization.diet == .none ? SCPalette.terracotta : personalization.diet.accent,
                 title: personalization.diet == .none ? "Alergeny ukrywają wszystko" : "Dieta ukrywa wszystko",
-                message: favouritesOnly
-                    ? "Twoja dieta i alergeny ukrywają wszystkie ulubione przepisy \(forSlot)."
-                    : "Twoja dieta i alergeny ukrywają wszystkie przepisy \(forSlot).",
-                actions: favouritesOnly ? [clearFilters] : []
+                // Bez „Wyczyść filtry”: pulę opróżniło dopasowanie, nie filtry.
+                message: "Twoja dieta i alergeny ukrywają wszystkie przepisy \(forSlot).",
+                actions: []
             )
         }
         return RecipeListEmptyState(
@@ -528,8 +516,8 @@ struct PlanSlotPickerSheet: View {
         }
     }
 
-    /// Zaznaczony przepis, którego nie ma już na liście (schowały go filtry,
-    /// ulubione albo szukanie) — przycisk pod spodem zapisze właśnie jego,
+    /// Zaznaczony przepis, którego nie ma już na liście (schowały go filtry
+    /// albo szukanie) — przycisk pod spodem zapisze właśnie jego,
     /// więc musi być widać, co to jest.
     private func hiddenSelection(_ recipe: Recipe) -> some View {
         HStack(spacing: 10) {

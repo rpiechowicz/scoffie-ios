@@ -464,6 +464,15 @@ struct RecipeFilterOptions: Equatable {
         matches(RecipeFilterFactsCache.facts(for: recipe))
     }
 
+    /// Wybór przepisu do planu: filtry kategorii `facetCategory` (kategoria
+    /// pory) działają na każde danie z listy, także z innej kategorii — ta
+    /// sama reguła, po której liczy arkusz „Filtry” otwarty z wyboru
+    /// (`RecipeFilterIndex(…, facetCategory:)`).
+    @MainActor
+    func matches(_ recipe: Recipe, facetCategory: RecipesCategory?) -> Bool {
+        matches(RecipeFilterFactsCache.facts(for: recipe, in: facetCategory))
+    }
+
     /// Jedyne miejsce z regułami filtra — liczy po nim i lista Przepisów,
     /// i liczniki w arkuszu, więc „Pokaż 132” zawsze znaczy 132 na liście.
     func matches(_ facts: RecipeFilterFacts) -> Bool {
@@ -591,6 +600,24 @@ struct RecipeFilterFacts {
         })
         facetValues = RecipeCategoryFacets.values(for: recipe)
     }
+
+    /// Te same fakty, ale „przeniesione” do innej kategorii: aspekty (smak,
+    /// rodzaj dania, mięso…) policzone w jej aspektach. Wybór przepisu do
+    /// planu (7.10.2026) pokazuje filtry kategorii PORY, a na liście stoją też
+    /// dania z innych kategorii (owsianka w II śniadaniu) — liczone po własnej
+    /// kategorii przechodziłyby przez każdy filtr rodzaju dania nietknięte.
+    init(_ base: RecipeFilterFacts, category: RecipesCategory, facetValues: [RecipeFacetKind: Set<String>]) {
+        self.category = category
+        prepTimeMinutes = base.prepTimeMinutes
+        kcalPerServing = base.kcalPerServing
+        difficulty = base.difficulty
+        diets = base.diets
+        traits = base.traits
+        cuisine = base.cuisine
+        moments = base.moments
+        exclusionKeys = base.exclusionKeys
+        self.facetValues = facetValues
+    }
 }
 
 enum RecipeFilterFactsCache {
@@ -613,6 +640,20 @@ enum RecipeFilterFactsCache {
         let facts = RecipeFilterFacts(recipe)
         storage[recipe.id] = (stamp, facts)
         return facts
+    }
+
+    /// Fakty przepisu z aspektami liczonymi w `facetCategory` — wybór do
+    /// planu, gdzie filtry kategorii pory dotyczą KAŻDEGO dania na liście,
+    /// także z innej kategorii. `nil` albo kategoria przepisu = zwykłe fakty.
+    @MainActor
+    static func facts(for recipe: Recipe, in facetCategory: RecipesCategory?) -> RecipeFilterFacts {
+        let own = facts(for: recipe)
+        guard let facetCategory, facetCategory != own.category else { return own }
+        return RecipeFilterFacts(
+            own,
+            category: facetCategory,
+            facetValues: facetValues(for: recipe, in: facetCategory)
+        )
     }
 
     /// Wartości aspektów przepisu w aspektach podanej kategorii — patrz

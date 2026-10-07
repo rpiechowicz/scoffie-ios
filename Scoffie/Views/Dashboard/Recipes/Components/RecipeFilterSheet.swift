@@ -25,6 +25,17 @@ import SwiftUI
 // zamyka. Dalsze kroki — „Więcej filtrów”, „Bez składników” i jego działy —
 // to PUSH w stosie arkusza (systemowy pasek z tytułem i „wstecz”), nie
 // kolejne arkusze na arkuszu.
+//
+// Te same Filtry stoją w „Wybierz przepis” w Planie (7.10.2026, Rafał: „na
+// filtrach mam inne niż te, co są na głównych przepisach — trzeba to
+// ujednolicić”; wcześniej własna strona `RecipePlanFilterPage`). Tam są
+// PUSHEM w stosie arkusza wyboru (`isPushed`) — arkusz na arkuszu jest
+// zakazany, a `NavigationStack` w `NavigationStack` nie działa — więc pierwszy
+// ekran dostaje systemowy pasek („wstecz”, „Filtry”, różdżka i „Wyczyść”)
+// zamiast nagłówka z krzyżykiem, a „Gotowe” wraca do listy (`onDone`).
+// `slot` = pora, na którą się wybiera: bez aspektu „Pora w planie” (pora jest
+// już wybrana), a aspekty kategorii pory liczą się dla każdego dania listy,
+// także z innej kategorii (`RecipeFilterIndex(…, facetCategory:)`).
 struct RecipeFilterSheet: View {
     @Binding var filters: RecipeFilterOptions
     /// Przełącznik „Dopasowane do Ciebie” — różdżka obok krzyżyka.
@@ -38,6 +49,16 @@ struct RecipeFilterSheet: View {
     /// zakładka kategorii w wynikach), „Ulubione” albo `nil` — wszystkie
     /// przepisy. Kategoria dokłada swoją sekcję i zawęża liczby.
     let scope: RecipesCategory?
+
+    /// Pora wyboru przepisu do planu (`scope` = jej kategoria); `nil` = Przepisy.
+    let slot: MealSlot?
+
+    /// Ekran wepchnięty w stos innego arkusza (wybór do planu) zamiast
+    /// własnego arkusza z własnym `NavigationStack`.
+    let isPushed: Bool
+
+    /// „Gotowe” — co znaczy koniec; `nil` = zamknij arkusz (`dismiss`).
+    let onDone: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -55,14 +76,26 @@ struct RecipeFilterSheet: View {
         isPersonalizationEnabled: Binding<Bool>,
         scope: RecipesCategory?,
         recipes: [Recipe],
-        personalization: RecipePersonalization
+        personalization: RecipePersonalization,
+        slot: MealSlot? = nil,
+        isPushed: Bool = false,
+        onDone: (() -> Void)? = nil
     ) {
         self._filters = filters
         self._isPersonalizationEnabled = isPersonalizationEnabled
         self.scope = scope
         self.recipes = recipes
         self.personalization = personalization
+        self.slot = slot
+        self.isPushed = isPushed
+        self.onDone = onDone
         self._indexBox = State(initialValue: IndexBox())
+    }
+
+    /// Kategoria, w której aspektach liczy się KAŻDY przepis puli — tylko
+    /// w wyborze do planu (kategoria pory); na Przepisach każdy we własnej.
+    private var facetCategory: RecipesCategory? {
+        slot == nil ? nil : scope
     }
 
     /// Indeks liczony leniwie, raz na otwarcie arkusza. Nie w `init`: ten
@@ -71,7 +104,11 @@ struct RecipeFilterSheet: View {
     /// wyrzuca wszystko poza pierwszą wartością.
     private var index: RecipeFilterIndex {
         if let index = indexBox.index { return index }
-        let index = RecipeFilterIndex(recipes: recipes, personalization: personalization)
+        let index = RecipeFilterIndex(
+            recipes: recipes,
+            personalization: personalization,
+            facetCategory: facetCategory
+        )
         indexBox.index = index
         indexBox.recipes = recipes
         return index
@@ -147,8 +184,10 @@ struct RecipeFilterSheet: View {
         }
     }
 
-    /// „z 1072 przepisów” / „z 132 w tej kategorii” / „z 18 ulubionych”.
+    /// „z 1072 przepisów” / „z 132 w tej kategorii” / „z 18 ulubionych” /
+    /// „z 96 do wyboru” (wybór do planu).
     private var totalContext: String {
+        if slot != nil { return "do wyboru" }
         if scope == .favourite { return "ulubionych" }
         if sectionCategory != nil { return "w tej kategorii" }
         return index.total == 1 ? "przepisu" : "przepisów"
@@ -157,31 +196,87 @@ struct RecipeFilterSheet: View {
     // MARK: - Body
 
     var body: some View {
-        NavigationStack {
-            root
-                .toolbar(.hidden, for: .navigationBar)
-                .navigationDestination(item: $openPane) { pane in
-                    RecipeFilterPane(
-                        pane: pane,
-                        filters: $filters,
-                        fit: fit,
-                        index: index,
-                        covers: covers,
-                        facetCovers: { facetCovers(for: $0) },
-                        profileChips: profileChips,
-                        lockedDiets: lockedDiets,
-                        totalContext: totalContext,
-                        onDone: { dismiss() }
-                    )
+        if isPushed {
+            // W stosie arkusza wyboru do planu — jego `NavigationStack`
+            // niesie i ten ekran, i podstrony (`navigationDestination` niżej).
+            withSelectionHaptics(
+                page
+                    .scPushedPage("Filtry")
+                    .toolbar { pushedToolbar }
+            )
+        } else {
+            withSelectionHaptics(
+                NavigationStack {
+                    page
+                        .toolbar(.hidden, for: .navigationBar)
                 }
+                .tint(SCPalette.terracotta)
+            )
         }
-        .tint(SCPalette.terracotta)
-        .sensoryFeedback(.selection, trigger: filters.diets)
-        .sensoryFeedback(.selection, trigger: filters.traits)
-        .sensoryFeedback(.selection, trigger: filters.cuisines)
-        .sensoryFeedback(.selection, trigger: filters.moments)
-        .sensoryFeedback(.selection, trigger: filters.categoryFilters)
-        .sensoryFeedback(.impact(weight: .light), trigger: isPersonalizationEnabled)
+    }
+
+    /// Pierwszy ekran z podstronami wpychanymi w stos, w którym stoi.
+    private var page: some View {
+        root
+            .navigationDestination(item: $openPane) { pane in
+                RecipeFilterPane(
+                    pane: pane,
+                    filters: $filters,
+                    fit: fit,
+                    index: index,
+                    covers: covers,
+                    facetCovers: { facetCovers(for: $0) },
+                    profileChips: profileChips,
+                    lockedDiets: lockedDiets,
+                    totalContext: totalContext,
+                    onDone: { finish() }
+                )
+            }
+    }
+
+    /// Haptyka wyboru — na stosie arkusza (albo na wepchniętym ekranie),
+    /// nie na podstronach, inaczej byłaby podwójna.
+    private func withSelectionHaptics<Content: View>(_ content: Content) -> some View {
+        content
+            .sensoryFeedback(.selection, trigger: filters.diets)
+            .sensoryFeedback(.selection, trigger: filters.traits)
+            .sensoryFeedback(.selection, trigger: filters.cuisines)
+            .sensoryFeedback(.selection, trigger: filters.moments)
+            .sensoryFeedback(.selection, trigger: filters.categoryFilters)
+            .sensoryFeedback(.impact(weight: .light), trigger: isPersonalizationEnabled)
+    }
+
+    /// Pasek wepchniętego ekranu: różdżka „Dopasowane do Ciebie” (jak obok
+    /// krzyżyka w arkuszu) i „Wyczyść” — tak jak na podstronach Filtrów.
+    @ToolbarContentBuilder
+    private var pushedToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            if personalization.hasAnyPreference {
+                Button {
+                    withAnimation(.smooth(duration: 0.22)) { isPersonalizationEnabled.toggle() }
+                } label: {
+                    Image(systemName: "wand.and.stars")
+                        .symbolEffect(.bounce, value: isPersonalizationEnabled)
+                }
+                .tint(isPersonalizationEnabled ? SCPalette.sage : nil)
+                .accessibilityLabel("Dopasowane do Ciebie")
+                .accessibilityValue(isPersonalizationEnabled ? "włączone" : "wyłączone")
+            }
+
+            Button("Wyczyść") { clearAll() }
+                .disabled(!filters.isActive(in: scope))
+                .accessibilityLabel("Wyczyść filtry")
+        }
+    }
+
+    /// „Gotowe” i „Gotowe” podstron: zamknięcie arkusza albo — w stosie
+    /// wyboru do planu — powrót do listy.
+    private func finish() {
+        if let onDone {
+            onDone()
+        } else {
+            dismiss()
+        }
     }
 
     private var root: some View {
@@ -193,13 +288,27 @@ struct RecipeFilterSheet: View {
                 // Przypięty i taki sam przez cały czas. Był zwijany do samego
                 // tytułu na środku — przy przewijaniu „Filtry” przeskakiwały
                 // z lewej na środek, a Rafał chciał ich tam, gdzie zawsze.
-                header
-                    .padding(.horizontal, 20)
-                    .padding(.top, 18)
-                    .padding(.bottom, 12)
+                // Wepchnięty ekran ma w tym miejscu systemowy pasek.
+                if !isPushed {
+                    header
+                        .padding(.horizontal, 20)
+                        .padding(.top, 18)
+                        .padding(.bottom, 12)
+                }
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
+                        if isPushed {
+                            // Zdanie spod tytułu arkusza — co robi różdżka
+                            // z paska i gdzie działają filtry.
+                            Text(headerScope)
+                                .font(.sc(size: 13))
+                                .foregroundStyle(Color.scMuted(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .contentTransition(.opacity)
+                                .padding(.horizontal, 6)
+                                .padding(.top, 8)
+                        }
                         if let category = sectionCategory {
                             dishSection(category)
                             tasteSection(category)
@@ -217,8 +326,9 @@ struct RecipeFilterSheet: View {
                     .containerRelativeFrame(.horizontal)
                 }
                 .scrollIndicators(.hidden)
-                // Treść gaśnie, gdy wjeżdża pod nagłówek — wspólny „cień w dół”.
-                .scScrollEdgeFade()
+                // Treść gaśnie, gdy wjeżdża pod nagłówek — wspólny „cień w dół”;
+                // pod systemowym paskiem — jego miękka krawędź.
+                .modifier(RecipeFilterScrollEdge(isPushed: isPushed))
                 // Wspólna stopka arkuszy (`scSheetFooter`): liczba przepisów
                 // i „Gotowe”, przewijane sekcje przejeżdżają pod nimi.
                 .scSheetFooter { footer }
@@ -244,8 +354,10 @@ struct RecipeFilterSheet: View {
         )
     }
 
-    /// Nad tytułem — gdzie stoi lista: „Przepisy”, „Obiady”, „Ulubione”.
+    /// Nad tytułem — gdzie stoi lista: „Przepisy”, „Obiady”, „Ulubione”,
+    /// w wyborze do planu — pora.
     private var headerEyebrow: String {
+        if let slot { return slot.title }
         guard let scope else { return "Przepisy" }
         return RecipesConstants.displayName(for: scope)
     }
@@ -253,7 +365,10 @@ struct RecipeFilterSheet: View {
     /// Podtytuł mówi, co robi różdżka obok krzyżyka — dawna karta
     /// „Dopasowane do Ciebie” z przełącznikiem zajmowała górę arkusza.
     private var headerScope: String {
-        guard personalization.hasAnyPreference, fit else { return "Działają od razu na listę przepisów" }
+        guard personalization.hasAnyPreference, fit else {
+            if let slot { return "Zawężają listę przepisów na \(slot.accusativeName)" }
+            return "Działają od razu na listę przepisów"
+        }
         let hidden = index.profileHiddenCount
         return hidden > 0
             ? "Dopasowane do Ciebie · ukrywa \(PolishPlural.recipes(hidden))"
@@ -451,8 +566,13 @@ struct RecipeFilterSheet: View {
     /// systemowe menu; mięso / pora kategorii, dieta, składniki i „Więcej
     /// filtrów” = podstrona.
     private func listSection(_ category: RecipesCategory?) -> some View {
+        // „Pora w planie” (przekąski) znika w wyborze do planu — pora jest
+        // tam już wybrana, a lista ma tylko jej przepisy.
+        let hidesSlot = slot != nil
         let otherFacets = category.map { cat in
-            Self.inlineFacets(for: cat).filter { $0.kind != .dish && $0.kind != .taste }
+            Self.inlineFacets(for: cat).filter {
+                $0.kind != .dish && $0.kind != .taste && !(hidesSlot && $0.kind == .slot)
+            }
         } ?? []
         let locked = lockedDiets
         let diets = RecipeDietFilter.allCases
@@ -595,7 +715,9 @@ struct RecipeFilterSheet: View {
                     RecipeFilterProgressBar(
                         count: count,
                         total: index.total,
-                        accent: scope.map(RecipeScopeTabs.accent(for:)) ?? SCPalette.terracotta
+                        accent: slot?.cozyAccent
+                            ?? scope.map(RecipeScopeTabs.accent(for:))
+                            ?? SCPalette.terracotta
                     )
                     .padding(.top, 8)
                 }
@@ -605,7 +727,7 @@ struct RecipeFilterSheet: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(footerAccessibilityLabel(count: count))
 
-            RecipeFilterFooterButton(title: "Gotowe", trailingIcon: nil) { dismiss() }
+            RecipeFilterFooterButton(title: "Gotowe", trailingIcon: nil) { finish() }
         }
         .padding(.leading, 4)
     }
@@ -975,6 +1097,25 @@ private struct RecipeFilterCategorySplit: View {
         }
         .frame(height: 22)
         .animation(.smooth(duration: 0.3), value: counts)
+    }
+}
+
+// MARK: - Krawędź przewijania
+
+/// Górna krawędź przewijanej treści Filtrów: w arkuszu wspólny „cień w dół”
+/// pod przypiętym nagłówkiem (`scScrollEdgeFade`), na ekranie wepchniętym
+/// w stos wyboru do planu — miękka krawędź systemowego paska, jak na
+/// podstronach (`RecipeFilterPage`).
+private struct RecipeFilterScrollEdge: ViewModifier {
+    let isPushed: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isPushed {
+            content.scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            content.scScrollEdgeFade()
+        }
     }
 }
 
