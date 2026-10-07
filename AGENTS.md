@@ -145,7 +145,7 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   „Wyloguj się” (wiersz „Wersja” i `EditorialSettingsInfoTile` USUNIĘTE). Od 7.10.2026 wiersz ma też `subtitle:`
   (linijka 12,5 szara pod tytułem, wiersz 8 pt oddechu) i `wrapsText:` (tytuł i podpis łamią się zamiast ucinać — gdy
   treść jest sprawą wiersza: notatka, przykład do wysłania, zdanie zgody); bez nich wiersz jest taki jak był.
-  `PlanAccessRow` i wiersz wyboru diety (`SettingsView.choiceRowLabel`) to jeszcze kopie tego układu z podpisem.
+  `PlanAccessRow` i wiersz wyboru diety (`DietPreferencesForm.choiceRowLabel`) to jeszcze kopie tego układu z podpisem.
 - **Arkusze Asystenta = klocki Ustawień** (7.10.2026, Rafał: „popraw widoki i sheet dla asystenta zgodnie z nowym
   design”; spis odejść `docs/asystent-spojnosc-2026-10-07.md`): listy w arkuszach Asystenta to `EditorialSheetSectionLabel`
   + `EditorialSettingsCardGroup` + `EditorialSettingsRow` (pełny kafelek w kolorze sprawy) — „Co potrafi” (kafelek
@@ -188,7 +188,42 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   `SCIconTilePicker` (`Components/`, wariant A „Kafle”): ikona w kółku w kolorze wysiłku (0–1 indygo `sofa.fill`, 2–3
   szałwia, 4–5 terakota, 6+ `SCPalette.Toast.ember`), wybrany = pełne kółko (głęboki wariant) + szklana soczewka
   przesuwana sprężyną z `LensSquish` (wspólne z `RecipeFilterSegment`) + podskok ikony; BEZ podpisu z nazwą poziomu
-  („to lekko aktywny usuń”). Pola tekstowe wzrostu/wagi i ich drafty USUNIĘTE. Kreator (krok 1–2) świadomie bez zmian.
+  („to lekko aktywny usuń”). Pola tekstowe wzrostu/wagi i ich drafty USUNIĘTE. Od 7.10.2026 wynik, Sylwetka, treningi,
+  profil nad treścią (`ProfileIdentityRow`) i okno „Imię” (`.profileNameAlert`) to wspólne klocki
+  `Settings/Components/ProfileBodyForm.swift` — stoi na nich też krok 1 kreatora (akapit „Kreator = widoki Ustawień”).
+- **Kreator = widoki Ustawień** (7.10.2026, Rafał: „zrób na onboarding user te nowe widoki z ustawień, uspójnij to
+  i popraw maksymalnie pod nowy widok”): CZTERY kroki, każdy na tym samym komponencie co wiersz Ustawień — 1 „Twoje
+  dane” (`WelcomeProfileStep` → `ProfileIdentityRow` + `ProfileBodyForm`; treningi przeszły tu z dawnego kroku celu),
+  2 „Dieta i alergeny” (`WelcomeDietStep` → `DietPreferencesForm`; dawne kroki „Cel” i „Dieta i kalorie” w jednym, bo
+  cel stoi w arkuszu diety; makro bez stepperów, za to z „N % kalorii” i paskiem udziału pod wierszem — prośba Rafała
+  z 24.09.2026; alergeny w arkuszu), 3 „Posiłki w planie” (`WelcomeMealsStep` →
+  `MealDayAxisList` z `SCStepHeader` w `top:`), 4 „Gospodarstwo” (`WelcomeHouseholdStep` → `HouseholdKit`: skrzynka
+  zaproszeń z „Odrzuć”/„Dołącz”, `HouseholdNameField`, `HouseholdMemberRow`, `HouseholdInviteRowLabel(.later)` — bez
+  krążka, domu jeszcze nie ma). `WelcomeView.householdOnlyStep` = 4. Nagłówek kroku = `SCStepHeader` w kolorze wiersza
+  Ustawień (dane terakota, dieta szałwia `leaf.fill`, posiłki masło `fork.knife`, dom indygo). Imię = okno „Imię” jak
+  w „Twoich danych” (pusty tytuł w terakocie „Jak masz na imię?”, „Dalej” wyłączone). Zapisy BEZ ZMIAN (`saveProfile` po
+  1, `saveUserPreferences` po 2, oba `confirmBaselineFirst: false`; pory i godziny lokalnie do `createHousehold` →
+  `saveMealSlotConfiguration` → `completeOnboarding`). Kalorie idą za celem, dopóki nikt nie ruszy suwaka; „Ustaw”
+  w karcie kalorii przypina je z powrotem. Stopka `SCStepFooter` w `safeAreaBar` + `scSheetFooterEdge()` (nie nakładka;
+  strony przewodnika bez `padding(footerHeight)`). Nowa rzecz w kreatorze = najpierw w Ustawieniach jako komponent
+  z trybem, potem użyć w kroku — nie rysować kopii. USUNIĘTE: `WelcomeStep1…4*`, `WelcomeSection`, `WelcomeOptionRow`,
+  `welcomeCard()`, `YearWheelPicker`, `MealDayTimesCard`, `BodyMetricsSummaryRow`.
+- Kreator WYMUSZA odpowiedzi (7.10.2026, Rafał: „inaczej button będzie dalej wyłączony”; reguły z #360, który
+  stał na starym kreatorze, przeniesione na nowy): krok 1 — imię, rok (koło startuje na bieżącym roku, wiek
+  `ProfileField.acceptedAges` 16…110), wzrost i waga (puste = `nil`, „Wybierz”; otwarcie wiersza wpisuje wartość,
+  na której stoi koło), płeć ALBO kafel „Nie podaję” (`nil` = brak odpowiedzi, „” = „Nie podaję”; kasuje płeć tylko
+  po stuknięciu: przy „Dalej” synchronicznie `markSexClearPending`, wspólny `sexClearPending` z „Twoimi danymi”)
+  i treningi; krok 2 — cel i dieta („Bez diety” to odpowiedź), alergeny opcjonalne; kroki 3–4 bez zmian. Tryb
+  w klockach Ustawień: `ProfileBodyForm(answers:…)` / `DietPreferencesForm(…answers:…)` (`requiresAnswers`; Ustawienia
+  idą przez `init` z wartościami zwykłymi i nic się u nich nie zmienia). Brak = tytuł wiersza
+  (`EditorialSettingsRow(titleColor:)`) albo etykieta sekcji (`EditorialSheetSectionLabel(color:)`) w terakocie,
+  nic więcej; `SCIconTilePicker` z opcjonalnym `Value` i `nil` nie zapala kafla. Wynik kcal/BMI w kroku 1 zakryty
+  (`redacted`) do podania roku, wzrostu i wagi; kalorie i makro w kroku 2 — do wyboru celu. Cel/aktywność/dieta są
+  w magazynie ZAWSZE (start sesji wpisuje domyślny wiersz serwera), a zapis na serwer idzie w tle, więc wznowienie
+  czyta SZKIC (`WelcomeDraft`: odpowiedzi kroków 1–2 + zaliczony krok + `userId`, JSON pod `onboarding.draft`
+  w `SCProtectedSettings`, zapisywany synchronicznie przy „Dalej” przed `advance()`), nie kopię. Szkic znika po
+  zakończeniu onboardingu (`persistOnboardingCompletedAt`) i z `removeAll` przy wylogowaniu; szkic innego konta
+  jest pomijany. Zapis wysyła tylko odpowiedzi (alergeny dopiero po kroku 2).
 - **Ustawienia**: zgoda na powiadomienia NIGDY przy starcie — `NotificationPermission.requestIfNotAsked()` w kontekście:
   Ustawienia → Powiadomienia („Włącz powiadomienia” / „Wyłączone w ustawieniach iOS” + „Otwórz ustawienia”), po wysłaniu
   zaproszenia domownika (`SCShareSheet(message:)`, `completed`), po dołączeniu z zaproszenia (pulpit odsłonięty,
@@ -205,8 +240,11 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
 - **Arkusze Ustawień** (6.10.2026 wieczór, artefakt „Arkusze Ustawień”, cztery rundy): Gospodarstwo — podtytuł samo
   „N osoby”, plakietki „Ty”/„Właściciel” w tincie, „Opuść gospodarstwo” NA KOŃCU listy (nie w stopce), nazwa domu 2–50
   znaków wszędzie (`SessionStore.householdNameLengthRange`). Dieta — KALORIE NA GÓRZE (Rafał), potem makro, cel, dieta,
-  alergeny; listy celu i diety z kółkiem (dawny układ wygrał z menu), podpisy w jednej linii (kopie lokalne, `UserGoal`/
-  `DietPreference` bez zmian — kreator); podpowiedź „Dla celu „…” wychodzi N kcal · Ustaw” w karcie kalorii.
+  alergeny; listy celu i diety z kółkiem (dawny układ wygrał z menu), podpisy w jednej linii (krótkie kopie w formularzu,
+  `UserGoal`/`DietPreference.subtitle` bez zmian); podpowiedź „Dla celu „…” wychodzi N kcal · Ustaw” w karcie kalorii.
+  Od 7.10.2026 sekcje to wspólny `DietPreferencesForm` (Settings/Components) — w Ustawieniach z nadpisaniami makro
+  (`DietMacroOverrides`), wepchniętym wyborem alergenów i odsyłaczem „Twoje dane ›”, w kreatorze bez nich (makro tam
+  jako podgląd: procent kalorii i pasek w kolorze makro).
   Powiadomienia — na górze PODGLĄD powiadomienia (`NotificationPreviewCard`: znak, „SCOFFIE · teraz”, przykład kanału
   w tonie `MealReminderService`; stuknięcie/włączenie kanału podmienia przykład i roluje tekst, wyciszone = szary podgląd
   „Wyciszone”), główny przełącznik jako wiersz (bez zgody „Włącz powiadomienia” / „Wyłączone w ustawieniach iOS ·
@@ -219,7 +257,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   0,45 s); „Wyłącz” też pod przytrzymaniem wiersza (`contextMenu`) i przesunięciem — cała treść to `List(.insetGrouped)`, która MUSI się przewijać (`scrollDisabled`
   wyłącza też `swipeActions`; tak „Wyłącz” nie działało w #342); wyłączona pora z daniami stoi z „+ Dodaj” i dopiskiem
   „W tym tygodniu: N dania”, nie jak włączona;
-  pozioma oś (`MealDayTimesCard`) została TYLKO w kreatorze — w Ustawieniach była nieczytelna. Asystent i plan — teksty rolują WYŁĄCZNIE `SCMotion.textRoll` (sprężyna z odbiciem przy wyborze planu odpadła); karta
+  pozioma oś (`MealDayTimesCard`) USUNIĘTA 7.10.2026 — oś, okienko pory i „Wyłącz” to wspólny `MealDayAxisList`
+  (Settings/Components, z `MealTimeEditorSheet`), na którym stoi też krok „Posiłki” kreatora. Asystent i plan — teksty rolują WYŁĄCZNIE `SCMotion.textRoll` (sprężyna z odbiciem przy wyborze planu odpadła); karta
   stanu na górze (`PlanStatusHero`: duża liczba pozostałych wiadomości, kropki w próbie, pasek po domownikach w planie),
   w próbie plany od razu w arkuszu (trzy kafle + „Wybierz X · cena”, zakup przez wspólne `PlanPurchase` z `PlansSheet`),
   płacący: „Zmień” → `PlansSheet` + „Zarządzaj subskrypcją ↗”; domownik: „Kto opłaca”. Prywatność — przypięty nagłówek,
@@ -879,9 +918,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   Pod zasłoną, przed podmianą: `dismissPresentedScreens()` zamyka BEZ animacji arkusze starego
   korzenia (inaczej UIKit zamykał je sam, z animacją, już nad ekranem logowania), klawiatura chowa
   się razem z wejściem zasłony. Ekran, z którego się wychodzi, nie wraca do stanu spoczynku
-  pod wchodzącą zasłoną: spinner logowania trzyma `isAuthenticated`, przycisk kroku 5 —
+  pod wchodzącą zasłoną: spinner logowania trzyma `isAuthenticated`, przycisk ostatniego kroku (`householdOnlyStep`) —
   `currentHouseholdId`. Logowanie BEZ domu czeka na `users:me` (limit 4 s) przed `isAuthenticated`,
-  bo to ono mówi, czy kreator zaczyna od przewodnika, od kroku 5, czy od razu pulpit — dociągnięte
+  bo to ono mówi, czy kreator zaczyna od przewodnika, od kroku gospodarstwa (`householdOnlyStep`), czy od razu pulpit — dociągnięte
   po wejściu przestawiało kreator albo korzeń drugi raz na oczach użytkownika.
 - Szczegóły posiłku v2 (21.09.2026) — makieta Claude Design „Scoffie — Szczegóły Posiłku v2”
   (projekt `43b605d0-…`, `components/detail-v2.jsx`, sekcja „final”). Stepper porcji siedzi
@@ -971,8 +1010,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (odcinki na całą szerokość, bieżący nalewa się od lewej) albo odnośnik „Pomiń…” · licznik „2/5”; pod
   spodem `EditorialPrimaryActionButton`. JEDNA instancja na cały przepływ, żeby pasek się animował.
   `WelcomeFooter`, `WelcomeStepper`, `WelcomeStepHeader`, `TourFooter`, `TourBackground`, `AssistantTickRow`
-  usunięte; kreator i przewodnik na `SCPageBackground`, margines 20, sekcje `WelcomeSection`, wiersze celu
-  i diety jak w Ustawieniach, bez akapitów objaśnień. `SCStepHeader(typing:)` = tytuł i opis PISZĄ SIĘ
+  usunięte; kreator i przewodnik na `SCPageBackground`, margines 20, treść kroków = komponenty Ustawień (od 7.10.2026,
+  akapit „Kreator = widoki Ustawień” na górze), bez akapitów objaśnień. `SCStepHeader(typing:)` = tytuł i opis PISZĄ SIĘ
   (`SCTypedText`, tempo powitania Asystenta: 65 / 170 zn/s, razem ≤ 0,9 s) — używa tego tylko Asystent.
 - Wprowadzenie Asystenta v2 (24.09.2026, Rafał: „nieaktualne… zrób od nowa”, „button wstecz taki sam jak na
   onboardingu aplikacji”, „po poznawaniu od razu klawiatura, a nie chcę”) — makieta Claude Design
@@ -1019,8 +1058,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (chmura, kafle z opisami, siatka pigułek — „dalej nie jest ładne UX”). Od 24.09.2026 kreator stoi
   na TYM SAMYM mechanizmie: `AllergenSelectionField` (karta + arkusz, stan arkusza w środku) w obu
   miejscach; siatka 3 × 5 (`AllergenPicker`) usunięta — nie robić drugiego wyboru alergenów.
-- Pory posiłków = `MealDayTimesCard` (oś dnia z kreatora: ikona pory, godzina na kapsułce, krótka nazwa),
-  JEDNA w kroku 4 kreatora i w Ustawieniach → „Posiłki w planie” (osobny `MealTimesSheet` z listą
+- Pory posiłków = `MealDayAxisList` (pionowa oś „Twój dzień”, od 7.10.2026; pozioma `MealDayTimesCard` usunięta),
+  JEDNA w kroku 3 kreatora i w Ustawieniach → „Posiłki w planie” (osobny `MealTimesSheet` z listą
   wierszy usunięty 24.09.2026). Stuknięcie w posiłek = koło godzin w arkuszu na 1/3 ekranu
   (`MealTimeEditorSheet`, `.fraction(1/3)`, kompaktowy nagłówek, koło 100–150 pt — 4.10.2026). Kreator trzyma godziny lokalnie i wysyła po utworzeniu gospodarstwa
   (tylko gdy różne od domyślnych), Ustawienia zapisują od razu.
@@ -1274,57 +1313,48 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   są 1:1 ze stroną (scoffie-web `src/pages/{privacy,terms}`); po zmianie — Android
   `python scripts/gen-legal-content.py`.
 - Wygląd sprawdzamy NA ZRZUCIE, nie po samym buildzie: `SCOFFIE_DEBUG_OPTIONS=0…n|card|buttons|
-  auth|auth-error|legal|thought|plate|plate-gotujesz|tour-0…6|welcome-1…5|asystent-0…2|asystent-jak` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
+  auth|auth-error|legal|thought|plate|plate-gotujesz|tour-0…6|welcome-1…4|asystent-0…2|asystent-jak` (+ `SCOFFIE_DEBUG_OPTIONS_AUTOPLAY` do nagrania animacji) otwiera ekrany
   z `Previews/AssistantOptionsDebugScreen.swift` bez sesji i bez alertów systemowych; tylko DEBUG.
   Uruchamiać na OSOBNYM symulatorze (`SIMCTL_CHILD_…=… xcrun simctl launch`), nie na roboczym.
-- Przewodnik „Poznaj aplikację” (`TourStep`, `Views/Tour/`, 24.09.2026 wieczór — Rafał: „podmień
-  przewodnik”): krok = SAM PLAKAT z R2 (`TourStepView`) — pionowa grafika z własnym nagłówkiem, opisem
-  i kartami aplikacji, te same co zrzuty w App Store. Bez `SCStepHeader` i karty funkcji nad/pod nim
-  (dublowałyby tekst plakatu). Plakat mieści się W CAŁOŚCI bez przewijania: wysokość strony nad stopką,
-  szerokość z proporcji 1080 : 2344, na środku; przed pobraniem tint koloru kroku w tym samym rozmiarze.
-  `TourStep.title`/`lead` = tekst plakatu słowo w słowo — tylko dla VoiceOver. Pliki:
-  `https://img.scoffie.app/onboarding/tour-{plan,recipes,shopping,assistant,settings}-v2.webp`
-  (1080 × 2344, WebP q85, ~150–210 KB; `-v1` = dawne poziome ilustracje, zostają dla starszych wersji).
-  Bucket `scoffie` (produkcyjny — lokalny token R2 w `.env` backendu jest nieaktualny, wysyłka przez
-  `railway run` z katalogu backendu), `Cache-Control: immutable` na rok → NOWA grafika = NOWA wersja
-  w nazwie (`TourStep.image(_:version:)`), nigdy nadpisanie. Wariant `CachedAsyncImage(.poster)` (do
-  2400 px) — przy `.large` (1200 px) drobny tekst plakatu się rozmywał. `TourStep.prefetchImages()`
-  rusza na ekranie logowania (`AuthView`) i przy wejściu w przepływ. Powitanie (`TourIntroView`)
-  i „Teraz my poznajmy Ciebie” (`TourDoneView`) zostają rysowane w aplikacji.
+- Przewodnik „Poznaj aplikację” (`TourStep`, strony w `Views/Tour/`): od 7.10.2026 ZNOWU ilustracja + lista
+  (Rafał: „mieliśmy wcześniej te małe zdjęcia + lista”, „wróć do tamtego” — plakaty z 24.09.2026 wieczór,
+  `tour-*-v2.webp` z tekstem w grafice i bez listy, WYCOFANE revertem 4a1288c; wariant `CachedAsyncImage(.poster)`
+  usunięty razem z nimi). Krok = zdjęcie, `SCStepHeader` z eyebrow w kolorze kroku („Zakładka Plan”), tytuł,
+  `lead` (dwa zdania zwykłym językiem, NAJWYŻEJ dwie linie na iPhonie 16e) i `SCStepFeatureCard(revealed:compact:)` —
+  punkty `TourPoint` = ikona + tytuł + podpis, TEN SAM wiersz co na powitaniu i ekranie końcowym (Rafał: „te
+  wszystkie listy, aby były podobne”), cztery na krok, kaskada `scReveal`. Każdy punkt to funkcja, która JEST
+  w aplikacji — źródło każdego twierdzenia w komentarzu przy `TourStep.all`; zmieniasz / usuwasz funkcję → popraw
+  punkt (zdjęte jako nieprawdziwe: „Własne przepisy domu”, „z Waszych przepisów” u asystenta, „z powodem” przy
+  podmianie). Przewodnik stoi BEZ przewijania także na 16e — nowy tekst sprawdzaj na zrzucie 16e (`tour-1…5`),
+  zanim go dopiszesz. Zdjęcie bierze to, co zostaje po ZMIERZONYM tekście kroku (`TourStepView.textHeight` →
+  `TourMedia.reserved`, widoczna strona z `tourViewport`), najniżej 85 % naturalnej wysokości (ucina się tylko krem
+  nad i pod kartami), ZAWSZE na pełną szerokość, `scaledToFill`; zanim dojdzie — tint koloru kroku w tym samym
+  rozmiarze. Stopka stoi w `safeAreaBar`, więc dół strony (`TourLayout.bottom`) to sam oddech 24 pt jak w kreatorze —
+  dawny zapas na cień nakładanej stopki (64 pt) odpadł 7.10.2026. Pliki:
+  `https://img.scoffie.app/onboarding/tour-{plan,recipes,shopping,assistant,settings}-v1.webp`, 1474 × 1067, WebP
+  q82 (~100 KB), pokazywane `CachedAsyncImage(.large)`. Bucket `scoffie` (produkcyjny — lokalny token R2 w `.env`
+  backendu jest nieaktualny, wysyłka przez `railway run` z katalogu backendu), `Cache-Control: immutable` na rok →
+  NOWA grafika = NOWA wersja w nazwie (`TourStep.image(_:version:)`; `-v2` zajęte przez wycofane plakaty, więc
+  następna to `-v3`), nigdy nadpisanie. `TourStep.prefetchImages()` rusza na ekranie logowania (`AuthView`) i przy
+  wejściu w przepływ. Powitanie (`TourIntroView`) i „Teraz my poznajmy Ciebie” (`TourDoneView`) bez zdjęcia.
 - Przewodnik + kreator profilu = JEDEN przepływ w `WelcomeView` (24.09.2026, Rafał: „wszystko w jednym
   wielkim stepperze, aby nie przełączać”): `tourPhase` (0 powitanie, 1…5 kroki, 6 „Teraz my poznajmy
-  Ciebie”, `nil` = kreator `step` 1…5), jedna stopka, jeden pasek na 11 odcinków, strony jadą na bok także
-  na styku; „Wstecz” z 1. kroku kreatora wraca do przewodnika, „Pomiń…” skacze do kreatora.
+  Ciebie”, `nil` = kreator `step` 1…4 od 7.10.2026), jedna stopka, jeden pasek na 10 odcinków, strony jadą na bok
+  także na styku; „Wstecz” z 1. kroku kreatora wraca do przewodnika, „Pomiń…” skacze do kreatora.
   `FeatureTourView` usunięty; `WelcomeFlowView` tylko decyduje, czy przewodnik jest (pełna ścieżka i brak
-  `TourCompletion`). Strony przewodnika dostają `padding(.bottom, footerHeight)`, bo stopka kreatora jest
-  nakładką (pola nad klawiaturą). „Wstecz” w jednej linii z „Dalej”, po lewej
+  `TourCompletion`). Stopka całego przepływu stoi w `safeAreaBar` (7.10.2026; wcześniej nakładka i strony
+  przewodnika z `padding(.bottom, footerHeight)`) — strona przewodnika mierzy zdjęcie z części nad stopką, przy
+  klawiaturze (nazwa domu) stopka jedzie nad nią. „Wstecz” w jednej linii z „Dalej”, po lewej
   (`SCStepFooter(backPlacement: .besidePrimary)`) w całym przepływie — od wprowadzenia v2 także u Asystenta.
-  Krok 1 kreatora = układ Ustawień → „Twoje dane”: karta „Profil” (awatar + imię w miejscu, ołówek)
-  i karta „Sylwetka” (płeć, rok z wiekiem, wzrost, waga na `scChipBg`) z `BodyMetricsSummaryRow` (BMI
-  + kcal na utrzymanie, wspólny z `ProfileDetailsSheet`) — Rafał: „tak smutno wygląda”. Krok 1 mieści się
-  BEZ przewijania (także 16e): karta profilu bez etykiety, „🔒 Tylko do obliczeń” w wierszu etykiety
-  „Sylwetka”, odstępy 16. Krok 2: treningi w karcie „Aktywność” jak w „Twoich danych”. Krok 3: makro
-  ZOSTAJE osobną sekcją „Makroskładniki” z trzema paskami, gramami i procentami (Rafał 24.09.2026: „daj
-  tak samo jak było wcześniej” — połączenie z kartą celu w jeden pasek proporcji odrzucone). Krok 5 jak Ustawienia →
-  Gospodarstwo: nazwa w miejscu (kafelek domu, ołówek) z podpowiedziami „Dom / Nasz dom / Mieszkanie”,
-  karta „Domownicy” (Ty + „TY” / „WŁAŚCICIEL”, pod kreską „Domownicy dołączą z linku”). Licznik kroków
-  w stopce ma szerokość z treści — „11/11” nie łamie się.
-- Kreator WYMUSZA odpowiedzi (7.10.2026, Rafał: „inaczej button będzie dalej wyłączony”): krok 1 — imię,
-  rok (koło startuje na bieżącym roku, wiek 16…110), wzrost 120…230 i waga 30…250 (pola puste = `nil`,
-  szara podpowiedź), płeć ALBO trzeci chip „Nie podaję” (kasuje płeć tylko po stuknięciu: przy „Dalej”
-  synchronicznie `markSexClearPending`, wspólny `sexClearPending` z „Twoimi danymi”); krok 2 — cel
-  i aktywność; krok 3 — dieta („Bez diety” to odpowiedź), alergeny opcjonalne; kroki 4–5 bez zmian.
-  Zakresy w `WelcomeProgress`. Brak = etykieta pola/sekcji w terakocie (`WelcomeSection(isMissing:)`),
-  nic więcej; wynik BMI/kcal w kroku 1 zakryty (`redacted`) do podania danych. Cel/aktywność/dieta są
-  w magazynie ZAWSZE (start sesji wpisuje domyślny wiersz serwera), a zapis na serwer idzie w tle, więc
-  wznowienie czyta SZKIC (`WelcomeDraft`: odpowiedzi kroków 1–3 + zaliczony krok + `userId`, JSON pod
-  `onboarding.draft` w `SCProtectedSettings`, zapisywany synchronicznie przy „Dalej” przed `advance()`),
-  nie kopię. Szkic znika po zakończeniu onboardingu (`persistOnboardingCompletedAt`) i z `removeAll`
-  przy wylogowaniu. Zapis wysyła tylko odpowiedzi (alergeny i dieta dopiero po kroku 3).
+  Treść kroków kreatora = widoki Ustawień (akapit „Kreator = widoki Ustawień” na górze). Dawne zapisy o kroku 1
+  bez przewijania z kartą „Profil” i `BodyMetricsSummaryRow`, krokach 2–3 z kartą „Aktywność” i osobną kartą pasków makro
+  w procentach (paski z procentami żyją dalej w wierszach makro kroku „Dieta”) oraz dawnym kroku 5 z nazwą w miejscu — NIEAKTUALNE od 7.10.2026. Licznik kroków w stopce ma szerokość
+  z treści — „10/10” nie łamie się.
 - Kreator profilu (`WelcomeView`) od 24.09.2026 BEZ paska nawigacji i BEZ „Wyloguj” (Rafał: „wywal”):
   nagłówek kroku od góry jak w przewodniku (`WelcomeLayout.topInset = TourLayout.top`), górny brzeg
-  treści gaśnie przez `scScrollEdgeFade`. Wyjście z kreatora = dokończyć go albo zamknąć aplikację. Kreatora profilu (`Welcome*`) to NIE dotyczy — Rafał rozróżnia „onboarding aplikacji”
-  (przewodnik) od „onboardingu usera” (kreator) i kreator ma zostać, jak jest.
+  treści gaśnie przez `scScrollEdgeFade`. Wyjście z kreatora = dokończyć go albo zamknąć aplikację. Rafał rozróżnia
+  „onboarding aplikacji” (przewodnik) od „onboardingu usera” (kreator); 7.10.2026 zlecił przebudowę kreatora na
+  widoki Ustawień, a przewodnik wrócił tego dnia do ilustracji z listą (akapit „Przewodnik…” wyżej).
 - Ekran logowania nie przewija się: elastyczne jest hero z kaflami (150–280 pt) i odstęp nad
   przyciskiem; poniżej 700 pt kafle funkcji tracą podpisy. Arkusze dokumentów
   (`LegalDocumentSheet`) stoją na `EditorialSheetHeader`, nagłówek NAD przewijaną treścią.

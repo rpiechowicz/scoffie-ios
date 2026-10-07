@@ -544,7 +544,7 @@ final class SessionStore {
             // onboarding, zaczyna od kroku gospodarstwa, a członkostwo
             // nieobecne w odpowiedzi auth prowadzi prosto na pulpit. Czekamy
             // na nie pod spinnerem logowania — dociągnięte po wejściu
-            // przestawiało kreator (przewodnik → krok 5) albo cały korzeń
+            // przestawiało kreator (przewodnik → krok gospodarstwa) albo cały korzeń
             // drugi raz, już na oczach użytkownika.
             await restoreHouseholdBeforeEntering()
         } else {
@@ -3315,8 +3315,8 @@ final class SessionStore {
     // gracefully and we'll re-sync on next launch via `users:me`.
 
     /// „Nie podaję” zatwierdzone w kreatorze — zamiar skasowania płci od razu
-    /// w pliku, zanim zapis wejdzie do `profileSyncQueue` (7.10.2026, Codex
-    /// runda 2). Ten sam znacznik `sexClearPending`, którym żyje „Twoje dane”:
+    /// w pliku, zanim zapis wejdzie do `profileSyncQueue` (7.10.2026, z #360).
+    /// Ten sam znacznik `sexClearPending`, którym żyje „Twoje dane”:
     /// przeżywa zabicie aplikacji, każdy następny `saveProfile` bez płci
     /// wysyła `null`, `users:me` nie przywraca starej płci, a zdejmuje go
     /// dopiero zapis potwierdzony przez serwer albo wybór płci.

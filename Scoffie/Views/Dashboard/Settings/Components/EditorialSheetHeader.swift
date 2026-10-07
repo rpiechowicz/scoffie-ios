@@ -207,7 +207,7 @@ struct SCHeaderIconWell: View {
 struct EditorialSheetSectionLabel: View {
     let title: String
     /// `nil` = zwykła szarość (`scFaint`). Kreator barwi tu brakującą
-    /// odpowiedź na terakotę (`WelcomeSection.isMissing`, 7.10.2026).
+    /// odpowiedź na terakotę (7.10.2026) — reszta bez zmian.
     var color: Color? = nil
 
     @Environment(\.colorScheme) private var scheme
