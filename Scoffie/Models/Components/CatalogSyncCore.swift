@@ -20,8 +20,11 @@ struct CatalogCacheFiles {
     /// Przepisy domu i ulubione — prywatne, z właścicielem w środku.
     var householdURL: URL { directory.appendingPathComponent("recipe_catalog_household.json") }
 
-    static var documents: CatalogCacheFiles {
-        CatalogCacheFiles(directory: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0])
+    /// Pliki aplikacji. 7.10.2026 (audyt 2.5): katalog offline poza kopią
+    /// zapasową zamiast `Documents` — stare pliki (także `recipes_catalog_cache_v*`)
+    /// przenosi `AppCacheDirectory`, więc katalog nie pobiera się od nowa.
+    static var appCache: CatalogCacheFiles {
+        CatalogCacheFiles(directory: AppCacheDirectory.directory)
     }
 }
 

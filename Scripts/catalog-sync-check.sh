@@ -17,6 +17,7 @@ OUT=$(mktemp -d)/catalogsync
 xcrun swiftc -o "$OUT" \
   "Scoffie/Models/Components/CatalogSync.swift" \
   "Scoffie/Models/Components/CatalogSyncCore.swift" \
+  "Scoffie/Models/Stores/AppCacheDirectory.swift" \
   "Scoffie/Models/Components/MealSlot.swift" \
   "Scoffie/Models/Components/RecipesModel.swift" \
   "Scoffie/Models/Components/RecipeTaxonomy.swift" \

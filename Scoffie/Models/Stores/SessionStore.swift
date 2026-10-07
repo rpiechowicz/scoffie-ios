@@ -3063,10 +3063,10 @@ final class SessionStore {
         }
     }
 
+    /// 7.10.2026 (audyt 2.5): katalog offline poza kopią zapasową, nie
+    /// `Documents` — stary plik przenosi `AppCacheDirectory`.
     private var householdMembersCacheURL: URL {
-        FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("household_members_cache_v1.json")
+        AppCacheDirectory.url(for: "household_members_cache_v1.json")
     }
 
     private func loadHouseholdMembersFromCacheIfFresh(for householdId: String) {

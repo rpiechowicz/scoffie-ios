@@ -279,10 +279,10 @@ final class CookSessionStore {
         CookLiveActivity.shared.sync(nil)
     }
 
+    /// 7.10.2026 (audyt 2.5): w katalogu offline wykluczonym z kopii zapasowej
+    /// (wcześniej sam `Application Support`) — stary plik przenosi `AppCacheDirectory`.
     private static var fileURL: URL {
-        FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("cook-session-v1.json")
+        AppCacheDirectory.url(for: "cook-session-v1.json")
     }
 
     private func save() {

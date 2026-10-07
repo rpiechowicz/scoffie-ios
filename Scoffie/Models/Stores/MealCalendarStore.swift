@@ -682,9 +682,10 @@ class MealCalendarStore {
 
     private static let cacheFilePrefix = "meal_plans"
 
+    /// 7.10.2026 (audyt 2.5): katalog offline poza kopią zapasową, nie
+    /// `Documents` — stare pliki przenosi `AppCacheDirectory`.
     private var fileURL: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("\(Self.cacheFilePrefix)_\(cacheNamespace).json")
+        AppCacheDirectory.url(for: "\(Self.cacheFilePrefix)_\(cacheNamespace).json")
     }
 
     private static func sanitizedCacheNamespace(_ raw: String) -> String {
@@ -697,7 +698,7 @@ class MealCalendarStore {
     /// Wylogowanie, usunięcie konta, zmiana domu: plik planu (także stary,
     /// wspólny `meal_plans.json`) nie może przeżyć sesji.
     static func clearCache() {
-        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let directory = AppCacheDirectory.directory
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return }
         for name in names where name.hasPrefix(cacheFilePrefix) && name.hasSuffix(".json") {
             try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))

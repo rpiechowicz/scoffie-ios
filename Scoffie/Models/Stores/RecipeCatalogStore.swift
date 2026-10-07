@@ -56,7 +56,7 @@ final class RecipeCatalogStore {
     /// Wołać PO `invalidate()` starej instancji — inaczej jej zapis, który
     /// właśnie czeka w kolejce, mógłby przyjść po skasowaniu.
     static func clearCache() {
-        CatalogSyncCore<Recipe>.clearPrivateFiles(.documents, gate: .shared)
+        CatalogSyncCore<Recipe>.clearPrivateFiles(.appCache, gate: .shared)
     }
 
     /// Pliki sprzed synchronizacji rewizją: `recipes_catalog_cache_v<N>.json`
@@ -76,7 +76,7 @@ final class RecipeCatalogStore {
         // aplikacji — patrz `RecipePersonalization.restoreForThisLaunch`.
         RecipePersonalization.restoreForThisLaunch()
         self.repository = repository
-        self.core = CatalogSyncCore(ownerKey: ownerKey, files: .documents, gate: .shared)
+        self.core = CatalogSyncCore(ownerKey: ownerKey, files: .appCache, gate: .shared)
         self.repository.observeFavoritesChanges { [weak self] recipeId, isFavorite in
             guard let self else { return }
             Task { @MainActor in

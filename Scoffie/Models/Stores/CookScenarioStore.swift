@@ -162,10 +162,10 @@ final class CookScenarioStore {
         try? FileManager.default.removeItem(at: directory)
     }
 
+    /// 7.10.2026 (audyt 2.5): w katalogu offline wykluczonym z kopii zapasowej
+    /// (wcześniej sam `Application Support`) — stary katalog przenosi `AppCacheDirectory`.
     private static var directory: URL {
-        FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("cook-scenarios-v1", isDirectory: true)
+        AppCacheDirectory.url(for: "cook-scenarios-v1", isDirectory: true)
     }
 
     /// Katalog paczek jednego konta i domu (klucz bez znaków spoza nazwy pliku).
