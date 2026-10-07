@@ -444,9 +444,9 @@ struct RecipeFilterOptions: Equatable {
         }
         let chosenCuisines = RecipeCuisine.allCases.filter { cuisines.contains($0) }
         if chosenCuisines.count == 1, let cuisine = chosenCuisines.first {
-            labels.append("kuchnia \(cuisine.title.lowercased())")
+            labels.append("kuchnia \(cuisine.summaryAdjective)")
         } else if chosenCuisines.count > 1 {
-            // Najwyżej osiem kuchni: 2–4 „kuchnie”, 5–8 „kuchni”.
+            // Najwyżej dwanaście kuchni: 2–4 „kuchnie”, 5–12 „kuchni”.
             labels.append("\(chosenCuisines.count) \(chosenCuisines.count < 5 ? "kuchnie" : "kuchni")")
         }
         labels += RecipeMoment.allCases.filter { moments.contains($0) }.map(\.summaryTitle)

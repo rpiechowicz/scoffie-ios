@@ -337,7 +337,7 @@ struct RecipeFilterSheet: View {
     // MARK: - Kuchnia (filtry globalne)
 
     /// Filtry wszystkich przepisów (wariant G1, 6.10.2026): rodzaj dania
-    /// i smak należą do kategorii, więc na górę idzie kuchnia — 8 kółek ze
+    /// i smak należą do kategorii, więc na górę idzie kuchnia — 12 kółek ze
     /// zdjęciem typowego dania, ten sam klocek co rodzaj dania w kategorii.
     private var cuisineSection: some View {
         RecipeFilterSection(title: "Kuchnia", top: 6) {
@@ -712,7 +712,7 @@ private struct RecipeFilterPane: View {
                         accent: SCPalette.sage,
                         cover: covers.cuisines[cuisine],
                         icon: cuisine.tileIcon,
-                        accessibilityDetail: "kuchnia \(cuisine.title.lowercased())"
+                        accessibilityDetail: "kuchnia \(cuisine.summaryAdjective)"
                     ) {
                         withAnimation(.smooth(duration: 0.18)) { filters.toggle(cuisine: cuisine) }
                     }
