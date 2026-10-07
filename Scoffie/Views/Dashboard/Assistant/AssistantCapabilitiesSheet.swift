@@ -9,6 +9,14 @@ import SwiftUI
 /// Karta → Ty decydujesz) — to jest teraz krok „Ty decydujesz” wprowadzenia
 /// i „Jak działa” — i bez akapitu instrukcji: to, że wiersz wysyła, mówi
 /// jedno zdanie pod tytułem i strzałka przy każdym wierszu.
+///
+/// 7.10.2026 (Rafał: „popraw widoki i sheet dla asystenta zgodnie z nowym
+/// design”): lista na klockach Ustawień — etykieta sekcji
+/// (`EditorialSheetSectionLabel`), karta (`EditorialSettingsCardGroup`)
+/// i wiersz (`EditorialSettingsRow` z pełnym kafelkiem w kolorze grupy
+/// i przykładem w podpisie). Dawne `AssistantGroup` z kolorowym tytułem
+/// i dopiskiem po prawej („Najczęściej”, „Z planu do sklepu”) oraz
+/// `AssistantRow` z kafelkiem w tincie odpadły — dopiski nic nie mówiły.
 struct AssistantCapabilitiesSheet: View {
     let store: AgentStore
     /// Wysyła przykład jako wiadomość (arkusz sam się zamyka).
@@ -40,13 +48,20 @@ struct AssistantCapabilitiesSheet: View {
                     )
                 }
             ) {
-                ForEach(AssistantCapabilities.groups) { group in
-                    AssistantGroup(title: group.label, aside: group.lead, titleColor: group.accent.color) {
-                        ForEach(Array(group.items.enumerated()), id: \.element) { index, id in
-                            abilityRow(AssistantCapabilities.by(id), accent: group.accent, first: index == 0)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(AssistantCapabilities.groups.enumerated()), id: \.element.id) { index, group in
+                        EditorialSheetSectionLabel(title: group.label)
+                            .padding(.top, index == 0 ? 14 : 20)
+                        EditorialSettingsCardGroup {
+                            ForEach(Array(group.items.enumerated()), id: \.element) { itemIndex, id in
+                                abilityRow(
+                                    AssistantCapabilities.by(id),
+                                    color: group.accent.color,
+                                    isLast: itemIndex == group.items.count - 1
+                                )
+                            }
                         }
                     }
-                    .padding(.top, 2)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -56,41 +71,27 @@ struct AssistantCapabilitiesSheet: View {
 
     // MARK: - Wiersze
 
-    /// Wiersz umiejętności: kafelek ikony · tytuł · przykład w cudzysłowie
-    /// w terakocie · krążek ze strzałką (wysyła).
-    private func abilityRow(_ capability: AssistantCapability, accent: AssistantAccent, first: Bool) -> some View {
-        Button {
-            dismiss()
-            onAsk(capability.example)
-        } label: {
-            AssistantRow(
-                title: capability.title,
-                subtitle: "„\(capability.example)”",
-                chevron: false,
-                first: first,
-                titleSize: 15,
-                subtitleColor: AssistantLook.terra(scheme),
-                subtitleWeight: .medium,
-                // Przykład to cała wiadomość — widać ją w całości, zanim
-                // pójdzie, zamiast uciętej w pół zdania.
-                subtitleWraps: true,
-                verticalPadding: 10,
-                leadingInset: 12,
-                trailingInset: 12,
-                leading: { AssistantTile(icon: capability.icon, tint: accent.tint(scheme), color: accent.color) },
-                trailing: {
-                    ZStack {
-                        Circle().fill(AssistantLook.terraTint(scheme))
-                        Image(systemName: "arrow.up")
-                            .font(.sc(size: 14, weight: .bold))
-                            .foregroundStyle(AssistantLook.terra(scheme))
-                    }
-                    .frame(width: 30, height: 30)
-                }
-            )
-            .contentShape(Rectangle())
+    /// Wiersz umiejętności: kafelek w kolorze grupy · tytuł · przykład
+    /// w cudzysłowie (cały, bez ucinania — to cała wiadomość, widać ją,
+    /// zanim pójdzie) · strzałka „wyślij” w terakocie.
+    private func abilityRow(_ capability: AssistantCapability, color: Color, isLast: Bool) -> some View {
+        EditorialSettingsRow(
+            icon: capability.icon,
+            iconColor: color,
+            title: capability.title,
+            subtitle: "„\(capability.example)”",
+            isLast: isLast,
+            wrapsText: true,
+            action: {
+                dismiss()
+                onAsk(capability.example)
+            }
+        ) {
+            Image(systemName: "arrow.up.circle.fill")
+                .font(.sc(size: 22, weight: .semibold))
+                .foregroundStyle(SCPalette.terracotta)
+                .accessibilityHidden(true)
         }
-        .buttonStyle(PlanPressStyle(scale: 0.985))
         .accessibilityLabel("\(capability.title): \(capability.example)")
         .accessibilityHint("Wysyła ten przykład do Asystenta")
     }
