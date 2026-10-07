@@ -183,10 +183,11 @@ enum RecipeMoment: String, CaseIterable, Identifiable {
 // MARK: - Odczyt z przepisu
 
 extension Recipe {
-    /// Kuchnia z kafelka; nieznana wartość = „Inne”, `nil` = serwer nie
-    /// przysłał taksonomii (stary backend, stary cache).
+    /// Kuchnia z kafelka; nieznana wartość i brak taksonomii (stary backend,
+    /// stary cache) = „Inne” — inaczej „wszystkie kuchnie” chowałyby takie
+    /// przepisy. Opcjonalna tylko dla zgodności z wywołaniami — zawsze jest.
     var cuisine: RecipeCuisine? {
-        taxonomy.map { RecipeCuisine(serverValue: $0.cuisine) }
+        RecipeCuisine(serverValue: taxonomy?.cuisine ?? RecipeCuisine.other.rawValue)
     }
 
     /// Okazje i pory roku przepisu w jednym zbiorze — pod sekcję „Okazje i sezon”.
