@@ -710,12 +710,28 @@ struct ProfileDetailsSheet: View {
     /// wyzerował — a 0 cm wzrostu i rok 0 to nie są wartości, które da się
     /// postawić na kole. Podmieniamy je na te same wartości startowe, których
     /// używa kreator powitalny.
+    ///
+    /// Zapis przez magazyn, NIE przez `@ProtectedSetting` (7.10.2026, przegląd
+    /// gałęzi): poprawka wartości spoza zakresu to nie edycja z ręki — nie
+    /// podbija `userEditGeneration`, więc nie unieważnia `users:me` w drodze
+    /// i sama nie odpala zapisu na serwer. Klucze = te z deklaracji wyżej.
     private func normaliseStoredValues() {
-        if !yearRange.contains(yearOfBirth) { yearOfBirth = Self.defaultYearOfBirth }
-        if !ProfileField.heights.contains(heightCm) { heightCm = Self.defaultHeightCm }
-        if !ProfileField.weights.contains(weightKg) { weightKg = Self.defaultWeightKg }
-        if !sexRaw.isEmpty, Sex(rawValue: sexRaw) == nil { sexRaw = "" }
-        if ActivityLevel(rawValue: activityLevelRaw) == nil { activityLevelRaw = ActivityLevel.light.rawValue }
+        let store = SCProtectedSettings.shared
+        if !yearRange.contains(yearOfBirth) {
+            store.set(Self.defaultYearOfBirth, forKey: "settings.profile.yearOfBirth")
+        }
+        if !ProfileField.heights.contains(heightCm) {
+            store.set(Self.defaultHeightCm, forKey: "settings.profile.heightCm")
+        }
+        if !ProfileField.weights.contains(weightKg) {
+            store.set(Self.defaultWeightKg, forKey: "settings.profile.weightKg")
+        }
+        if !sexRaw.isEmpty, Sex(rawValue: sexRaw) == nil {
+            store.set("", forKey: "settings.profile.sex")
+        }
+        if ActivityLevel(rawValue: activityLevelRaw) == nil {
+            store.set(ActivityLevel.light.rawValue, forKey: "settings.diet.activityLevel")
+        }
     }
 
     /// Bez zbędnego „,0" — 83 kg zostaje jako „83", 83,5 jako „83,5".
