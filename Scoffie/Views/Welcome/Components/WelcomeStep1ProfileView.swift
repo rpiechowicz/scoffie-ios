@@ -16,9 +16,13 @@ import SwiftUI
 struct WelcomeStep1ProfileView: View {
     @Binding var name: String
     @Binding var yearOfBirth: Int
-    @Binding var heightCm: Int
-    @Binding var weightKg: Double
+    /// `nil` = pole puste, czyli jeszcze niepodane (7.10.2026) — w polu stoi
+    /// wtedy szara podpowiedź z wartością startową.
+    @Binding var heightCm: Int?
+    @Binding var weightKg: Double?
     @Binding var sex: Sex?
+    /// „Nie podaję” — trzecia odpowiedź na pytanie o płeć.
+    @Binding var sexDeclined: Bool
     /// Treningi z kroku 2 (do tej chwili wartość domyślna) — tylko do
     /// podglądu kalorii na utrzymanie wagi.
     var activity: ActivityLevel = .light
@@ -37,11 +41,24 @@ struct WelcomeStep1ProfileView: View {
 
     private var currentYear: Int { Calendar.current.component(.year, from: Date()) }
 
-    /// Podgląd pod polami — zawsze jest (`BodyMetrics.preview`).
+    // Braki (7.10.2026) — podpis pola w terakocie, „Dalej” czeka
+    // (`WelcomeView.isNextEnabled`, te same zakresy z `WelcomeProgress`).
+    private var isYearMissing: Bool { !WelcomeProgress.isYearAnswered(yearOfBirth) }
+    private var isHeightMissing: Bool {
+        !(heightCm.map { WelcomeProgress.heightRange.contains($0) } ?? false)
+    }
+    private var isWeightMissing: Bool {
+        !(weightKg.map { WelcomeProgress.weightRange.contains($0) } ?? false)
+    }
+    private var isSexMissing: Bool { sex == nil && !sexDeclined }
+
+    /// Podgląd pod polami — zawsze jest (`BodyMetrics.preview`), ale do
+    /// podania wzrostu, wagi i roku zakryty (`redacted`): liczby z wartości
+    /// startowych udawałyby wynik.
     private var metrics: BodyMetrics {
         BodyMetrics.preview(
-            heightCm: heightCm,
-            weightKg: weightKg,
+            heightCm: heightCm ?? BodyMetrics.defaultHeightCm,
+            weightKg: weightKg ?? BodyMetrics.defaultWeightKg,
             yearOfBirth: yearOfBirth,
             activityRaw: activity.rawValue,
             sexRaw: sex?.rawValue ?? ""
@@ -157,25 +174,41 @@ struct WelcomeStep1ProfileView: View {
     private var bodyCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
-                fieldCaption("Płeć")
+                fieldCaption("Płeć", missing: isSexMissing)
+                // Wybór jednej z trzech (7.10.2026): płeć albo „Nie podaję”,
+                // jak w „Twoich danych” — bez odznaczania ponownym stuknięciem.
                 HStack(spacing: 8) {
                     ForEach(Sex.allCases) { candidate in
                         SexChip(
-                            candidate: candidate,
+                            title: candidate.title,
+                            icon: candidate.icon,
                             isSelected: sex == candidate,
                             onTap: {
                                 withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                                    sex = (sex == candidate) ? nil : candidate
+                                    sex = candidate
+                                    sexDeclined = false
                                 }
                             }
                         )
                     }
+                    SexChip(
+                        title: "Nie podaję",
+                        // Ta sama ikona co „Nie podaję” w „Twoich danych”.
+                        icon: "eye.slash",
+                        isSelected: sex == nil && sexDeclined,
+                        onTap: {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                sex = nil
+                                sexDeclined = true
+                            }
+                        }
+                    )
                 }
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {
-                    fieldCaption("Rok urodzenia")
+                    fieldCaption("Rok urodzenia", missing: isYearMissing)
                     Spacer(minLength: 8)
                     Text(BodyMetricsSummaryRow.ageLabel(max(currentYear - yearOfBirth, 0)))
                         .font(.sc(size: 11.5, weight: .semibold))
@@ -188,7 +221,7 @@ struct WelcomeStep1ProfileView: View {
 
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 6) {
-                    fieldCaption("Wzrost")
+                    fieldCaption("Wzrost", missing: isHeightMissing)
                     measureField(unit: "cm") {
                         TextField(String(BodyMetrics.defaultHeightCm), value: $heightCm, format: .number)
                             .keyboardType(.numberPad)
@@ -197,7 +230,7 @@ struct WelcomeStep1ProfileView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    fieldCaption("Waga")
+                    fieldCaption("Waga", missing: isWeightMissing)
                     measureField(unit: "kg") {
                         // Jedno miejsce po przecinku — 83,5 kg to
                         // normalny odczyt z wagi łazienkowej.
@@ -209,19 +242,27 @@ struct WelcomeStep1ProfileView: View {
             }
 
             BodyMetricsSummaryRow(metrics: metrics)
+                .redacted(reason: isMetricsReady ? [] : .placeholder)
+                .accessibilityHidden(!isMetricsReady)
                 .animation(.smooth(duration: 0.2), value: metrics.maintenanceCalories)
         }
         .padding(14)
         .welcomeCard()
     }
 
+    /// Wynik pod polami liczy się z podanych danych, nie z podpowiedzi.
+    private var isMetricsReady: Bool {
+        !isYearMissing && !isHeightMissing && !isWeightMissing
+    }
+
     /// Podpis pola w karcie — krój etykiety sekcji bez jej marginesów, jak
-    /// w „Twoich danych”.
-    private func fieldCaption(_ text: String) -> some View {
+    /// w „Twoich danych”. Brakująca odpowiedź: terakota zamiast szarości.
+    private func fieldCaption(_ text: String, missing: Bool = false) -> some View {
         Text(text.uppercased())
             .font(.sc(size: 10.5, weight: .bold))
             .tracking(1.4)
-            .foregroundStyle(Color.scFaint(colorScheme))
+            .foregroundStyle(missing ? SCPalette.terracotta : Color.scFaint(colorScheme))
+            .animation(.smooth(duration: 0.2), value: missing)
     }
 
     /// Pole liczby z jednostką — wzrost i waga w jednym kroju, na wklęsłej
@@ -250,10 +291,11 @@ struct WelcomeStep1ProfileView: View {
 }
 
 /// Płeć różnicuje wzór na przemianę materii wyłącznie stałą (+5 / −161),
-/// więc pytanie jest opcjonalne: ponowne stuknięcie w zaznaczoną opcję ją
-/// odznacza, a bez niej liczymy ze średniej.
+/// więc płci można nie podać — ale odpowiedzieć trzeba (7.10.2026): trzeci
+/// chip „Nie podaję”, a wtedy liczymy ze średniej.
 private struct SexChip: View {
-    let candidate: Sex
+    let title: String
+    let icon: String
     let isSelected: Bool
     let onTap: () -> Void
 
@@ -262,10 +304,12 @@ private struct SexChip: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 7) {
-                Image(systemName: candidate.icon)
+                Image(systemName: icon)
                     .font(.sc(size: 13, weight: .semibold))
-                Text(candidate.title)
+                Text(title)
                     .font(.sc(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .foregroundStyle(isSelected ? SCPalette.terracotta : Color.scLabel(colorScheme))
             .frame(maxWidth: .infinity)
@@ -282,7 +326,7 @@ private struct SexChip: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(candidate.title)
+        .accessibilityLabel(title)
         .accessibilityValue(isSelected ? "Wybrane" : "Niewybrane")
     }
 }
@@ -445,7 +489,8 @@ struct YearWheelPicker: View {
             yearOfBirth: .constant(1992),
             heightCm: .constant(180),
             weightKg: .constant(80),
-            sex: .constant(.male)
+            sex: .constant(.male),
+            sexDeclined: .constant(false)
         )
     }
     .preferredColorScheme(.dark)
@@ -458,7 +503,8 @@ struct YearWheelPicker: View {
             yearOfBirth: .constant(1992),
             heightCm: .constant(180),
             weightKg: .constant(80),
-            sex: .constant(.male)
+            sex: .constant(.male),
+            sexDeclined: .constant(false)
         )
     }
     .preferredColorScheme(.light)

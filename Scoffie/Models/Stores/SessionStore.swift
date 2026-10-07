@@ -239,6 +239,9 @@ final class SessionStore {
         if let raw, !raw.isEmpty {
             defaults.set(raw, forKey: Keys.onboardingCompletedAt)
             onboardingCompletedAt = Self.parseOnboardingDate(raw)
+            // Onboarding zamknięty — szkic kreatora nie ma już czego wznawiać
+            // (7.10.2026). Wylogowanie kasuje go razem z chronionym plikiem.
+            WelcomeDraft.clear()
         } else {
             defaults.removeObject(forKey: Keys.onboardingCompletedAt)
             onboardingCompletedAt = nil
@@ -3310,6 +3313,21 @@ final class SessionStore {
     // the user kills the app mid-flow; the matching backend round-trip runs
     // afterwards. Network failures are swallowed — the welcome flow degrades
     // gracefully and we'll re-sync on next launch via `users:me`.
+
+    /// „Nie podaję” zatwierdzone w kreatorze — zamiar skasowania płci od razu
+    /// w pliku, zanim zapis wejdzie do `profileSyncQueue` (7.10.2026, Codex
+    /// runda 2). Ten sam znacznik `sexClearPending`, którym żyje „Twoje dane”:
+    /// przeżywa zabicie aplikacji, każdy następny `saveProfile` bez płci
+    /// wysyła `null`, `users:me` nie przywraca starej płci, a zdejmuje go
+    /// dopiero zapis potwierdzony przez serwer albo wybór płci.
+    @MainActor
+    func markSexClearPending() {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+        if UserDefaults.standard.string(forKey: ProfileKeys.sexClearPending) == nil {
+            UserDefaults.standard.set(UUID().uuidString, forKey: ProfileKeys.sexClearPending)
+        }
+        SCProtectedSettings.shared.removeObject(forKey: ProfileKeys.sex)
+    }
 
     /// Persist the profile slice (display name + biometrics) for the
     /// welcome flow's step 1. Updates AppStorage immediately, then mirrors

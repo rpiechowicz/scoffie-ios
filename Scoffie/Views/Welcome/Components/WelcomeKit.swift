@@ -55,11 +55,15 @@ extension View {
 /// w kreatorze osobno i dostawała odstępy od każdego kroku po swojemu.
 struct WelcomeSection<Content: View>: View {
     let title: String
+    /// Wymagana odpowiedź jeszcze nie padła (7.10.2026) — etykieta
+    /// w terakocie zamiast szarości; nic poza tym.
+    var isMissing: Bool = false
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            EditorialSheetSectionLabel(title: title)
+            EditorialSheetSectionLabel(title: title, color: isMissing ? SCPalette.terracotta : nil)
+                .animation(.smooth(duration: 0.2), value: isMissing)
             content()
         }
     }
