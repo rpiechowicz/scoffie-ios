@@ -743,7 +743,7 @@ struct SettingsView: View {
                         .foregroundStyle(Color.scMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
 
-                    editorialNameInputCard
+                    HouseholdNameField(name: $createHouseholdName, error: $householdNameError)
 
                     editorialPrimaryButton(
                         title: "Utwórz gospodarstwo",
@@ -1543,62 +1543,6 @@ struct SettingsView: View {
         }
     }
 
-    private var editorialNameInputCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            EditorialSheetSectionLabel(title: "Nazwa")
-
-            TextField("Np. Dom", text: $createHouseholdName)
-                .textInputAutocapitalization(.words)
-                .font(.sc(size: 15.5, weight: .medium))
-                .foregroundStyle(Color.scLabel(scheme))
-                .tint(SCPalette.terracotta)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.scChipBg(scheme))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(
-                            householdNameError != nil
-                                ? SCInlineErrorText.tint.opacity(0.6)
-                                : Color.scTileStroke(scheme),
-                            lineWidth: householdNameError != nil ? 1.5 : 1
-                        )
-                )
-                .onChange(of: createHouseholdName) { _, _ in
-                    if householdNameError != nil { householdNameError = nil }
-                }
-
-            if let error = householdNameError {
-                SCInlineErrorText(error)
-                    .padding(.horizontal, 4)
-            }
-
-            HStack {
-                Spacer()
-                Text("\(trimmedCreateHouseholdName.count)/\(Self.householdNameMaxLength)")
-                    .font(.sc(size: 11, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(
-                        trimmedCreateHouseholdName.count > Self.householdNameMaxLength
-                            ? SCInlineErrorText.tint
-                            : Color.scFaint(scheme)
-                    )
-            }
-        }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-    }
-
     // ─── Gospodarstwo ─────────────
     //
     // Tylko to, po co się tu wchodzi: kto mieszka w domu, jak zaprosić
@@ -1719,58 +1663,12 @@ struct SettingsView: View {
     @ViewBuilder
     private var inviteRow: some View {
         let isReady = invitationLink != nil
-        let label = HStack(spacing: 12) {
-            Circle()
-                .strokeBorder(
-                    SCPalette.terracotta.opacity(0.7),
-                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
-                )
-                .background(Circle().fill(SCPalette.terracotta.opacity(scheme == .dark ? 0.12 : 0.08)))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Image(systemName: "plus")
-                        .font(.sc(size: 16, weight: .bold))
-                        .foregroundStyle(SCPalette.terracotta)
-                )
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(isReady ? "Zaproś domownika" : "Przygotuj zaproszenie")
-                    .font(.sc(size: 15, weight: .semibold))
-                    .tracking(-0.2)
-                    .foregroundStyle(SCPalette.terracotta)
-                Text("Link dla jednej osoby · 7 dni")
-                    .font(.sc(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.scMuted(scheme))
-            }
-            .lineLimit(1)
-            .minimumScaleFactor(0.85)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Group {
-                if isCreatingInvitation {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(SCPalette.terracotta)
-                } else {
-                    Image(systemName: isReady ? "square.and.arrow.up" : "arrow.clockwise")
-                        .font(.sc(size: 14, weight: .semibold))
-                        .foregroundStyle(SCPalette.terracotta)
-                }
-            }
-            .frame(width: 34, height: 34)
-            .scChromeGlass(in: Circle(), tint: SCPalette.terracotta.opacity(scheme == .dark ? 0.3 : 0.22))
-            .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Color.scRule(scheme))
-                .frame(height: 1)
-                .padding(.leading, 14 + 40 + 12)
-        }
+        // Wiersz wspólny z kreatorem (`HouseholdKit`, 7.10.2026).
+        let label = HouseholdInviteRowLabel(
+            title: isReady ? "Zaproś domownika" : "Przygotuj zaproszenie",
+            subtitle: "Link dla jednej osoby · 7 dni",
+            phase: isCreatingInvitation ? .loading : (isReady ? .ready : .retry)
+        )
 
         if let invitationLink {
             // Systemowy arkusz udostępniania przez `SCShareSheet`, nie
@@ -1838,106 +1736,24 @@ struct SettingsView: View {
     /// innego gospodarstwa albo zamknął alert — nie miał w aplikacji ŻADNEGO
     /// śladu, że coś do niego przyszło.
     private var householdInvitationsCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            EditorialSheetSectionLabel(title: "Zaproszenia")
-
-            VStack(spacing: 0) {
-                ForEach(Array(sessionStore.pendingInvitations.enumerated()), id: \.element.id) { index, invitation in
-                    invitationRow(
-                        invitation,
-                        isLast: index == sessionStore.pendingInvitations.count - 1
+        HouseholdInvitationsCard(
+            invitations: sessionStore.pendingInvitations,
+            hasHousehold: hasHousehold,
+            onAccept: { invitation in
+                Task {
+                    await sessionStore.acceptPendingInvitation(
+                        token: invitation.token,
+                        leaveOtherHouseholds: hasHousehold
                     )
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.scTileBg(scheme))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-    }
-
-    private func invitationRow(
-        _ invitation: HouseholdInvitationSnapshot,
-        isLast: Bool
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 14) {
-                EditorialSettingsTileIcon(icon: "envelope.open.fill", color: SCPalette.butter)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(invitation.householdName)
-                        .font(.sc(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.scLabel(scheme))
-
-                    Text(invitation.subtitle)
-                        .font(.sc(size: 12, weight: .regular))
-                        .foregroundStyle(Color.scMuted(scheme))
-
-                    if let expiry = invitation.expiresAtText {
-                        Text("Ważne do: \(expiry)")
-                            .font(.sc(size: 11, weight: .medium))
-                            .foregroundStyle(Color.scMuted(scheme))
+                    if sessionStore.currentHouseholdId != nil {
+                        persistedHouseholdName = sessionStore.currentHouseholdName ?? persistedHouseholdName
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            },
+            onDecline: { invitation in
+                Task { await sessionStore.declineInvitation(token: invitation.token) }
             }
-
-            // Dołączenie z gospodarstwa oznacza jego opuszczenie, więc etykieta
-            // mówi to wprost zamiast obiecywać samo „Dołącz".
-            HStack(spacing: 10) {
-                // Neutralna obok terakotowej — jak `AssistantGhostButton`:
-                // tło o ton od karty i cienka obwódka. Wcześniej kapsuła
-                // wypełniona kolorem tekstu (`scFaint`) czytała się jak ciężka
-                // szara płyta, mocniejsza niż akcja główna obok.
-                Button {
-                    Task { await sessionStore.declineInvitation(token: invitation.token) }
-                } label: {
-                    Text("Odrzuć")
-                        .font(.sc(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.scLabel(scheme))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                        // Neutralne szkło obok „Dołącz” (szkło w tincie).
-                        .scChromeGlass(in: Capsule(style: .continuous))
-                }
-                .buttonStyle(PlanPressStyle(scale: 0.96))
-
-                Button {
-                    Task {
-                        await sessionStore.acceptPendingInvitation(
-                            token: invitation.token,
-                            leaveOtherHouseholds: hasHousehold
-                        )
-                        if sessionStore.currentHouseholdId != nil {
-                            persistedHouseholdName = sessionStore.currentHouseholdName ?? persistedHouseholdName
-                        }
-                    }
-                } label: {
-                    Text(hasHousehold ? "Przenieś się" : "Dołącz")
-                        .font(.sc(size: 13, weight: .bold))
-                        .foregroundStyle(SCPalette.terracotta)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                        .scSoftCapsule()
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .overlay(alignment: .bottom) {
-            if !isLast {
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-                    .padding(.leading, 16 + 32 + 14)
-            }
-        }
+        )
     }
 
     private var householdEmptyCard: some View {
@@ -2015,54 +1831,20 @@ struct SettingsView: View {
 
     // MARK: - Member row
 
-    /// Rola dla VoiceOver — to samo, co plakietki przy imieniu.
-    private func memberRoleDescription(_ member: HouseholdMemberSnapshot) -> String {
-        let role = member.role.uppercased() == "OWNER" ? "Właściciel" : "Domownik"
-        return member.id == sessionStore.currentUserId ? "\(role), to Ty" : role
-    }
-
-    /// Awatar, imię i plakietki — nic więcej. Dieta, alergeny i opis roli
-    /// wyszły z wiersza (Rafał, 23.09.2026: „to tu nie ma sensu”): czego kto
-    /// nie je, pilnuje plan i asystent, a nie lista domowników. Jedna linijka
-    /// zamiast dwóch, więc każdy wiersz ma tę samą wysokość — wyznacza ją
-    /// awatar, a nie liczba etykiet.
+    /// Awatar, imię i plakietki — nic więcej (wspólny wiersz z kreatorem,
+    /// `HouseholdMemberRow`). Z prawej menu domownika albo kręciołek usuwania.
     private func memberRow(_ member: HouseholdMemberSnapshot, showsRule: Bool) -> some View {
-        let isOwner = member.role.uppercased() == "OWNER"
         let isMe = member.id == sessionStore.currentUserId
 
-        return HStack(spacing: 12) {
-            // Kolor z backendu + ziarno z id — dokładnie to, czym ten sam
-            // domownik świeci na Planie. Bez tych parametrów kolor liczył
-            // się z IMIENIA i ta sama osoba miała tu inny odcień niż wszędzie
-            // indziej.
-            ProfileAvatar(
-                avatarUrl: member.avatarUrl,
-                displayName: member.displayName,
-                size: 40,
-                colorIndex: member.avatarColor,
-                seed: member.id
-            )
-
-            HStack(spacing: 6) {
-                Text(member.displayName)
-                    .font(.sc(size: 15, weight: .semibold))
-                    .tracking(-0.2)
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .lineLimit(1)
-
-                if isMe {
-                    memberBadge("Ty", color: SCPalette.terracotta)
-                }
-
-                if isOwner {
-                    memberBadge("Właściciel", color: SCPalette.butter)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(member.displayName)
-            .accessibilityValue(memberRoleDescription(member))
-
+        return HouseholdMemberRow(
+            displayName: member.displayName,
+            avatarUrl: member.avatarUrl,
+            colorIndex: member.avatarColor,
+            seed: member.id,
+            isMe: isMe,
+            isOwner: member.role.uppercased() == "OWNER",
+            showsRule: showsRule
+        ) {
             if removingMemberId == member.id {
                 ProgressView()
                     .controlSize(.small)
@@ -2074,30 +1856,6 @@ struct SettingsView: View {
                 memberActionsMenu(for: member)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .overlay(alignment: .top) {
-            if showsRule {
-                Rectangle()
-                    .fill(Color.scRule(scheme))
-                    .frame(height: 1)
-                    .padding(.leading, 14 + 40 + 12)
-            }
-        }
-    }
-
-    /// Mała plakietka przy imieniu — „Ty” w terakocie, „Właściciel” w maśle,
-    /// zwykłymi literami w tincie (6.10.2026; wersaliki 9,5 pt odstawały od
-    /// reszty aplikacji). Stały rozmiar (`fixedSize`): przy długim imieniu
-    /// skraca się imię, a nie plakietka.
-    private func memberBadge(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.sc(size: 11.5, weight: .bold))
-            .foregroundStyle(color)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(color.opacity(scheme == .dark ? 0.16 : 0.12), in: Capsule())
-            .fixedSize()
     }
 
     /// Trzy kropki przy domowniku — 32pt kółko w stylistyce krzyżyka arkusza,
