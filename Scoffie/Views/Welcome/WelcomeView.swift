@@ -389,7 +389,7 @@ struct WelcomeView: View {
                 }
             }
             // Stopka stoi w `safeAreaBar`, więc strona przewodnika liczy
-            // wysokość plakatu już z części NAD nią (dawniej nakładka
+            // wysokość zdjęcia kroku już z części NAD nią (dawniej nakładka
             // i `padding(.bottom, footerHeight)`).
             .ignoresSafeArea(.keyboard)
         } else {
