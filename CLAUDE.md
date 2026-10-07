@@ -1319,9 +1319,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   w magazynie ZAWSZE (start sesji wpisuje domyślny wiersz serwera), a zapis na serwer idzie w tle, więc
   wznowienie czyta SZKIC (`WelcomeDraft`: odpowiedzi kroków 1–3 + zaliczony krok + `userId`, JSON pod
   `onboarding.draft` w `SCProtectedSettings`, zapisywany synchronicznie przy „Dalej” przed `advance()`),
-  nie kopię. Po zakończeniu onboardingu `SessionStore.flushWelcomeDraft` (koniec kreatora, start sesji po
-  odczycie preferencji, powrót aplikacji) wysyła szkic jeszcze raz i kasuje go DOPIERO po zapisach
-  potwierdzonych przez serwer; wylogowanie kasuje go z `removeAll`. Zapis wysyła tylko odpowiedzi (alergeny i dieta dopiero po kroku 3).
+  nie kopię. Szkic znika po zakończeniu onboardingu (`persistOnboardingCompletedAt`) i z `removeAll`
+  przy wylogowaniu. Zapis wysyła tylko odpowiedzi (alergeny i dieta dopiero po kroku 3).
 - Kreator profilu (`WelcomeView`) od 24.09.2026 BEZ paska nawigacji i BEZ „Wyloguj” (Rafał: „wywal”):
   nagłówek kroku od góry jak w przewodniku (`WelcomeLayout.topInset = TourLayout.top`), górny brzeg
   treści gaśnie przez `scScrollEdgeFade`. Wyjście z kreatora = dokończyć go albo zamknąć aplikację. Kreatora profilu (`Welcome*`) to NIE dotyczy — Rafał rozróżnia „onboarding aplikacji”
