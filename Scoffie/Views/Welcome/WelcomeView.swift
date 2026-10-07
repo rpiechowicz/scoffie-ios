@@ -547,7 +547,10 @@ struct WelcomeView: View {
             yearOfBirth: yearOfBirth,
             heightCm: heightCm,
             weightKg: weightKg,
-            sex: sex?.rawValue
+            sex: sex?.rawValue,
+            // Formularz kreatora, nie lokalna kopia — bez czekania na `users:me`
+            // (7.10.2026, `ensureProfileBaseline`).
+            confirmBaselineFirst: false
         )
         pendingProfileRetry = !ok
         refreshSaveWarning()

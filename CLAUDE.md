@@ -512,7 +512,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   Plik nie przeżywa kopii zapasowej ani reinstalacji (Keychain z tokenami tak), więc sesja bywa z PUSTĄ dietą:
   pełny zestaw preferencji (ekran diety wysyła też alergeny) wychodzi tylko po `ensurePreferencesBaseline()` — kopia
   potwierdzona `users:preferences:get` w tym procesie dla tego konta, inaczej najpierw odczyt, a zapis ze starej kopii
-  przepada z toastem. Wyjątek `confirmBaselineFirst: false`: kreator i sprzątanie po odczycie. Odczyt ponawia foreground.
+  przepada z toastem. Tak samo sylwetka: `saveProfile` po `ensureProfileBaseline()` (potwierdza `users:me` w
+  `restoreHouseholdIfNeeded`), „Twoje dane” sprawdzają oba przez `serverCopiesReady`. Wyjątek
+  `confirmBaselineFirst: false`: kreator i sprzątanie po odczycie. Oba odczyty ponawia foreground; potwierdzenia
+  tylko w pamięci, przypięte do id konta, zerowane w `logout()`.
 
 ## Kontrakty z backendem (nie zmieniać jednostronnie)
 - **Minimalna wersja** (2.10.2026): `Components/SCAppUpdateGate.swift` pyta `GET /public/app-version?platform=ios&version=`

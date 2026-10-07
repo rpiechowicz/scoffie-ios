@@ -282,6 +282,13 @@ final class SessionStore {
                 await self?.loadUserPreferences()
             }
         }
+        // To samo dla sylwetki: `users:me` przy starcie padł.
+        if isAuthenticated, let userId = currentUserId, !userId.isEmpty,
+           profileConfirmedForUserId != userId {
+            Task { @MainActor [weak self] in
+                await self?.restoreHouseholdIfNeeded()
+            }
+        }
         if let recipeCatalogStore {
             Task {
                 await recipeCatalogStore.reload()
@@ -586,6 +593,7 @@ final class SessionStore {
         authError = nil
         currentUserId = nil
         preferencesConfirmedForUserId = nil
+        profileConfirmedForUserId = nil
         CrashReporting.setUser(id: currentUserId)
         currentHouseholdId = nil
         currentHouseholdName = nil
@@ -2104,6 +2112,11 @@ final class SessionStore {
                 weightKg: user.weightKg,
                 sex: user.sex
             )
+            // Sylwetka i imię = serwer: „Twoje dane” mogą wysyłać pełny zestaw
+            // (`ensureProfileBaseline`, 7.10.2026).
+            if currentUserId == userId {
+                profileConfirmedForUserId = userId
+            }
             defaults.set(user.avatarColor ?? -1, forKey: Keys.avatarColor)
             persistOnboardingCompletedAt(user.onboardingCompletedAt)
 
@@ -2788,8 +2801,8 @@ final class SessionStore {
         }
     }
 
-    /// Wynik `ensurePreferencesBaseline`.
-    enum PreferencesBaseline {
+    /// Wynik `ensurePreferencesBaseline` / `ensureProfileBaseline`.
+    enum ServerBaseline {
         /// Lokalna kopia potwierdzona odczytem z serwera — można wysyłać.
         case confirmed
         /// Kopia była niepotwierdzona i właśnie wczytała się z serwera. Zapis
@@ -2812,11 +2825,25 @@ final class SessionStore {
     /// (Keychain zostaje, `UserDefaults` nie) i przy nieudanym odczycie po
     /// zalogowaniu na nowym telefonie.
     @MainActor
-    func ensurePreferencesBaseline() async -> PreferencesBaseline {
+    func ensurePreferencesBaseline() async -> ServerBaseline {
         guard let userId = currentUserId, !userId.isEmpty else { return .unavailable }
         if preferencesConfirmedForUserId == userId { return .confirmed }
         let loaded = await loadUserPreferences()
         guard loaded, preferencesConfirmedForUserId == userId else { return .unavailable }
+        return .reloaded
+    }
+
+    /// To samo dla sylwetki (rok, wzrost, waga, płeć) i imienia — „Twoje dane”
+    /// wysyłają zawsze cały zestaw z lokalnej kopii, a ta po odtworzeniu
+    /// telefonu albo reinstalacji jest pusta (wartości domyślne arkusza), dopóki
+    /// nie dojdzie `users:me` (7.10.2026). Potwierdza `restoreHouseholdIfNeeded`
+    /// (start sesji, logowanie, ponowienie przy wejściu na pierwszy plan).
+    @MainActor
+    func ensureProfileBaseline() async -> ServerBaseline {
+        guard let userId = currentUserId, !userId.isEmpty else { return .unavailable }
+        if profileConfirmedForUserId == userId { return .confirmed }
+        await restoreHouseholdIfNeeded()
+        guard profileConfirmedForUserId == userId else { return .unavailable }
         return .reloaded
     }
 
@@ -3037,9 +3064,19 @@ final class SessionStore {
         /// „Nie podaję” w „Twoich danych” — jawny `null` dla płci. Pominięte
         /// pole znaczy dla serwera „nie ruszaj”, więc bez tego stara płeć
         /// zostawała w bazie i wracała z `users:me` po ponownym uruchomieniu.
-        clearSex: Bool = false
+        clearSex: Bool = false,
+        /// `false` tylko dla kreatora (formularz, który użytkownik właśnie
+        /// wypełnił). Patrz `ensureProfileBaseline`.
+        confirmBaselineFirst: Bool = true
     ) async -> Bool {
         guard let userId = currentUserId, !userId.isEmpty else { return false }
+        // Sylwetka z niepotwierdzonej kopii (wartości domyślne po odtworzeniu
+        // telefonu) nie nadpisuje konta (7.10.2026). Niepotwierdzone „Nie
+        // podaję” (`sexClearPending`) nie ginie: flaga zostaje i jedzie z
+        // następnym zapisem, a `persistProfileFields` jej pilnuje.
+        if confirmBaselineFirst, await ensureProfileBaseline() != .confirmed {
+            return false
+        }
 
         var data: [String: Any] = [:]
         if let displayName {
@@ -3319,6 +3356,9 @@ final class SessionStore {
     /// każdy start sesji potwierdza kopię od nowa, a plik ustawień i tak
     /// nie przeżywa kopii zapasowej ani reinstalacji.
     private var preferencesConfirmedForUserId: String?
+    /// Konto, którego sylwetka przyszła w tym procesie z `users:me` — patrz
+    /// `ensureProfileBaseline` (7.10.2026). Też tylko w pamięci.
+    private var profileConfirmedForUserId: String?
     /// Seria odmów socketu po udanych refreshach — hamulec na wypadek, gdy
     /// serwer odrzuca także świeże tokeny (rozjazd konfiguracji): backoff,
     /// a po `maxSocketAuthRetries` czekamy na następny foreground.

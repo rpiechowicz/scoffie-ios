@@ -591,6 +591,7 @@ struct ProfileDetailsSheet: View {
     /// `users:profile:update`, a liczba treningów przez
     /// `users:preferences:update` (tam mieszka `activityLevel`).
     private func pushProfile() async {
+        guard await Self.serverCopiesReady(sessionStore, toasts: toasts) else { return }
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         await sessionStore.saveProfile(
@@ -603,6 +604,29 @@ struct ProfileDetailsSheet: View {
         )
 
         await sessionStore.saveUserPreferences(activityLevel: activityLevelRaw)
+    }
+
+    /// Arkusz wysyła CAŁY zestaw (sylwetka + aktywność) z lokalnej kopii, więc
+    /// najpierw upewnia się, że kopia przyszła z serwera (7.10.2026). Po
+    /// odtworzeniu telefonu albo nieudanym odczycie przy starcie kopia to
+    /// wartości domyślne — wysłane nadpisałyby prawdziwe dane konta. `false` =
+    /// nic nie wysyłać (komunikat już pokazany).
+    @MainActor
+    private static func serverCopiesReady(_ store: SessionStore, toasts: SCToastCenter) async -> Bool {
+        let profile = await store.ensureProfileBaseline()
+        let preferences = await store.ensurePreferencesBaseline()
+        if profile == .unavailable || preferences == .unavailable {
+            toasts.error("Nie udało się wczytać Twoich danych", "Spróbuj ponownie.")
+            return false
+        }
+        if profile == .reloaded || preferences == .reloaded {
+            toasts.info(
+                "Wczytano Twoje dane",
+                "Ostatnia zmiana nie została zapisana — wprowadź ją jeszcze raz."
+            )
+            return false
+        }
+        return true
     }
 
     /// Zamknięcie arkusza nie może zgubić zmiany zrobionej sekundę wcześniej —
@@ -640,6 +664,7 @@ struct ProfileDetailsSheet: View {
         // tego widoku już nie istnieje, gdy `await` wracają.
         let toasts = toasts
         Task { @MainActor in
+            guard await Self.serverCopiesReady(store, toasts: toasts) else { return }
             let profileSaved = await store.saveProfile(
                 displayName: name.isEmpty ? nil : name,
                 yearOfBirth: year,
