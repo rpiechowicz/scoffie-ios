@@ -785,14 +785,15 @@ struct SettingsView: View {
     }
 
     private var householdManagementSheet: some View {
-        // „Opuść gospodarstwo” stoi na końcu przewijanej treści, nie w stopce
-        // (6.10.2026, artefakt „Arkusze Ustawień”): rzadki krok, który niczego
-        // nie zatwierdza, nie wisi stale nad domownikami.
-        pinnedEditorialSheet {
-            householdHeader
-        } content: {
-            householdSheetContent
-        }
+        // „Opuść gospodarstwo” przypięte na samym dole arkusza (Rafał
+        // 7.10.2026: „daj na samym dole”). Od 6.10 stało na końcu treści,
+        // czyli przy krótkiej liście domowników — w połowie arkusza.
+        pinnedEditorialSheet(
+            header: { householdHeader },
+            content: { householdSheetContent },
+            showsFooter: hasHousehold,
+            footer: { leaveHouseholdButton }
+        )
         .alert("Opuścić gospodarstwo?", isPresented: $showLeaveHouseholdAlert) {
             Button("Anuluj", role: .cancel) {}
             Button("Opuść", role: .destructive) {
@@ -1971,7 +1972,8 @@ struct SettingsView: View {
     }
 
     /// Treść arkusza gospodarstwa — domownicy (z zaproszeniem jako ostatnim
-    /// wierszem) i „Opuść gospodarstwo” na końcu, a bez domu karta zakładania.
+    /// wierszem), a bez domu karta zakładania. „Opuść gospodarstwo” stoi
+    /// w stopce arkusza (`householdManagementSheet`).
     private var householdSheetContent: some View {
         let hasInvitations = !sessionStore.pendingInvitations.isEmpty
 
@@ -1988,9 +1990,6 @@ struct SettingsView: View {
             if hasHousehold {
                 householdMembersSection
                     .padding(.top, hasInvitations ? 20 : 0)
-
-                leaveHouseholdButton
-                    .padding(.top, 24)
             } else {
                 householdEmptyCard
                     .padding(.top, hasInvitations ? 18 : 0)
@@ -2023,6 +2022,17 @@ struct SettingsView: View {
         @ViewBuilder header: () -> Header,
         @ViewBuilder content: () -> Content
     ) -> some View {
+        pinnedEditorialSheet(header: header, content: content, showsFooter: false) { EmptyView() }
+    }
+
+    /// To samo z przyciskiem przypiętym na samym dole arkusza (`scSheetFooter`)
+    /// — `showsFooter: false` = bez stopki (gospodarstwo bez domu).
+    private func pinnedEditorialSheet<Header: View, Content: View, Footer: View>(
+        @ViewBuilder header: () -> Header,
+        @ViewBuilder content: () -> Content,
+        showsFooter: Bool,
+        @ViewBuilder footer: @escaping () -> Footer
+    ) -> some View {
         editorialSheet {
             VStack(spacing: 0) {
                 header()
@@ -2030,7 +2040,7 @@ struct SettingsView: View {
                     .padding(.top, 18)
                     .padding(.bottom, 12)
 
-                ScrollView {
+                let scroll = ScrollView {
                     content()
                         .padding(.horizontal, 20)
                         .padding(.top, 6)
@@ -2038,6 +2048,12 @@ struct SettingsView: View {
                 }
                 .scrollIndicators(.hidden)
                 .scScrollEdgeFade()
+
+                if showsFooter {
+                    scroll.scSheetFooter(footer)
+                } else {
+                    scroll
+                }
             }
         }
     }
@@ -2319,9 +2335,9 @@ struct SettingsView: View {
         }
     }
 
-    /// Wyjście na końcu przewijanej treści arkusza (6.10.2026; od 23.09 do
-    /// tego dnia w stopce), w tym samym stroju co każda akcja nieodwracalna
-    /// (`SCDestructiveButton`) i z pytaniem w alercie.
+    /// Wyjście przypięte na dole arkusza gospodarstwa (7.10.2026; 6.10 na
+    /// chwilę na końcu treści), w tym samym stroju co każda akcja
+    /// nieodwracalna (`SCDestructiveButton`) i z pytaniem w alercie.
     private var leaveHouseholdButton: some View {
         SCDestructiveButton(title: "Opuść gospodarstwo", icon: "rectangle.portrait.and.arrow.right") {
             showLeaveHouseholdAlert = true
