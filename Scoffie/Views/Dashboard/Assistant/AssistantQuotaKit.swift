@@ -268,12 +268,19 @@ struct AssistantQuotaNextRow: View {
 /// z odliczaniem albo polecany plan z ceną) i jedna akcja. Kreseczki zużycia
 /// zniknęły z karty — pełny pasek nie mówił nic ponad tytuł; zostały
 /// w panelu powitania i w arkuszu limitów.
+///
+/// 7.10.2026 (Rafał: „pozwól mi zamknąć tę wiadomość”): krzyżyk jak w karcie
+/// skrótu nad polem (`AssistantAppShortcutCard`). Po zamknięciu w miejscu
+/// karty stoi WYŁĄCZONE pole z „Wyślij” i zdaniem o puli w podpowiedzi;
+/// stuknięcie w nie przywraca kartę (`AssistantView.composer`).
 struct AssistantQuotaSpentCard: View {
     let facts: AssistantQuotaFacts?
     /// Próba (bez odnowienia) czy plan miesięczny. Osobno od `facts`, bo
     /// blokada bywa znana, zanim dojdą liczby.
     let isTrial: Bool
     let action: () -> Void
+    /// Krzyżyk — `nil` = karta bez zamykania.
+    var onDismiss: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var scheme
 
@@ -310,6 +317,20 @@ struct AssistantQuotaSpentCard: View {
                     }
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if let onDismiss {
+                        // Ten sam krzyżyk co w karcie skrótu nad polem.
+                        Button(action: onDismiss) {
+                            Image(systemName: "xmark")
+                                .font(.sc(size: 11, weight: .bold))
+                                .foregroundStyle(AssistantLook.faint(scheme))
+                                .frame(width: 28, height: 28)
+                                .scTapTarget(drawn: 28)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Zamknij")
+                    }
                 }
 
                 AssistantQuotaNextRow(facts: facts, isTrial: isTrial)
