@@ -142,7 +142,27 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   każdy wiersz w SWOIM kolorze (Gospodarstwo indygo, Dieta szałwia, Posiłki masło, Asystent terakota, Powiadomienia
   koral, Wygląd lawenda `circle.lefthalf.filled`, Pomoc morska `questionmark`, Oceń róż `star.fill`, Prywatność szary
   `SettingsAccent.slate`), a arkusz bierze kolor wiersza; profil 56/17; wersja = podpis „Scoffie 1.0 (35)” pod
-  „Wyloguj się” (wiersz „Wersja” i `EditorialSettingsInfoTile` USUNIĘTE).
+  „Wyloguj się” (wiersz „Wersja” i `EditorialSettingsInfoTile` USUNIĘTE). Od 7.10.2026 wiersz ma też `subtitle:`
+  (linijka 12,5 szara pod tytułem, wiersz 8 pt oddechu) i `wrapsText:` (tytuł i podpis łamią się zamiast ucinać — gdy
+  treść jest sprawą wiersza: notatka, przykład do wysłania, zdanie zgody); bez nich wiersz jest taki jak był.
+  `PlanAccessRow` i wiersz wyboru diety (`DietPreferencesForm.choiceRowLabel`) to jeszcze kopie tego układu z podpisem.
+- **Arkusze Asystenta = klocki Ustawień** (7.10.2026, Rafał: „popraw widoki i sheet dla asystenta zgodnie z nowym
+  design”; spis odejść `docs/asystent-spojnosc-2026-10-07.md`): listy w arkuszach Asystenta to `EditorialSheetSectionLabel`
+  + `EditorialSettingsCardGroup` + `EditorialSettingsRow` (pełny kafelek w kolorze sprawy) — „Co potrafi” (kafelek
+  w kolorze grupy, przykład w podpisie, „wyślij” = terakotowe `arrow.up.circle.fill`), „Rozmowy” (nagłówek + `SCSearchField`
+  przypięte jak w „Wybierz przepis” — `RecipeListSheetTop`; kafelek terakota, pusta rozmowa szara; godzina i „W toku”
+  po prawej), „Co o Was pamięta” (podtytuł samo „N z 30 notatek”, kafelek grupy: preferencje róż `heart.fill`,
+  ograniczenia koral `nosign`, zwyczaje indygo `repeat`; „Usuń wszystkie notatki” = `SCDestructiveButton` w stopce, jak
+  „Opuść gospodarstwo”), „Zgłoś odpowiedź” (na `AssistantSheetScaffold`, powody z kafelkiem i `SCRadioMark`,
+  `EditorialPrimaryActionButton` w stopce), „Co nie zagrało?” (kafelek powodu + `SCCheckbox`), zgoda (wiersze potwierdzeń
+  z `SCCheckbox`, „Polityka prywatności · Sekcja 6” jako wiersz; w arkuszu z menu polityka = PUSH `LegalDocumentPage`,
+  w zakładce dalej arkusz). Puste stany „Rozmów” i „Pamięci” = `RecipeListEmptyState`. „Jak pracowałem” bez kaskady
+  wejścia. Przegląd propozycji: dzień w `EditorialSettingsCardGroup` (kreska `scRule`), zapis = `AssistantPrimaryButton(tint:)`.
+  USUNIĘTE: `AssistantGroup`, `AssistantRow`, `AssistantTile`, `AssistantSheetFooter`, `AssistantStickyFooter`,
+  `AssistantIconTile`, `AssistantTextButton`, `ProposalAcceptButton`, `AssistantCardMetrics.listRadius` — nie wracać.
+  Świadomie bez zmian: powitanie, przerwa, wprowadzenie (także jego stopka jako ostatnie dziecko `VStack` i zapas
+  `AssistantIntroLayout.bottom` po dawnym cieniu — do decyzji na Macu), karty w rozmowie, pole i karta limitu, arkusz
+  wyboru posiłku (zdjęcie na całą górę), kapsuła czasu w „Jak pracowałem”.
 - **„Twoje dane”** (`ProfileDetailsSheet`, 6.10.2026 wieczór — artefakt „Arkusze Ustawień”, sekcja 1, cztery rundy,
   „super, pasuje mi, koduj”; arkusze 2–8 z tego artefaktu czekają po kolei): nagłówek = PROFIL (`EditorialSheetHeader`
   z awatarem w `leading` i e-mailem w nowym slocie `detail` pod tytułem; ołówek obok krzyżyka → alert „Imię” z polem,
@@ -304,7 +324,7 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   „Zamień to danie” = „…” (`Menu`) w wierszu + to samo pod przytrzymaniem, akcja po 0,35 s (po zamknięciu menu), tylko
   PENDING; zdanie bez zmian („Zamień w tej propozycji …: X. Pokaż 3 inne dania na tę porę do wyboru.” → serwer oddaje
   OPTIONS → „Wybieram: …” → ta sama propozycja z nowym daniem). Stopka `.scSheetFooter`: zdanie stanu
-  (`ProposalEndCopy`) + JEDEN przycisk (zapis w szałwii `ProposalAcceptButton` → „Zapisuję…” / „Wstawiam do planu…” →
+  (`ProposalEndCopy`) + JEDEN przycisk (zapis w szałwii `AssistantPrimaryButton(tint:)` → „Zapisuję…” / „Wstawiam do planu…” →
   „Jest w planie” + „Otwórz plan”; bez zapisu „Napisz, co zmienić”); zapis NIE zamyka arkusza; po zapisie ptaszki na
   miniaturach + haptyka; pod listą `ProposalRegenerateLink`. Bez kaskad przy wejściu. Stuknięcie w danie NIE otwiera
   szczegółów (`RecipeDetailView` zakłada bycie arkuszem). Karta w rozmowie: dotknięcie dania / „Przeglądaj dania”
@@ -697,7 +717,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   białe karty z makiety odstawały od reszty („wszystkie karty w tym samym kolorze”, decyzja Rafała).
   Nowa karta gdziekolwiek = `scTileBg` + `scTileStroke`; `scCardSurface`/`scInsetSurface` zostały tylko
   pod pływające kontrolki. Arkusze stoją na `AssistantSheetKit.swift`
-  (`AssistantSheetScaffold` = eyebrow · tytuł · X, `AssistantGroup`, `AssistantRow`). Stan pracy
+  (`AssistantSheetScaffold` = eyebrow · tytuł · X; listy w środku od 7.10.2026 na klockach Ustawień — akapit
+  „Arkusze Asystenta = klocki Ustawień” na górze). Stan pracy
   (`AssistantThoughtLine`, faza `working`) to „Oddech łuku” (artefakt `claude.ai/artifact/7vwJmr2mCR8xTYnjAJ9F3s`):
   znak, łuk i status w TERAKOCIE (nie indygo z makiety — decyzja Rafała 21.09.2026), obrót 2,4 s,
   oddech 5 → 55 % obwodu 1,8 s, nigdy zamknięty. Od 21.09.2026 to DZIENNIK w jednej kolumnie
@@ -810,7 +831,7 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   zgłoszonej, idzie do działu „Oceny” w panelu. Napisu „Zgłoszone — dzięki” nie ma („bez sensu”). Runda 3:
   👎 SAM otwiera arkusz „Słaba odpowiedź · Co poprawić?” (ocena zapisuje się od razu, krzyżyk zostawia sam kciuk) —
   pigułka w pasku odpadła, bo przestawiała układ („przeskakuje, jak zmieniam like”); pasek ma zawsze ten sam układ.
-  Arkusz = LISTA 4 powodów w jednej karcie (krążek w kolorze powodu · nazwa · `SCCheckbox`, bez `withAnimation`
+  Arkusz = LISTA 4 powodów w jednej karcie (od 7.10.2026 `EditorialSettingsRow`: kafelek w kolorze powodu · nazwa · `SCCheckbox`, bez `withAnimation`
   i podmiany glifu — „animacje check za wolne”) + pole; prawe wcięcie paska = lewe (glif „⋯” 28 pt
   od brzegu). „Jak pracowałem”: tytuł = co tura zrobiła (`ThinkingHeadline`: „Ułożyłem plan”, „Dobrałem dania”…),
   kafelek = stała ikona przebiegu `point.3.filled.connected.trianglepath.dotted` w terakocie, czas kapsułką obok krzyżyka.
@@ -964,8 +985,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (`RecipeDetail.primaryActionBar` w `safeAreaBar` na `ScrollView`) i przegląd propozycji.
   `SCEdgeShade` został TYLKO pod górnym paskiem szczegółów posiłku (84 pt) — Rafał: „bardzo mi się podoba shadow górny”. Pod listą w `VStack` jako ostatnie dziecko lista ma na dole tylko oddech (16 pt). Przycisk pełnej szerokości = `EditorialPrimaryActionButton`,
   obok liczb = `RecipeFilterFooterButton` („Pokaż” w Filtrach USUNIĘTE 6.10.2026 — filtry działają na żywo,
-  stopka ma „N z M” i tekstowe „Gotowe”). `AssistantStickyFooter` i `AssistantSheetFooter` to już
-  tylko nakładki na nią; kreator, przewodnik i wprowadzenie Asystenta też (`SCStepFooter`, runda 14).
+  stopka ma „N z M” i tekstowe „Gotowe”). Nakładki `AssistantStickyFooter` i `AssistantSheetFooter` USUNIĘTE
+  7.10.2026 (nieużywane); kreator, przewodnik i wprowadzenie Asystenta też stoją na niej (`SCStepFooter`, runda 14).
 - Przepływy krok po kroku (kreator „Poznajmy się”, przewodnik „Poznaj aplikację”, wprowadzenie Asystenta,
   runda 14) stoją na `Components/SCStepFlow.swift`: `SCStepHeader` (kafel `SCHeaderIconWell` 48, eyebrow
   10,5/1,4, tytuł 28 heavy, najwyżej jedno zdanie), `SCStepFeatureCard` i `SCStepFooter` = płyta
@@ -1243,8 +1264,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (kafelek `SCHeaderIconWell` w tincie akcentu), `accent` (kolor eyebrow) i `subtitle` — nie rysować
   nagłówka z kafelkiem ręcznie (stoją na nim filtry, lista kategorii, wybór do planu, dział składników,
   gospodarstwo). Pole szukania = `SCSearchField` (kapsuła 44 pt, krzyżyk, obwódka przy fokusie; przy
-  fokusie z zewnątrz obwódkę podaje ekran przez `isActive`) — wyjątki to pływające pole
-  rozmów Asystenta i pasek szukania Przepisów (`RecipesSearchBar`). Wybór „jedno z wielu” = `SCRadioMark` (obwódka + kropka), „wiele” = `SCCheckbox`.
+  fokusie z zewnątrz obwódkę podaje ekran przez `isActive`) — także „Rozmowy” Asystenta (od 7.10.2026, przypięte pod
+  nagłówkiem; dawna kremowa pigułka na dole odpadła); wyjątkiem zostaje pasek szukania Przepisów (`RecipesSearchBar`). Wybór „jedno z wielu” = `SCRadioMark` (obwódka + kropka), „wiele” = `SCCheckbox`.
   Podpowiedź szukania kategorii: `RecipesConstants.searchPrompt(for:)` („Szukaj w śniadaniach”, nie „w śniadania”).
 - Po audycie spójności (runda 8, 23.09.2026, 26 punktów): akcja niszcząca = `SCDestructiveButton`
   (soft kapsuła w ciepłej czerwieni: wyloguj, usuń konto, opuść gospodarstwo, odłącz Cookidoo/Zdrowie);
