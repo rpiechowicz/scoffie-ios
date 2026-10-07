@@ -134,12 +134,13 @@ struct MealDayTimesCard: View {
 ///
 /// Wspólny dla osi kreatora (`MealDayTimesCard`) i osi Ustawień
 /// (`MealSlotsSheet`). Ustawienia podają `inPlan` — przy porach dodatkowych
-/// nad kołem stoi wiersz „W planie dnia” z systemowym `Toggle`, jak w Ustawieniach
-/// iOS; kreator go nie podaje i wygląda jak dotąd.
+/// obok krzyżyka stoi „Wyłącz” (albo „Włącz”, gdy pora jest wyłączona, a ma
+/// dania); kreator go nie podaje i wygląda jak dotąd.
 struct MealTimeEditorSheet: View {
-    /// Czy pora dodatkowa jest w dniu — wiersz z przełącznikiem nad kołem.
-    /// (6.10.2026: czerwony przycisk „Wyłącz …” pod kołem „totalnie nie
-    /// pasował” — włącz/wyłącz to w iOS przełącznik, nie przycisk.)
+    /// Czy pora dodatkowa jest w dniu — przycisk obok krzyżyka.
+    /// (6.10.2026: czerwony „Wyłącz …” pod kołem „totalnie nie pasował”,
+    /// przełącznik nad kołem też nie; 7.10.2026 Rafał: „obok X na sheet
+    /// button wyłącz”.)
     struct InPlan {
         let isOn: Bool
         let set: (Bool) -> Void
@@ -154,8 +155,8 @@ struct MealTimeEditorSheet: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    /// Stan przełącznika „W planie dnia” — lokalny, żeby kciuk przejechał od
-    /// razu, zanim zapis i zamknięcie okienka dojdą z góry.
+    /// Czy pora jest w dniu — lokalnie, żeby przycisk i koło zmieniły się od
+    /// razu, zanim zapis (i zamknięcie okienka) dojdą z góry.
     @State private var isInPlan: Bool
 
     /// Kopia lokalna: koło pisze tu na każdą klatkę przeciągnięcia,
@@ -194,7 +195,11 @@ struct MealTimeEditorSheet: View {
                     accent: slot.cozyAccent,
                     compact: true,
                     onClose: onClose
-                )
+                ) {
+                    if inPlan != nil {
+                        inPlanButton
+                    }
+                }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .padding(.bottom, 2)
@@ -202,26 +207,6 @@ struct MealTimeEditorSheet: View {
                 // naturalne 216 pt i ściśnięty do 150 łapał dotyk nad sobą
                 // (6.10.2026 — akcja obok krzyżyka nie reagowała).
                 .zIndex(1)
-
-                if inPlan != nil {
-                    EditorialSettingsCardGroup {
-                        EditorialSettingsRow(
-                            icon: slot.icon,
-                            iconColor: slot.cozyAccent,
-                            title: "W planie dnia",
-                            isLast: true
-                        ) {
-                            Toggle("W planie dnia", isOn: $isInPlan)
-                                .labelsHidden()
-                                .tint(SCPalette.sage)
-                                .fixedSize()
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 10)
-                    .padding(.bottom, 4)
-                    .zIndex(1)
-                }
 
                 DatePicker(
                     "",
@@ -237,7 +222,10 @@ struct MealTimeEditorSheet: View {
                 // Niższe niż naturalne 216 pt, żeby zmieścić się w trzeciej
                 // części ekranu — koło pokazuje wtedy mniej wierszy, ale dalej
                 // kręci się tak samo. Na małych telefonach schodzi do 100.
-                .frame(minHeight: 100, maxHeight: 150)
+                // Z „Wyłącz” w nagłówku koło ma pełne 216 pt (okienko jest
+                // na to wyższe): nieściśnięte nie wystaje nad nagłówek, więc
+                // nie zabiera stuknięcia przyciskowi obok krzyżyka.
+                .frame(minHeight: 100, maxHeight: inPlan != nil ? 216 : 150)
                 .clipped()
                 .layoutPriority(1)
                 .padding(.horizontal, 20)
@@ -266,5 +254,24 @@ struct MealTimeEditorSheet: View {
         .onChange(of: isInPlan) { _, newValue in
             inPlan?.set(newValue)
         }
+    }
+
+    /// „Wyłącz” / „Włącz” obok krzyżyka — szklana pigułka tej samej
+    /// wysokości co krążek, jak „Wyczyść” w wynikach Przepisów.
+    private var inPlanButton: some View {
+        Button {
+            isInPlan.toggle()
+        } label: {
+            Text(isInPlan ? "Wyłącz" : "Włącz")
+                .font(.sc(size: 13.5, weight: .semibold))
+                .foregroundStyle(isInPlan ? SCPalette.terracotta : Color.scLabel(scheme))
+                .contentTransition(.interpolate)
+                .padding(.horizontal, 14)
+                .frame(height: SCSheetIconLabel.size)
+                .scChromeGlass(in: Capsule(style: .continuous))
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .accessibilityLabel(isInPlan ? "Wyłącz \(slot.accusativeName)" : "Włącz \(slot.accusativeName)")
     }
 }
