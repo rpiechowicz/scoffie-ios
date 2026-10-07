@@ -1,5 +1,7 @@
 import Foundation
+#if SCOFFIE_HEALTHKIT
 import HealthKit
+#endif
 
 /// Skąd czytamy kroki. Wybór użytkownika w arkuszu „Zdrowie" — jedno źródło
 /// naraz, nigdy suma obu: Garmin Connect dopisuje kroki do Zdrowia obok
@@ -15,6 +17,7 @@ struct DailyStepsSample: Equatable {
     let steps: Int
 }
 
+#if SCOFFIE_HEALTHKIT
 /// Cienka warstwa nad HealthKit: autoryzacja odczytu kroków, dzienne sumy
 /// i obserwacja zmian. Bez zapisu i bez background delivery (V1) — działa
 /// tylko, gdy aplikacja żyje; resztę dogania odświeżenie przy foregroundzie.
@@ -127,3 +130,30 @@ final class HealthKitService {
         }
     }
 }
+#else
+/// Zdrowie schowane (`FeatureFlags.health`, 7.10.2026): w paczce nie ma ani
+/// uprawnienia HealthKit, ani opisów NSHealth* w Info.plist, więc binarka nie
+/// może odwoływać się do API HealthKit — walidacja App Store (ITMS-90683)
+/// szuka opisów po samych odwołaniach w kodzie. Zaślepka trzyma ten sam
+/// interfejs i mówi „niedostępne”. Powrót: warunek `SCOFFIE_HEALTHKIT`
+/// w `SWIFT_ACTIVE_COMPILATION_CONDITIONS` (patrz `FeatureFlags.health`).
+final class HealthKitService {
+    static var isAvailable: Bool { false }
+
+    func requestReadAuthorization() async throws {
+        throw CocoaError(.featureUnsupported)
+    }
+
+    func dailySteps(
+        from firstDay: Date,
+        to lastDay: Date,
+        source: StepsSource
+    ) async throws -> [DailyStepsSample] {
+        []
+    }
+
+    func observeStepChanges(_ handler: @escaping @Sendable () -> Void) {}
+
+    func stopObserving() {}
+}
+#endif
