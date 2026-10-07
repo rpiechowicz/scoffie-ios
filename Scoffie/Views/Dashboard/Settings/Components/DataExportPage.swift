@@ -15,85 +15,29 @@ struct DataExportPage: View {
     @State private var fileSize: String?
     @State private var errorMessage: String?
     @State private var isLoading = false
+    /// Pobranie padło — także na łączności, której `inlineMessage` nie
+    /// opisuje (brak sieci ma swój pasek), a stopka i tak ma dać ponowienie.
+    @State private var didFail = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Paczka JSON z Twoim profilem, preferencjami, przepisami, posiłkami, krokami, zgodami i rozmowami z asystentem. Bez danych innych domowników.")
-                    .font(.sc(size: 13.5))
-                    .lineSpacing(2)
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 10) {
+                fileCard
 
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 12) {
-                        ZStack {
-                            Circle().fill(SCPalette.indigo.opacity(0.18))
-                            Image(systemName: "doc.zipper")
-                                .font(.sc(size: 15, weight: .bold))
-                                .foregroundStyle(SCPalette.indigo)
-                        }
-                        .frame(width: 36, height: 36)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(fileURL?.lastPathComponent ?? "scoffie-dane.json")
-                                .font(.sc(size: 14.5, weight: .semibold))
-                                .foregroundStyle(Color.scLabel(scheme))
-                                .lineLimit(1)
-                            Text(statusLine)
-                                .font(.sc(size: 12.5))
-                                .foregroundStyle(Color.scMuted(scheme))
-                        }
-                        Spacer(minLength: 0)
-                        if isLoading {
-                            ProgressView().controlSize(.small)
-                        }
-                    }
-
-                    if let fileURL {
-                        ShareLink(item: fileURL) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.sc(size: 14, weight: .bold))
-                                Text("Zapisz albo wyślij")
-                                    .font(.sc(size: 15, weight: .bold))
-                            }
-                            .foregroundStyle(SCPalette.terracotta)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .scSoftCapsule()
-                        }
-                        .buttonStyle(.plain)
-                    } else if !isLoading {
-                        Button(action: load) {
-                            Text(errorMessage == nil ? "Przygotuj paczkę" : "Spróbuj ponownie")
-                                .font(.sc(size: 15, weight: .bold))
-                                .foregroundStyle(SCPalette.terracotta)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 48)
-                                .scSoftCapsule()
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    if let errorMessage {
-                        SCInlineErrorText(errorMessage)
-                    }
-                }
-                .padding(16)
-                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.scTileBg(scheme)))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.scTileStroke(scheme), lineWidth: 1))
-
-                Text("Żądanie e-mailem działa dalej: \(LegalDocMeta.contactEmail), z adresu przypisanego do konta. Odpowiadamy w ciągu 30 dni.")
-                    .font(.sc(size: 12))
+                Text("Profil, preferencje, przepisy, posiłki, kroki, zgody i rozmowy z asystentem — bez danych innych domowników. Żądanie e-mailem: \(LegalDocMeta.contactEmail).")
+                    .font(.sc(size: 12.5))
                     .foregroundStyle(Color.scFaint(scheme))
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 6)
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
             .padding(.bottom, 28)
         }
         .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize)
+        .scSheetFooter { footerButton }
+        .scSheetFooterEdge()
         .scPushedPage("Pobierz moje dane")
         .task { load() }
         // Pełny eksport (profil, rozmowy, kroki) nie może leżeć w tmp po
@@ -103,10 +47,78 @@ struct DataExportPage: View {
         }
     }
 
+    /// Plik i jego stan w JEDNEJ karcie: kafelek z archiwum, nazwa pliku,
+    /// pod nią „Przygotowuję…” / „Gotowe · 182 KB” / błąd.
+    private var fileCard: some View {
+        HStack(spacing: 12) {
+            EditorialSettingsTileIcon(icon: "doc.zipper", color: SCPalette.teal, size: 44, radius: 11)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(fileURL?.lastPathComponent ?? "scoffie-dane.json")
+                    .font(.sc(size: 15, weight: .semibold))
+                    .tracking(-0.3)
+                    .foregroundStyle(Color.scLabel(scheme))
+                    .lineLimit(1)
+                if let errorMessage {
+                    SCInlineErrorText(errorMessage)
+                } else {
+                    Text(statusLine)
+                        .font(.sc(size: 13))
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .contentTransition(.numericText())
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if isLoading {
+                ProgressView().controlSize(.small)
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.scTileBg(scheme)))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
+        .animation(SCMotion.textRoll, value: statusLine)
+    }
+
+    /// Jeden przycisk w szklanej stopce: gotowy plik = arkusz udostępniania,
+    /// błąd = ponowienie, w trakcie = ten sam przycisk ze spinnerem.
+    @ViewBuilder
+    private var footerButton: some View {
+        if let fileURL {
+            ShareLink(item: fileURL) {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.sc(size: 13, weight: .heavy))
+                    Text("Zapisz albo wyślij")
+                        .font(.sc(size: 14, weight: .bold))
+                        .tracking(-0.1)
+                }
+                .foregroundStyle(SCPalette.terracotta)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .scSoftCapsule(SCPalette.terracotta)
+            }
+            .buttonStyle(PlanPressStyle(scale: 0.97))
+        } else if didFail, !isLoading {
+            EditorialPrimaryActionButton(
+                title: "Spróbuj ponownie",
+                icon: "arrow.clockwise",
+                action: { load() }
+            )
+        } else {
+            EditorialPrimaryActionButton(
+                title: "Zapisz albo wyślij",
+                icon: "square.and.arrow.up",
+                isLoading: isLoading,
+                action: { load() }
+            )
+        }
+    }
+
     private var statusLine: String {
-        if isLoading { return "Serwer składa paczkę…" }
+        if isLoading { return "Przygotowuję…" }
         if let fileSize { return "Gotowe · \(fileSize)" }
-        if errorMessage != nil { return "Nie udało się pobrać" }
+        if didFail { return "Nie udało się pobrać" }
         return "Jeszcze nie pobrano"
     }
 
@@ -114,6 +126,7 @@ struct DataExportPage: View {
         guard !isLoading, fileURL == nil else { return }
         isLoading = true
         errorMessage = nil
+        didFail = false
         Task { @MainActor in
             defer { isLoading = false }
             do {
@@ -122,6 +135,7 @@ struct DataExportPage: View {
                 let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
                 fileSize = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
             } catch {
+                didFail = true
                 errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             }
         }

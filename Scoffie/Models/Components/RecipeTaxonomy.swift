@@ -59,31 +59,60 @@ struct RecipeTaxonomy: Codable, Hashable {
 
 // MARK: - Kuchnia
 
-/// Kafelki „Kuchnia” w filtrach. `OTHER` nie ma kafelka — „kuchnia inna”
-/// niczego nie mówi, a to ponad połowa katalogu.
+/// Kafelki „Kuchnia” w filtrach — 12, w trzech rzędach po cztery.
+///
+/// Do 7.10.2026 `OTHER` nie miało kafelka, a to była połowa katalogu: „wszystkie
+/// kuchnie” dawały 542 z 1072 (Rafał: „gdzie są inne”). Teraz doszły francuska,
+/// Bliski Wschód i azjatycka (serwer przypisał im część dawnego `OTHER`), a reszta
+/// to „Inne” — więc zaznaczone wszystko = cały katalog.
 enum RecipeCuisine: String, CaseIterable, Identifiable {
     case polish = "POLISH"
     case italian = "ITALIAN"
     case spanish = "SPANISH"
     case greek = "GREEK"
+    case french = "FRENCH"
+    case middleEastern = "MIDDLE_EASTERN"
     case indian = "INDIAN"
     case thai = "THAI"
+    case asian = "ASIAN"
     case mexican = "MEXICAN"
     case american = "AMERICAN"
+    case other = "OTHER"
 
     var id: String { rawValue }
 
+    /// Podpis kafelka — jedno, najwyżej dwa krótkie słowa (kolumna ~80 pt).
     var title: String {
         switch self {
-        case .polish:   return "Polska"
-        case .italian:  return "Włoska"
-        case .spanish:  return "Hiszpańska"
-        case .greek:    return "Grecka"
-        case .indian:   return "Indyjska"
-        case .thai:     return "Tajska"
-        case .mexican:  return "Meksykańska"
-        case .american: return "Amerykańska"
+        case .polish:        return "Polska"
+        case .italian:       return "Włoska"
+        case .spanish:       return "Hiszpańska"
+        case .greek:         return "Grecka"
+        case .french:        return "Francuska"
+        case .middleEastern: return "Bliski Wschód"
+        case .indian:        return "Indyjska"
+        case .thai:          return "Tajska"
+        case .asian:         return "Azjatycka"
+        case .mexican:       return "Meksykańska"
+        case .american:      return "Amerykańska"
+        case .other:         return "Inne"
         }
+    }
+
+    /// Przymiotnik do zdania podsumowania („kuchnia bliskowschodnia”).
+    var summaryAdjective: String {
+        switch self {
+        case .middleEastern: return "bliskowschodnia"
+        case .other:         return "inna"
+        default:             return title.lowercased()
+        }
+    }
+
+    /// Kuchnia przepisu z wartości serwera. Nieznana wartość (nowsza kuchnia
+    /// niż ta wersja aplikacji) idzie do „Inne” — inaczej „wszystkie kuchnie”
+    /// znowu gubiłyby przepisy.
+    init(serverValue: String) {
+        self = RecipeCuisine(rawValue: serverValue) ?? .other
     }
 
     /// Glif, gdy żaden przepis tej kuchni nie ma zdjęcia.
@@ -154,9 +183,11 @@ enum RecipeMoment: String, CaseIterable, Identifiable {
 // MARK: - Odczyt z przepisu
 
 extension Recipe {
-    /// Kuchnia z kafelka albo `nil` (inna, nieznana, brak danych).
+    /// Kuchnia z kafelka; nieznana wartość i brak taksonomii (stary backend,
+    /// stary cache) = „Inne” — inaczej „wszystkie kuchnie” chowałyby takie
+    /// przepisy. Opcjonalna tylko dla zgodności z wywołaniami — zawsze jest.
     var cuisine: RecipeCuisine? {
-        taxonomy.flatMap { RecipeCuisine(rawValue: $0.cuisine) }
+        RecipeCuisine(serverValue: taxonomy?.cuisine ?? RecipeCuisine.other.rawValue)
     }
 
     /// Okazje i pory roku przepisu w jednym zbiorze — pod sekcję „Okazje i sezon”.

@@ -117,46 +117,6 @@ struct MealDayTimesCard: View {
     }
 }
 
-// MARK: - Ostrzeżenie o kolejności
-
-/// Kolejność posiłków w planie jest stała — godziny jej nie przestawiają.
-/// Użytkownik ma się o tym dowiedzieć od nas, a nie ze zdziwienia nad
-/// ekranem Planu.
-struct MealTimesOrderNotice: View {
-    let slots: [MealSlot]
-    let schedule: MealSlotSchedule
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        if let pair = schedule.outOfOrderPair(among: slots) {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.sc(size: 11, weight: .semibold))
-                    .foregroundStyle(SCPalette.terracotta)
-
-                Text(text(pair))
-                    .font(.sc(size: 12, weight: .regular))
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 6)
-        }
-    }
-
-    private func text(_ pair: (earlier: MealSlot, later: MealSlot)) -> String {
-        let earlierTime = schedule.time(for: pair.earlier) ?? ""
-        let laterTime = schedule.time(for: pair.later) ?? ""
-        let tail = "Plan i zakładka Dziś i tak pokażą posiłki w stałej kolejności dnia."
-
-        if earlierTime == laterTime {
-            return "\(pair.earlier.title) i \(pair.later.title.lowercased()) mają tę samą porę (\(earlierTime)). \(tail)"
-        }
-        return "\(pair.later.title) (\(laterTime)) wypada nie później niż \(pair.earlier.title.lowercased()) (\(earlierTime)). \(tail)"
-    }
-}
-
 // MARK: - Edytor pory
 
 /// Koło godzin dla jednego posiłku, we własnym arkuszu do połowy ekranu.
@@ -171,14 +131,33 @@ struct MealTimesOrderNotice: View {
 /// Godzina zapisuje się sama przy każdym obrocie koła (`onPick`), więc nie
 /// ma czego zatwierdzać: zamyka się krzyżykiem, jak każdy arkusz, a nie
 /// przyciskiem „Gotowe”, który udawał zapis.
-private struct MealTimeEditorSheet: View {
+///
+/// Wspólny dla osi kreatora (`MealDayTimesCard`) i osi Ustawień
+/// (`MealSlotsSheet`). Ustawienia podają `inPlan` — przy porach dodatkowych
+/// obok krzyżyka stoi „Wyłącz” (albo „Włącz”, gdy pora jest wyłączona, a ma
+/// dania); kreator go nie podaje i wygląda jak dotąd.
+struct MealTimeEditorSheet: View {
+    /// Czy pora dodatkowa jest w dniu — przycisk obok krzyżyka.
+    /// (6.10.2026: czerwony „Wyłącz …” pod kołem „totalnie nie pasował”,
+    /// przełącznik nad kołem też nie; 7.10.2026 Rafał: „obok X na sheet
+    /// button wyłącz”.)
+    struct InPlan {
+        let isOn: Bool
+        let set: (Bool) -> Void
+    }
+
     let slot: MealSlot
     let minutes: Int?
     let onPick: (Int) -> Void
     let onClearTime: () -> Void
     let onClose: () -> Void
+    let inPlan: InPlan?
 
     @Environment(\.colorScheme) private var scheme
+
+    /// Czy pora jest w dniu — lokalnie, żeby przycisk i koło zmieniły się od
+    /// razu, zanim zapis (i zamknięcie okienka) dojdą z góry.
+    @State private var isInPlan: Bool
 
     /// Kopia lokalna: koło pisze tu na każdą klatkę przeciągnięcia,
     /// a dalej idzie dopiero wartość różna od zapisanej.
@@ -189,13 +168,16 @@ private struct MealTimeEditorSheet: View {
         minutes: Int?,
         onPick: @escaping (Int) -> Void,
         onClearTime: @escaping () -> Void,
-        onClose: @escaping () -> Void
+        onClose: @escaping () -> Void,
+        inPlan: InPlan? = nil
     ) {
         self.slot = slot
         self.minutes = minutes
         self.onPick = onPick
         self.onClearTime = onClearTime
         self.onClose = onClose
+        self.inPlan = inPlan
+        _isInPlan = State(initialValue: inPlan?.isOn ?? true)
         let start = minutes ?? MealSlotSchedule.snackSuggestedMinutes
         _selection = State(initialValue: MealSlotSchedule.date(fromMinutes: start))
     }
@@ -213,10 +195,18 @@ private struct MealTimeEditorSheet: View {
                     accent: slot.cozyAccent,
                     compact: true,
                     onClose: onClose
-                )
+                ) {
+                    if inPlan != nil {
+                        inPlanButton
+                    }
+                }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .padding(.bottom, 2)
+                // Nad kołem także w kolejności dotyku: `UIDatePicker` ma
+                // naturalne 216 pt i ściśnięty do 150 łapał dotyk nad sobą
+                // (6.10.2026 — akcja obok krzyżyka nie reagowała).
+                .zIndex(1)
 
                 DatePicker(
                     "",
@@ -232,10 +222,17 @@ private struct MealTimeEditorSheet: View {
                 // Niższe niż naturalne 216 pt, żeby zmieścić się w trzeciej
                 // części ekranu — koło pokazuje wtedy mniej wierszy, ale dalej
                 // kręci się tak samo. Na małych telefonach schodzi do 100.
-                .frame(minHeight: 100, maxHeight: 150)
+                // Z „Wyłącz” w nagłówku koło ma pełne 216 pt (okienko jest
+                // na to wyższe): nieściśnięte nie wystaje nad nagłówek, więc
+                // nie zabiera stuknięcia przyciskowi obok krzyżyka.
+                .frame(minHeight: 100, maxHeight: inPlan != nil ? 216 : 150)
                 .clipped()
                 .layoutPriority(1)
                 .padding(.horizontal, 20)
+                // Pora wyłączona — godzina zostaje, ale nie ma czego ustawiać.
+                .opacity(isInPlan ? 1 : 0.35)
+                .disabled(!isInPlan)
+                .animation(.smooth(duration: 0.2), value: isInPlan)
 
                 // Zdjąć porę można wyłącznie tam, gdzie model na to pozwala.
                 // Przy pozostałych slotach `setting(_:toMinutes: nil)` jest
@@ -245,6 +242,7 @@ private struct MealTimeEditorSheet: View {
                         .font(.sc(size: 13.5, weight: .semibold))
                         .foregroundStyle(SCPalette.terracotta)
                         .frame(maxWidth: .infinity, minHeight: 40)
+                        .zIndex(1)
                 }
 
                 Spacer(minLength: 0)
@@ -253,5 +251,27 @@ private struct MealTimeEditorSheet: View {
         .onChange(of: selection) { _, newValue in
             onPick(MealSlotSchedule.minutes(from: newValue))
         }
+        .onChange(of: isInPlan) { _, newValue in
+            inPlan?.set(newValue)
+        }
+    }
+
+    /// „Wyłącz” / „Włącz” obok krzyżyka — szklana pigułka tej samej
+    /// wysokości co krążek, jak „Wyczyść” w wynikach Przepisów.
+    private var inPlanButton: some View {
+        Button {
+            isInPlan.toggle()
+        } label: {
+            Text(isInPlan ? "Wyłącz" : "Włącz")
+                .font(.sc(size: 13.5, weight: .semibold))
+                .foregroundStyle(isInPlan ? SCPalette.terracotta : Color.scLabel(scheme))
+                .contentTransition(.interpolate)
+                .padding(.horizontal, 14)
+                .frame(height: SCSheetIconLabel.size)
+                .scChromeGlass(in: Capsule(style: .continuous))
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.94))
+        .accessibilityLabel(isInPlan ? "Wyłącz \(slot.accusativeName)" : "Włącz \(slot.accusativeName)")
     }
 }

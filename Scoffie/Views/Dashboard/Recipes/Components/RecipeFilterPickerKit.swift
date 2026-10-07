@@ -11,86 +11,10 @@ import SwiftUI
 // kafelkami, piszącymi od razu do filtrów (6.10.2026; wcześniej półarkusz na
 // arkuszu).
 //
-// Wzór wiersza to kafelek „Wyklucz składniki” (ikona w tincie, tytuł, chipy,
-// plakietka, strzałka), więc cały arkusz czyta się jednym krojem.
-
-// MARK: - Wiersz
-
-/// Wiersz grupy filtrów w karcie „Więcej filtrów”.
-struct RecipeFilterPickerRow: View {
-    let icon: String
-    let title: String
-    /// Przykłady opcji, gdy nic nie wybrano — „Polska, włoska, grecka…”.
-    let placeholder: String
-    /// Wybrane opcje jako pigułki.
-    let chips: [RecipeFilterChipLine.Chip]
-    var accent: Color = SCPalette.terracotta
-    let action: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                RecipeFilterRowIcon(icon: icon, accent: accent)
-
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(title)
-                        .font(.sc(size: 15, weight: .semibold))
-                        .tracking(-0.3)
-                        .foregroundStyle(Color.scLabel(scheme))
-
-                    if chips.isEmpty {
-                        Text(placeholder)
-                            .font(.sc(size: 12.5))
-                            .foregroundStyle(Color.scMuted(scheme))
-                            .lineLimit(1)
-                            .padding(.top, 2)
-                    } else {
-                        RecipeFilterChipLine(chips: chips, accent: accent)
-                            .padding(.top, 7)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                if !chips.isEmpty {
-                    RecipeFilterCountBadge(count: chips.count, accent: accent)
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
-                }
-
-                Image(systemName: "chevron.right")
-                    .font(.sc(size: 12, weight: .bold))
-                    .foregroundStyle(Color.scFaint(scheme))
-            }
-            .padding(12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.985))
-        .animation(.smooth(duration: 0.22), value: chips.map(\.id))
-        .accessibilityLabel(title)
-        .accessibilityValue(chips.isEmpty ? "dowolne" : chips.map(\.title).joined(separator: ", "))
-        .accessibilityHint("Otwiera wybór")
-    }
-}
-
-/// Kafelek ikony na początku każdego wiersza filtrów — 32 pt w tincie akcentu.
-struct RecipeFilterRowIcon: View {
-    let icon: String
-    var accent: Color = SCPalette.terracotta
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(accent.opacity(scheme == .dark ? 0.16 : 0.12))
-            .frame(width: 32, height: 32)
-            .overlay(
-                Image(systemName: icon)
-                    .font(.sc(size: 14, weight: .semibold))
-                    .foregroundStyle(accent)
-            )
-    }
-}
+// Wiersze to dziś jedna lista jak Ustawienia iOS (`RecipeFilterListRowLabel`).
+// Dawny wiersz z pigułkami (`RecipeFilterPickerRow`, ikona `RecipeFilterRowIcon`,
+// kreska `RecipeFilterPickerDivider`) został już tylko w filtrach wyboru do
+// planu i odpadł razem z nimi 7.10.2026 — plan ma teraz te same Filtry.
 
 /// Jedna opcja wyboru „jedno z kilku” — czas, trudność, kalorie.
 struct RecipeFilterChoice<Value: Hashable> {
@@ -114,14 +38,8 @@ struct RecipeFilterListRowLabel: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(accent)
-                .frame(width: 30, height: 30)
-                .overlay(
-                    Image(systemName: icon)
-                        .font(.sc(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                )
+            // Ten sam kafelek co w Ustawieniach — głęboki kolor w obu motywach.
+            EditorialSettingsTileIcon(icon: icon, color: accent)
 
             Text(title)
                 .font(.sc(size: 15, weight: .semibold))
@@ -337,8 +255,8 @@ struct RecipeFilterSegment<Value: Hashable>: View {
 }
 
 /// Rozciągnięcie soczewki przy przeskoku — wszerz i spłaszczenie, potem
-/// lekkie odbicie i spoczynek.
-private struct LensSquish {
+/// lekkie odbicie i spoczynek. Wspólne z kaflami `SCIconTilePicker`.
+struct LensSquish {
     var x: CGFloat = 1
     var y: CGFloat = 1
 }
@@ -521,37 +439,6 @@ struct RecipeFilterPickerGroup<Content: View>: View {
                 .strokeBorder(Color.scTileStroke(scheme), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-}
-
-/// Kreska między wierszami karty — od miejsca, gdzie zaczyna się tekst.
-struct RecipeFilterPickerDivider: View {
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        Rectangle()
-            .fill(Color.scTileStroke(scheme))
-            .frame(height: 1)
-            .padding(.leading, 56)
-    }
-}
-
-extension RecipeFilterPickerRow {
-    /// „Polska, włoska, grecka…” — pierwsze nazwy opcji jako podpowiedź, co
-    /// jest w środku. Wielkość liter podaje wołający (`sentence`), bo „Boże
-    /// Narodzenie” w środku zdania zostaje z wielkiej.
-    static func placeholder(from titles: [String], limit: Int = 3) -> String {
-        let shown = Array(titles.prefix(limit))
-        guard !shown.isEmpty else { return "" }
-        return shown.joined(separator: ", ") + (titles.count > limit ? "…" : "")
-    }
-
-    /// Nazwy jak w zdaniu: pierwsza z wielkiej litery, reszta bez zmian
-    /// (wołający podaje je już małą literą albo w formie ze zdania).
-    static func sentence(_ parts: [String]) -> [String] {
-        guard let first = parts.first, let letter = first.first else { return parts }
-        let head = letter.uppercased() + String(first.dropFirst())
-        return [head] + Array(parts.dropFirst())
     }
 }
 

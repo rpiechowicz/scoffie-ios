@@ -1348,9 +1348,11 @@ final class SessionStore {
         }
     }
 
-    /// Granice nazwy gospodarstwa — parytet z `CreateHouseholdDto` (2…64) na
-    /// serwerze, który od Fazy 0 waliduje je również na WebSockecie.
-    static let householdNameLengthRange = 2...64
+    /// Granice nazwy gospodarstwa — WSZĘDZIE w aplikacji 2…50 (6.10.2026:
+    /// zakładanie w Ustawieniach miało 50, zmiana nazwy i kreator 64).
+    /// Serwer (`CreateHouseholdDto` / `UpdateHouseholdDto`, 2…64, także na
+    /// WebSockecie) jest luźniejszy, więc nic, co tu przejdzie, nie odbije się.
+    static let householdNameLengthRange = 2...50
 
     static func isValidHouseholdName(_ name: String) -> Bool {
         householdNameLengthRange.contains(
@@ -1362,6 +1364,18 @@ final class SessionStore {
     /// lokalnym i wysyłką, bo `saveProfile` zapisuje optymistycznie — dłuższa
     /// nazwa zostawałaby na telefonie, a serwer odrzucałby ją po cichu.
     static let displayNameMaxLength = 64
+
+    /// Imię przycięte do limitu serwera. `@MaxLength` liczy PUNKTY KODOWE, nie
+    /// znaki: emoji z łącznikiem to jeden znak, a kilka punktów, więc cięcie po
+    /// `count` przepuszczało imię, które serwer odrzucał — razem z całym zapisem
+    /// sylwetki. Odcinamy całe znaki od końca, aż zmieszczą się punkty kodowe.
+    static func limitedDisplayName(_ name: String) -> String {
+        var limited = name
+        while limited.unicodeScalars.count > displayNameMaxLength {
+            limited.removeLast()
+        }
+        return limited
+    }
 
     func createHousehold(name: String) async {
         guard let userId = currentUserId, !userId.isEmpty else {
@@ -1375,7 +1389,7 @@ final class SessionStore {
             return
         }
         guard Self.isValidHouseholdName(trimmed) else {
-            authError = "Nazwa gospodarstwa musi mieć od 2 do 64 znaków."
+            authError = "Nazwa gospodarstwa musi mieć od 2 do 50 znaków."
             return
         }
 
@@ -1500,7 +1514,7 @@ final class SessionStore {
         guard let userId = currentUserId, !userId.isEmpty,
               let householdId = currentHouseholdId, !householdId.isEmpty else { return false }
         guard Self.isValidHouseholdName(name) else {
-            authError = "Nazwa gospodarstwa musi mieć od 2 do 64 znaków."
+            authError = "Nazwa gospodarstwa musi mieć od 2 do 50 znaków."
             return false
         }
         guard name != currentHouseholdName else { return true }
@@ -2616,6 +2630,10 @@ final class SessionStore {
         static let heightCm = "settings.profile.heightCm"
         static let weightKg = "settings.profile.weightKg"
         static let sex = "settings.profile.sex"
+        /// „Nie podaję”, którego serwer jeszcze nie potwierdził (zapis padł) —
+        /// ponawiane przy każdym kolejnym zapisie profilu. Inne pola leczą się
+        /// same, bo zapis wysyła ich lokalną wartość; skasowanie płci — nie.
+        static let sexClearPending = "settings.profile.sexClearPending"
     }
 
     private func persistProfileFields(
@@ -2629,8 +2647,22 @@ final class SessionStore {
         if let heightCm { defaults.set(heightCm, forKey: ProfileKeys.heightCm) }
         if let weightKg { defaults.set(weightKg, forKey: ProfileKeys.weightKg) }
         // Backend oddaje `MALE` / `FEMALE`, iOS trzyma małymi literami —
-        // ta sama konwencja co przy diecie i celu.
-        if let sex { defaults.set(sex.lowercased(), forKey: ProfileKeys.sex) }
+        // ta sama konwencja co przy diecie i celu. `users:me` (jedyne wywołanie)
+        // oddaje płeć ZAWSZE, `null` gdy jej nie podano — brak to więc fakt:
+        // „Nie podaję” wybrane na innym telefonie kasuje tu zapamiętaną płeć,
+        // inaczej następna edycja sylwetki odesłałaby starą z powrotem.
+        if let sex {
+            // Niepotwierdzone „Nie podaję” wygrywa ze starą płcią z serwera,
+            // dopóki zapis go nie ponowi — inaczej arkusz pokazałby ją z powrotem.
+            if defaults.string(forKey: ProfileKeys.sexClearPending) == nil {
+                defaults.set(sex.lowercased(), forKey: ProfileKeys.sex)
+            }
+        } else {
+            // Flagi NIE zdejmujemy: spóźniony odczyt z `null` sprzed nowszego
+            // „Nie podaję” skasowałby jej znacznik. Zdejmuje ją tylko
+            // potwierdzony zapis (ponowny `null` serwerowi nie szkodzi).
+            defaults.removeObject(forKey: ProfileKeys.sex)
+        }
     }
 
     private func clearPersistedProfileFields() {
@@ -2639,6 +2671,7 @@ final class SessionStore {
         defaults.removeObject(forKey: ProfileKeys.heightCm)
         defaults.removeObject(forKey: ProfileKeys.weightKg)
         defaults.removeObject(forKey: ProfileKeys.sex)
+        defaults.removeObject(forKey: ProfileKeys.sexClearPending)
     }
 
     /// Pull the user's preferences row from the backend and write into
@@ -2919,16 +2952,18 @@ final class SessionStore {
         yearOfBirth: Int? = nil,
         heightCm: Int? = nil,
         weightKg: Double? = nil,
-        sex: String? = nil
+        sex: String? = nil,
+        /// „Nie podaję” w „Twoich danych” — jawny `null` dla płci. Pominięte
+        /// pole znaczy dla serwera „nie ruszaj”, więc bez tego stara płeć
+        /// zostawała w bazie i wracała z `users:me` po ponownym uruchomieniu.
+        clearSex: Bool = false
     ) async -> Bool {
         guard let userId = currentUserId, !userId.isEmpty else { return false }
 
         var data: [String: Any] = [:]
         if let displayName {
-            let trimmed = String(
-                displayName
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .prefix(Self.displayNameMaxLength)
+            let trimmed = Self.limitedDisplayName(
+                displayName.trimmingCharacters(in: .whitespacesAndNewlines)
             )
             if !trimmed.isEmpty {
                 data["displayName"] = trimmed
@@ -2951,9 +2986,23 @@ final class SessionStore {
             data["weightKg"] = rounded
             UserDefaults.standard.set(rounded, forKey: ProfileKeys.weightKg)
         }
-        if let sex, !sex.isEmpty {
+        // Skasowanie płci: wybrane teraz albo niepotwierdzone z wcześniejszego
+        // zapisu, który padł (`sexClearPending`) — ponawiamy je, dopóki serwer
+        // nie potwierdzi, chyba że w międzyczasie wybrano płeć. Każde nowe
+        // skasowanie dostaje własny znacznik: spóźnione potwierdzenie STARSZEGO
+        // zapisu nie zdejmie flagi nowszego, który jeszcze nie doszedł.
+        let pendingClear = UserDefaults.standard.string(forKey: ProfileKeys.sexClearPending)
+        var clearToken: String?
+        if clearSex || ((sex ?? "").isEmpty && pendingClear != nil) {
+            let token = clearSex ? UUID().uuidString : (pendingClear ?? UUID().uuidString)
+            clearToken = token
+            data["sex"] = NSNull()
+            UserDefaults.standard.removeObject(forKey: ProfileKeys.sex)
+            UserDefaults.standard.set(token, forKey: ProfileKeys.sexClearPending)
+        } else if let sex, !sex.isEmpty {
             data["sex"] = sex.uppercased()
             UserDefaults.standard.set(sex.lowercased(), forKey: ProfileKeys.sex)
+            UserDefaults.standard.removeObject(forKey: ProfileKeys.sexClearPending)
         }
         guard !data.isEmpty else { return true }
 
@@ -2965,6 +3014,10 @@ final class SessionStore {
                 payload: ["userId": userId, "data": data],
                 as: WsEnvelope<BackendUserProfileDTO>.self
             )
+            if envelope.ok, let clearToken,
+               UserDefaults.standard.string(forKey: ProfileKeys.sexClearPending) == clearToken {
+                UserDefaults.standard.removeObject(forKey: ProfileKeys.sexClearPending)
+            }
             return envelope.ok
         } catch {
             // AppStorage jest już zaktualizowany optymistycznie; kreator

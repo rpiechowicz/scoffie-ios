@@ -3,19 +3,28 @@ import SwiftUI
 /// Asystent wyłączony na serwerze (503 `AI_DISABLED`, `AI_ENABLED=false`
 /// na Railwayu) — przerwa techniczna, nie błąd.
 ///
-/// Dotąd jedynym śladem było wyszarzone pole „Asystent jest teraz
-/// niedostępny”: wyglądało jak zepsuta aplikacja. Teraz zakładka mówi to
-/// wprost i ciepło — znak z kluczem, „mały remont”, jedno zdanie, co działa
-/// dalej, i „Sprawdź ponownie”. Pole wiadomości znika (`AssistantView.composer`),
-/// bo pisać i tak nie ma do kogo.
+/// Wersja A z 6.10.2026 („jak od Apple”, artefakt „Asystent na przerwie”):
+/// pusty stan NA ŚRODKU wolnego miejsca, jak w aplikacjach Apple — znak
+/// z kluczem w krążku, tytuł, jedno zdanie i szklany „Sprawdź ponownie”.
+/// Pole wiadomości i licznik puli w nagłówku znikają na czas przerwy
+/// (`AssistantView.showsMaintenance`); „…” zostaje (historia rozmów).
+/// Dawna wersja (blok przy dolnej krawędzi, karta trzech kafli „Działa jak
+/// zawsze”, które wyglądały na przyciski, a nic nie robiły) odpadła.
 ///
-/// Blok stoi tam, gdzie powitanie (`AssistantEmptyState`): przy dolnej
-/// krawędzi, w tej samej typografii (znak, otwarcie 28 semibold, zdanie 17).
-/// Ruch: samo krycie kaskadą przy wejściu i żywy znak — bez ruchu całego
-/// ekranu. Wyczerpana pula to INNY stan (`AssistantQuotaSpentCard`).
+/// Ruch mówi tylko o zmianie — bez kaskady przy wejściu, ekran stoi od razu:
+/// - znak oddycha, a klucz kiwa się co kilka sekund (tylko na otwartej
+///   zakładce, przy „Ogranicz ruch” stoi);
+/// - sprawdzanie = kręciołek w miejscu strzałki, przycisk nie zmienia szerokości;
+/// - „jeszcze nie” = przycisk drgnie, haptyka ostrzeżenia i zdanie pod spodem;
+/// - powrót (`isBack`) = klucz odpada, znak podskakuje, tytuł roluje się
+///   na „Asystent wrócił”, a po chwili `AssistantView` przechodzi w powitanie
+///   (`comebackHold`). Wyczerpana pula to INNY stan (`AssistantQuotaSpentCard`).
 struct AssistantMaintenanceView: View {
-    /// Trwa sprawdzanie — przycisk kręci się zamiast napisu.
+    /// Trwa sprawdzanie — w przycisku kręciołek zamiast strzałki.
     let isChecking: Bool
+    /// Asystent już wrócił: chwila „wrócił” przed powitaniem
+    /// (`AssistantView.comebackHold`).
+    var isBack: Bool = false
     /// `true` = asystent wrócił (ekran zniknie sam, bo `isUnavailable` spadło).
     let onRecheck: () async -> Bool
 
@@ -23,163 +32,106 @@ struct AssistantMaintenanceView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scTabIsActive) private var isActiveTab
 
-    @State private var revealed = false
     /// Ostatnie sprawdzenie nic nie dało — pod przyciskiem krótkie „jeszcze nie”.
     @State private var stillDown = false
+    /// Nieudane sprawdzenia: haptyka ostrzeżenia i drgnięcie przycisku.
     @State private var checks = 0
-
-    private struct Working: Identifiable {
-        let id: String
-        let title: String
-        let icon: String
-        let accent: Color
-    }
-
-    /// Co działa bez asystenta — to, po co ktoś i tak przyszedł do aplikacji.
-    private let working: [Working] = [
-        Working(id: "plan", title: MenuConstans.Plan.name, icon: MenuConstans.Plan.icon, accent: SCPalette.terracotta),
-        Working(id: "recipes", title: MenuConstans.Recipes.name, icon: MenuConstans.Recipes.icon, accent: SCPalette.sage),
-        Working(id: "shopping", title: "Zakupy", icon: MenuConstans.Products.icon, accent: SCPalette.indigo),
-    ]
+    /// Podskok znaku przy powrocie (`SCLivingMark.cheer`).
+    @State private var cheer = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 0) {
             mark
-                .modifier(MaintenanceStep(revealed: revealed, delay: 0, reduceMotion: reduceMotion))
+                .padding(.bottom, 20)
 
-            Text("PRACE SERWISOWE")
-                .font(.sc(size: 10.5, weight: .bold))
-                .tracking(1.4)
-                .foregroundStyle(AssistantLook.terra(scheme))
-                .padding(.top, 18)
-                .modifier(MaintenanceStep(revealed: revealed, delay: 0.06, reduceMotion: reduceMotion))
-
-            Text("Asystent jest na małym remoncie")
-                .font(.sc(size: 28, weight: .semibold))
-                .tracking(-0.5)
-                .lineSpacing(2)
+            // Tytuł i zdanie ROLUJĄ się na powrót — ten sam ruch co każda
+            // zmiana tekstu w aplikacji (`SCMotion.textRoll`).
+            Text(isBack ? "Asystent wrócił" : "Asystent ma przerwę")
+                .font(.sc(size: 24, weight: .heavy))
+                .tracking(-0.6)
                 .foregroundStyle(AssistantLook.ink(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
+                .multilineTextAlignment(.center)
+                // „Ogranicz ruch”: samo przenikanie zamiast rolowania liter.
+                .contentTransition(reduceMotion ? .opacity : .numericText())
                 .accessibilityAddTraits(.isHeader)
-                .modifier(MaintenanceStep(revealed: revealed, delay: 0.1, reduceMotion: reduceMotion))
 
-            Text("Dokręcamy kilka śrubek, żeby podpowiadał jeszcze trafniej. Wróci niedługo.")
-                .font(.sc(size: 17))
-                .tracking(-0.3)
-                .lineSpacing(3)
+            Text(isBack ? "Możesz pisać." : "Wróci niedługo. Plan, przepisy i zakupy działają jak zawsze.")
+                .font(.sc(size: 15.5))
+                .tracking(-0.2)
+                .lineSpacing(2)
                 .foregroundStyle(AssistantLook.muted(scheme))
+                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 340, alignment: .leading)
+                .frame(maxWidth: 300)
+                .contentTransition(.opacity)
                 .padding(.top, 8)
-                .modifier(MaintenanceStep(revealed: revealed, delay: 0.16, reduceMotion: reduceMotion))
-
-            workingCard
-                .padding(.top, 20)
-                .modifier(MaintenanceStep(revealed: revealed, delay: 0.24, reduceMotion: reduceMotion))
 
             recheckButton
-                .padding(.top, 20)
-                .modifier(MaintenanceStep(revealed: revealed, delay: 0.32, reduceMotion: reduceMotion))
+                .padding(.top, 22)
+                .opacity(isBack ? 0 : 1)
+                .disabled(isBack)
+                .accessibilityHidden(isBack)
 
-            Text("Jeszcze nie wrócił — zajrzyj za kilka minut.")
+            Text("Jeszcze nie wrócił. Zajrzyj za kilka minut.")
                 .font(.sc(size: 13.5))
                 .foregroundStyle(AssistantLook.faint(scheme))
-                .padding(.top, 10)
-                .padding(.leading, 4)
-                .opacity(stillDown ? 1 : 0)
+                .multilineTextAlignment(.center)
+                .padding(.top, 12)
+                .opacity(stillDown && !isBack ? 1 : 0)
                 .animation(.easeOut(duration: 0.25), value: stillDown)
-                .accessibilityHidden(!stillDown)
+                .accessibilityHidden(!stillDown || isBack)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : SCMotion.textRoll, value: isBack)
         .sensoryFeedback(.warning, trigger: checks)
-        // Każdy element ma własną animację z opóźnieniem (`MaintenanceStep`).
-        .onAppear { revealed = true }
+        .sensoryFeedback(trigger: isBack) { old, new in
+            !old && new ? .success : nil
+        }
+        .onChange(of: isBack) { _, back in
+            if back { cheer += 1 }
+        }
     }
 
     // MARK: - Części
 
-    /// Żywy znak z kluczem w rogu — ta sama postać co w powitaniu, tylko
-    /// „w warsztacie”. Klucz kiwa się co kilka sekund, na niewybranej
-    /// zakładce i przy „Ogranicz ruch” stoi.
+    /// Żywy znak w krążku w tincie terakoty, klucz w rogu — ta sama postać
+    /// co w powitaniu, tylko „w warsztacie”. Krążek NIE jest szkłem: stoi
+    /// w treści, a szkło jest tylko na tym, co pływa.
     private var mark: some View {
         SCLivingMark(
             mood: .idle,
             color: AssistantLook.terraFill(scheme),
-            size: 26,
-            lively: true
+            size: 44,
+            cheer: cheer
         )
-        .frame(width: 34, height: 34, alignment: .topLeading)
+        .frame(width: 96, height: 96)
+        .background(Circle().fill(AssistantLook.terraTint(scheme)))
         .overlay(alignment: .bottomTrailing) {
             Image(systemName: "wrench.and.screwdriver.fill")
-                .font(.sc(size: 10.5, weight: .bold))
+                .font(.sc(size: 12, weight: .bold))
                 .foregroundStyle(AssistantLook.terra(scheme))
                 .symbolEffect(
                     .wiggle,
                     options: .repeat(.periodic(delay: 2.6)),
-                    isActive: isActiveTab && !reduceMotion
+                    isActive: isActiveTab && !reduceMotion && !isBack
                 )
-                .frame(width: 22, height: 22)
+                .frame(width: 28, height: 28)
                 .background(Circle().fill(Color.scPageBase(scheme)))
-                .background(Circle().fill(AssistantLook.terraTint(scheme)).padding(-0.5))
                 .overlay(Circle().stroke(AssistantLook.terraFill(scheme).opacity(0.35), lineWidth: 1))
-                .offset(x: 8, y: 6)
+                // Klucz odpada przy powrocie — skala z obrotem, potem krycie;
+                // przy „Ogranicz ruch” samo krycie.
+                .scaleEffect(isBack && !reduceMotion ? 0.01 : 1)
+                .rotationEffect(.degrees(isBack && !reduceMotion ? -60 : 0))
+                .opacity(isBack ? 0 : 1)
+                .animation(reduceMotion ? .easeOut(duration: 0.2) : .easeIn(duration: 0.25), value: isBack)
+                .offset(x: -14, y: -14)
         }
         .accessibilityHidden(true)
     }
 
-    /// Jedna karta, trzy kafle: co działa bez asystenta.
-    private var workingCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.sc(size: 13, weight: .semibold))
-                    .foregroundStyle(AssistantLook.sage(scheme))
-                Text("Działa jak zawsze")
-                    .font(.sc(size: 13.5, weight: .semibold))
-                    .tracking(-0.2)
-                    .foregroundStyle(AssistantLook.muted(scheme))
-            }
-
-            HStack(spacing: 8) {
-                ForEach(working) { item in
-                    VStack(spacing: 8) {
-                        Image(systemName: item.icon)
-                            .font(.sc(size: 16, weight: .semibold))
-                            .foregroundStyle(item.accent)
-                            .frame(width: 38, height: 38)
-                            .background(Circle().fill(item.accent.opacity(scheme == .dark ? 0.16 : 0.12)))
-                        Text(item.title)
-                            .font(.sc(size: 13.5, weight: .semibold))
-                            .tracking(-0.2)
-                            .foregroundStyle(AssistantLook.ink(scheme))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(AssistantLook.field(scheme))
-                    )
-                }
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: AssistantCardMetrics.radius, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AssistantCardMetrics.radius, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Plan, przepisy i zakupy działają jak zawsze")
-    }
-
-    /// Główna akcja w wariancie „soft”, na szerokość treści — jak w powitaniu.
+    /// Szklany przycisk w tincie terakoty („soft”), na szerokość treści.
+    /// Drgnięcie po nieudanym sprawdzeniu gra keyframe'ami na liczniku
+    /// `checks` — przy „Ogranicz ruch” zostaje sama haptyka i zdanie.
     private var recheckButton: some View {
         Button {
             Task {
@@ -192,62 +144,62 @@ struct AssistantMaintenanceView: View {
             }
         } label: {
             HStack(spacing: 8) {
-                if isChecking {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .tint(AssistantLook.terra(scheme))
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.sc(size: 15, weight: .bold))
+                ZStack {
+                    if isChecking {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(AssistantLook.terra(scheme))
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.sc(size: 15, weight: .bold))
+                    }
                 }
+                .frame(width: 20, height: 20)
+
                 Text("Sprawdź ponownie")
-                    .font(.sc(size: 17, weight: .semibold))
-                    .tracking(-0.3)
+                    .font(.sc(size: 16, weight: .semibold))
+                    .tracking(-0.2)
                     .lineLimit(1)
             }
             .foregroundStyle(AssistantLook.terra(scheme))
-            .padding(.leading, 20)
+            .padding(.leading, 18)
             .padding(.trailing, 22)
-            .frame(height: 50)
+            .frame(height: 48)
             .scSoftCapsule(AssistantLook.terra(scheme))
             .contentShape(Capsule())
         }
         .buttonStyle(PlanPressStyle(scale: 0.97))
         .disabled(isChecking)
+        .keyframeAnimator(initialValue: CGFloat.zero, trigger: reduceMotion ? 0 : checks) { content, offset in
+            content.offset(x: offset)
+        } keyframes: { _ in
+            KeyframeTrack {
+                MoveKeyframe(0)
+                CubicKeyframe(-6, duration: 0.08)
+                CubicKeyframe(5, duration: 0.1)
+                CubicKeyframe(-3, duration: 0.1)
+                CubicKeyframe(0, duration: 0.12)
+            }
+        }
         .animation(.easeOut(duration: 0.2), value: isChecking)
     }
 }
 
-/// Kaskada wejścia: samo krycie, każdy element z własnym opóźnieniem.
-private struct MaintenanceStep: ViewModifier {
-    let revealed: Bool
-    let delay: Double
-    let reduceMotion: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(revealed ? 1 : 0)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.4).delay(delay), value: revealed)
-    }
-}
-
 #Preview("Light") {
-    ZStack(alignment: .bottom) {
+    ZStack {
         SCPageBackground(scheme: .light).ignoresSafeArea()
         AssistantMaintenanceView(isChecking: false, onRecheck: { false })
             .padding(.horizontal, SCPageMetrics.horizontal)
-            .padding(.bottom, 40)
     }
     .preferredColorScheme(.light)
 }
 
-#Preview("Dark") {
-    ZStack(alignment: .bottom) {
+#Preview("Dark — wrócił") {
+    ZStack {
         SCPageBackground(scheme: .dark).ignoresSafeArea()
-        AssistantMaintenanceView(isChecking: true, onRecheck: { false })
+        AssistantMaintenanceView(isChecking: false, isBack: true, onRecheck: { true })
             .padding(.horizontal, SCPageMetrics.horizontal)
-            .padding(.bottom, 40)
     }
     .preferredColorScheme(.dark)
 }

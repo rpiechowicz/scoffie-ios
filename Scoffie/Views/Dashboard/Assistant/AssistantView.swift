@@ -54,8 +54,18 @@ struct AssistantView: View {
     @State private var showConversations = false
     @State private var showMemory = false
     @State private var showUsage = false
+    /// Asystent właśnie wrócił z przerwy, gdy jej ekran był na wierzchu:
+    /// ekran zostaje jeszcze chwilę w stanie „wrócił” (klucz odpada, znak
+    /// podskakuje, tytuł się roluje), zanim przejdzie w powitanie. Bez tego
+    /// ekran przerwy po prostu znikał w pół klatki.
+    @State private var comebackHold = false
     /// „Wybierz plan" — z linijki nad polem po wyczerpaniu puli.
     @State private var showPaywall = false
+    /// Karta wykorzystanej puli zamknięta krzyżykiem (7.10.2026) — zamiast
+    /// niej stoi wyłączone pole. Wraca, gdy blokada zejdzie i założy się
+    /// znowu, albo po stuknięciu w wyłączone pole lub w akcję karty, która
+    /// chciała coś wysłać (`refuseAsk`).
+    @State private var quotaCardDismissed = false
     /// „Prywatność i zgoda" z menu — stan zgody i jej cofnięcie.
     @State private var showConsentReview = false
     /// „Co potrafi asystent" — z menu.
@@ -234,7 +244,7 @@ struct AssistantView: View {
                                 header
                                     .background(alignment: .top) {
                                         AssistantHeaderShade()
-                                            .opacity(isConversationEmpty || store.isUnavailable ? 0 : headerShade)
+                                            .opacity(isConversationEmpty || showsMaintenance ? 0 : headerShade)
                                     }
                             }
                     }
@@ -281,6 +291,7 @@ struct AssistantView: View {
             // Przerwa techniczna: każde wejście na zakładkę sprawdza po cichu,
             // czy asystent już wrócił — nikt nie musi pamiętać o przycisku.
             if active, store.isUnavailable { Task { await store.recheckAvailability() } }
+            if !active { comebackHold = false }
             // Pula znana, zanim ktoś stuknie w akcję powitania: pusta =
             // powitanie od razu w stanie limitu, bez wysyłki i skoku.
             if active { Task { await store.refreshUsageIfStale() } }
@@ -306,6 +317,11 @@ struct AssistantView: View {
             // Tura domknęła się odpowiedzią (nie błędem, nie „stop”).
             if wasSending, !isSending, store.errorMessage == nil { answerCheer += 1 }
         }
+        .onChange(of: isQuotaLocked) { _, locked in
+            // Pula wróciła (zakup, odnowienie) — następna blokada znów
+            // zaczyna od karty, nie od zamkniętego pola.
+            if !locked { quotaCardDismissed = false }
+        }
         .task {
             // Stan zgód PRZED pierwszym renderem bramki — bez tego nowy
             // użytkownik widział rozmowę, dopóki serwer nie odpowiedział.
@@ -330,7 +346,12 @@ struct AssistantView: View {
         .sheet(isPresented: $showPaywall) {
             // „Zobacz plany" po wyczerpaniu puli prowadzi PROSTO do wyboru
             // planu — ten sam arkusz, który otwiera się z „Asystent i plan".
-            PlansSheet()
+            // Zakup przyjęty przez serwer od razu pyta o pulę: blokada pola
+            // schodzi teraz, nie po minucie (`refreshUsageIfStale`) — tak
+            // samo jak w „Asystent i plan” (`PlanAccessSheet`).
+            PlansSheet(onPurchased: {
+                Task { _ = await store.loadUsage() }
+            })
         }
         .sheet(isPresented: $showConversations) {
             AssistantConversationsSheet(store: store)
@@ -663,7 +684,9 @@ struct AssistantView: View {
     private var quotaPips: AnyView? {
         // Przy zerze kapsułki nie ma — zera nie trzeba pokazywać dwa razy
         // (briefing i karta zamiast pola już o tym mówią).
-        guard let usage = store.usage, usage.isTrial, usage.messages.remaining > 0 else { return nil }
+        // Na czas przerwy licznik nic nie znaczy — wraca razem z Asystentem.
+        guard !showsMaintenance,
+              let usage = store.usage, usage.isTrial, usage.messages.remaining > 0 else { return nil }
         return AnyView(
             Button { showUsage = true } label: {
                 AssistantQuotaPill(
@@ -858,22 +881,32 @@ struct AssistantView: View {
         reduceMotion ? nil : .smooth(duration: 0.3)
     }
 
+    /// Ekran przerwy na wierzchu: przerwa trwa albo właśnie minęła i trwa
+    /// chwila „wrócił” (`comebackHold`).
+    private var showsMaintenance: Bool {
+        store.isUnavailable || comebackHold
+    }
+
     private var conversation: some View {
         ZStack {
-            if store.isUnavailable {
+            if showsMaintenance {
                 // Asystent wyłączony na serwerze (`AI_DISABLED`): przerwa
                 // techniczna zamiast rozmowy i pola. Historia zostaje
                 // w menu („Historia rozmów”), a po powrocie wszystko wraca samo.
                 GeometryReader { geometry in
                     ScrollView {
+                        // Pusty stan na środku wolnego miejsca, optycznie
+                        // trochę wyżej (większy margines dolny) — jak
+                        // w aplikacjach Apple; pola wiadomości nie ma.
                         AssistantMaintenanceView(
                             isChecking: store.isCheckingAvailability,
+                            isBack: !store.isUnavailable,
                             onRecheck: { await store.recheckAvailability() }
                         )
                         .padding(.horizontal, SCPageMetrics.horizontal)
                         .padding(.top, 4)
-                        .padding(.bottom, 28)
-                        .frame(minHeight: geometry.size.height, alignment: .bottom)
+                        .padding(.bottom, 56)
+                        .frame(minHeight: geometry.size.height, alignment: .center)
                     }
                     .scrollBounceBehavior(.basedOnSize)
                 }
@@ -919,7 +952,18 @@ struct AssistantView: View {
             }
         }
         .animation(conversationSwitch, value: isConversationEmpty)
-        .animation(conversationSwitch, value: store.isUnavailable)
+        .animation(conversationSwitch, value: showsMaintenance)
+        // Powrót z przerwy na oczach: chwila „wrócił”, potem powitanie.
+        // Poza zakładką (`isActiveTab == false`) nikt tego nie widzi — wtedy
+        // od razu powitanie.
+        .onChange(of: store.isUnavailable) { wasUnavailable, isUnavailable in
+            guard wasUnavailable, !isUnavailable, isActiveTab else { return }
+            comebackHold = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(1300))
+                withAnimation(conversationSwitch) { comebackHold = false }
+            }
+        }
     }
 
     private var messageList: some View {
@@ -1166,6 +1210,38 @@ struct AssistantView: View {
         store.isLocked && store.lockReason == .quota && store.usage?.isTrial == false
     }
 
+    /// Pula wykorzystana — na próbie albo w planie miesięcznym.
+    private var isQuotaLocked: Bool {
+        store.isLockedByTrialQuota || isLockedByMonthlyQuota
+    }
+
+    /// Karta wykorzystanej puli zamiast pola: na próbie tylko w rozmowie (na
+    /// pustym ekranie to samo mówi powitanie), w planie miesięcznym wszędzie
+    /// — póki nikt jej nie zamknął krzyżykiem.
+    private var showsQuotaCard: Bool {
+        guard !showsMaintenance, !quotaCardDismissed else { return false }
+        if store.isLockedByTrialQuota { return !isConversationEmpty }
+        return isLockedByMonthlyQuota
+    }
+
+    /// Pole wiadomości: wszędzie poza przerwą, kartą puli i pustym ekranem
+    /// próby po wykorzystaniu puli (tam powitanie ma własne „Zobacz plany”).
+    /// Przy zamkniętej karcie puli pole stoi, ale wyłączone (`store.isLocked`).
+    private var showsComposerField: Bool {
+        guard !showsMaintenance, !showsQuotaCard else { return false }
+        return !(store.isLockedByTrialQuota && isConversationEmpty)
+    }
+
+    /// Podpowiedź w polu, które nie przyjmie wiadomości. Przy wykorzystanej
+    /// puli mówi, CO się stało i kiedy wróci — „Chwila przerwy — spróbuj za
+    /// moment” obiecywało coś, co nie nastąpi do odnowienia planu.
+    private var lockedPrompt: String {
+        guard store.lockReason == .quota else { return "Chwila przerwy — spróbuj za moment" }
+        if store.usage?.isTrial == true { return "Darmowe wiadomości wykorzystane" }
+        if let day = quotaFacts?.resetDay { return "Wiadomości wrócą \(day)" }
+        return "Wiadomości wrócą z odnowieniem planu"
+    }
+
     // MARK: - Klawiatura a powitanie
 
     /// Klawiatura rusza: powitanie zwija się / rozwija w tej samej chwili
@@ -1238,7 +1314,7 @@ struct AssistantView: View {
     /// (`AssistantComposerHint`: propozycja, zapis, dania do wyboru…).
     private var composerPrompt: String {
         if store.isUnavailable { return "Asystent jest teraz niedostępny" }
-        if store.isLocked { return "Chwila przerwy — spróbuj za moment" }
+        if store.isLocked { return lockedPrompt }
         if editing != nil { return "Popraw pytanie…" }
         if isConversationEmpty {
             let example = briefing.placeholder
@@ -1253,58 +1329,78 @@ struct AssistantView: View {
     // MARK: - Pole wiadomości
 
     private var composer: some View {
-        // Jedna grupa szkła na kartę skrótu, pole i „Wyślij”: karta „masz to
-        // w aplikacji” WYRASTA z pola i w nie wsiąka (Liquid Glass runda 2),
-        // a pole i krążek załamują światło razem. Odstęp grupy (8) nie
-        // przekracza odstępów w spoczynku, więc szkła nie zlewają się, póki
-        // stoją — łączą się tylko w ruchu.
-        GlassEffectContainer(spacing: 8) {
-            VStack(spacing: 0) {
-                if editing != nil {
-                    editingBar
-                        .transition(.opacity)
-                }
-
-                if let appShortcut {
-                    AssistantAppShortcutCard(
-                        shortcut: appShortcut,
-                        onOpen: { openShortcut(appShortcut) },
-                        onAskAnyway: {
-                            self.appShortcut = nil
-                            send(force: true)
-                        },
-                        onDismiss: { self.appShortcut = nil }
-                    )
-                    .glassEffectID("shortcut", in: composerGlass)
+        VStack(spacing: 0) {
+            // Karta wykorzystanej puli stoi POZA grupą szkła (7.10.2026,
+            // Rafał: „»Zobacz plany« nie działa”). W `GlassEffectContainer`
+            // pod systemowym `TabView` szklany przycisk bez `glassEffectID`
+            // nie przyjmował stuknięć — ten sam objaw i ta sama naprawa co
+            // krążek Filtrów na Przepisach (9af6e15, `RecipesSearchBar`).
+            // Karta i tak nie jest szkłem (strój kafla), więc z polem nie ma
+            // się w co zlewać.
+            if showsQuotaCard {
+                quotaSpentCard(isTrial: store.isLockedByTrialQuota)
                     .transition(.opacity)
-                }
+            }
 
-                // Wykorzystana pula na próbę: pole, w które nie da się pisać, jest
-                // wyłącznie frustracją. W rozmowie stoi zamiast niego karta
-                // z jednym przyciskiem, który coś zmienia; na pustym ekranie
-                // to samo mówi briefing, więc composera nie ma wcale.
-                if store.isUnavailable {
+            // Jedna grupa szkła na kartę skrótu, pole i „Wyślij”: karta „masz to
+            // w aplikacji” WYRASTA z pola i w nie wsiąka (Liquid Glass runda 2),
+            // a pole i krążek załamują światło razem. Odstęp grupy (8) nie
+            // przekracza odstępów w spoczynku, więc szkła nie zlewają się, póki
+            // stoją — łączą się tylko w ruchu.
+            GlassEffectContainer(spacing: 8) {
+                VStack(spacing: 0) {
+                    if editing != nil {
+                        editingBar
+                            .transition(.opacity)
+                    }
+
+                    if let appShortcut {
+                        AssistantAppShortcutCard(
+                            shortcut: appShortcut,
+                            onOpen: { openShortcut(appShortcut) },
+                            onAskAnyway: {
+                                self.appShortcut = nil
+                                send(force: true)
+                            },
+                            onDismiss: { self.appShortcut = nil }
+                        )
+                        .glassEffectID("shortcut", in: composerGlass)
+                        .transition(.opacity)
+                    }
+
                     // Przerwa techniczna: ekran mówi to sam i ma własne
                     // „Sprawdź ponownie” — wyszarzone pole byłoby tylko szumem.
-                    EmptyView()
-                } else if store.isLockedByTrialQuota {
-                    if !isConversationEmpty {
-                        quotaSpentCard(isTrial: true)
+                    // Pole wjeżdża dopiero z powitaniem, po chwili „wrócił”.
+                    // Wykorzystana pula: zamiast pola karta (wyżej), a po jej
+                    // zamknięciu pole WYŁĄCZONE z podpowiedzią o puli
+                    // (`lockedPrompt`) — Rafał 7.10.2026: „wyłącz input do
+                    // wpisywania wiadomości oraz send”.
+                    if showsComposerField {
+                        composerField
                     }
-                } else if isLockedByMonthlyQuota {
-                    // Pula miesięczna: pole, w które nie da się pisać do
-                    // odnowienia, zastępuje karta z datą powrotu — także na
-                    // pustym ekranie, bo powitanie o puli nie mówi.
-                    quotaSpentCard(isTrial: false)
-                } else {
-                    composerField
+                }
+            }
+            .overlay {
+                if isQuotaLocked, showsComposerField {
+                    // Wyłączone pole nie łapie dotyku, więc stuknięcie w nie
+                    // „nic nie robiło”. Przezroczysta warstwa nad nim przywraca
+                    // kartę puli z drogą do planów albo limitów.
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { quotaCardDismissed = false }
+                    } label: {
+                        Color.clear.contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(lockedPrompt)
+                    .accessibilityHint("Pokazuje, co dalej z pulą wiadomości")
                 }
             }
         }
         .animation(.easeInOut(duration: 0.2), value: editing != nil)
         .animation(.easeInOut(duration: 0.2), value: store.isLockedByTrialQuota)
         .animation(.easeInOut(duration: 0.2), value: isLockedByMonthlyQuota)
-        .animation(.easeInOut(duration: 0.2), value: store.isUnavailable)
+        .animation(.easeInOut(duration: 0.2), value: quotaCardDismissed)
+        .animation(.easeInOut(duration: 0.2), value: showsMaintenance)
         // Karta skrótu znika też bez `withAnimation` (krzyżyk, „Zapytaj mimo
         // to”, pisanie w polu) — wsiąkanie w pole ma grać zawsze.
         .animation(.smooth(duration: 0.32), value: appShortcut != nil)
@@ -1320,7 +1416,9 @@ struct AssistantView: View {
     /// nimi. Grupa szkła (`GlassEffectContainer`) stoi w `composer` — wspólna
     /// z kartą skrótu, która wyrasta z pola.
     private var composerField: some View {
-        let active = store.isSending || editing != nil || canSend
+        // Zablokowane pole (pula, przerwa) nie ma terakotowego „Wyślij” także
+        // w trakcie poprawki pytania — krążek i tak jest wyłączony (7.10.2026).
+        let active = store.isSending || (editing != nil && !store.isLocked) || canSend
         return HStack(alignment: .bottom, spacing: 10) {
             TextField(composerPrompt, text: $draft, axis: .vertical)
             // Do ośmiu wierszy: pytanie bywa całym akapitem („mamy gości
@@ -1399,12 +1497,16 @@ struct AssistantView: View {
 
     /// Karta zamiast pola po wykorzystaniu puli (`AssistantQuotaSpentCard`):
     /// próba prowadzi do planów, plan miesięczny — do limitów z datą powrotu.
+    /// Krzyżyk zostawia w jej miejscu wyłączone pole (7.10.2026).
     private func quotaSpentCard(isTrial: Bool) -> some View {
         AssistantQuotaSpentCard(
             facts: quotaFacts,
             isTrial: isTrial,
             action: {
                 if isTrial { showPaywall = true } else { showUsage = true }
+            },
+            onDismiss: {
+                withAnimation(.easeInOut(duration: 0.2)) { quotaCardDismissed = true }
             }
         )
         .background(RoundedRectangle(cornerRadius: AssistantCardMetrics.radius, style: .continuous).fill(AssistantLook.input(scheme)))
@@ -1548,6 +1650,27 @@ struct AssistantView: View {
         isComposerFocused = true
     }
 
+    /// Akcja karty (wiersz „Jak nadrobić”, pigułka odpowiedzi, „Wstaw” przy
+    /// daniu do wyboru, akcja powitania), gdy Asystent nie przyjmie teraz
+    /// wiadomości. Dotąd `ask` wracał bez śladu i stuknięcie „nic nie
+    /// robiło” — Rafał 7.10.2026: trzy propozycje domknięcia białka
+    /// (`AssistantMacroGapCard`) „nie dają się otworzyć”, bo pula była już
+    /// wykorzystana. Teraz zawsze widać powód: przy puli wraca jej karta
+    /// (z „Zobacz plany” / „Limity asystenta”) i toast, przy turze w biegu
+    /// albo przerwie — sam toast. Toast gra też haptykę.
+    private func refuseAsk() {
+        if isQuotaLocked {
+            withAnimation(.easeInOut(duration: 0.2)) { quotaCardDismissed = false }
+            toasts.show(SCToast(style: .warning, title: lockedPrompt))
+        } else if store.isSending || store.isPreparing {
+            toasts.show(SCToast(style: .info, title: "Chwila — kończę poprzednią odpowiedź"))
+        } else if store.isUnavailable {
+            toasts.show(SCToast(style: .info, title: "Asystent ma przerwę"))
+        } else if store.isLocked {
+            toasts.show(SCToast(style: .info, title: lockedPrompt))
+        }
+    }
+
     /// „Poproś o nową” z karty STALE/EXPIRED — gotowe zdanie, bez zapisu.
     private func askForFreshProposal() {
         ask("Przelicz tę propozycję na nowo na aktualnym planie")
@@ -1555,7 +1678,11 @@ struct AssistantView: View {
 
     private func ask(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, store.canSend else { return }
+        guard !trimmed.isEmpty else { return }
+        guard store.canSend else {
+            refuseAsk()
+            return
+        }
         draft = ""
         isComposerFocused = false
         // Tekst, który nie doszedł, wraca przyciskiem „Spróbuj ponownie" przy

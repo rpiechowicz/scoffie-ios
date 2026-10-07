@@ -83,11 +83,28 @@ struct PlanAudienceButton: View {
     // MARK: Wybór
 
     /// Osoba z „Całego domu” startuje od samej siebie; zaznaczenie wszystkich
-    /// zwija się z powrotem do „Całego domu”, odznaczenie ostatniej — też.
+    /// (dom 3+ osobowy) zwija się z powrotem do „Całego domu”. Ostatniej osoby
+    /// się nie odznacza, a w domu dwuosobowym osoby się wykluczają — do
+    /// „Całego domu” prowadzi tylko jego wiersz (7.10.2026).
     private func toggle(_ memberId: String) {
-        var next = isWholeHouse ? Set<String>() : selection
+        // Stuknięcie w OSOBĘ nigdy po cichu nie daje „Całego domu” (7.10.2026,
+        // Rafał: „dodaję posiłek dla domu, potem 2. posiłek dla user2 jako
+        // obok — oba chipy są dom”). W domu dwuosobowym każde stuknięcie
+        // w osobę przy wybranej jednej osobie zwijało się do „Całego domu”:
+        // odznaczenie ostatniej → pusto, dołożenie drugiej → wszyscy. Arkusz
+        // „Osobne danie dla kogoś” startuje z jedną osobą, więc „wybranie”
+        // user2 zapisywało drugie danie dla całego domu, karta mówiła „Zamień
+        // dla wszystkich”, a „Dodaj obok” stawiało dwa dania „Wspólne” — oba
+        // z domkiem. „Cały dom” ma własny wiersz menu.
+        var next = isWholeHouse ? Set<String>() : Set(PlanAudienceChips.collapsed(selection, members: members))
         if next.contains(memberId) {
+            // Ostatnia wybrana osoba zostaje (jak wybrana pozycja w `Picker`).
+            guard next.count > 1 else { return }
             next.remove(memberId)
+        } else if members.count == 2 {
+            // Dwie osoby razem = „Cały dom”, więc tu osoby się wykluczają:
+            // stuknięcie w drugą PRZEŁĄCZA na nią, zamiast dokładać.
+            next = [memberId]
         } else {
             next.insert(memberId)
         }

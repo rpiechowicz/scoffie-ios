@@ -107,14 +107,22 @@ enum RecipeFilterCoverPicks {
         "cuisine:SPANISH": ["ad93575d-abc1-476f-8252-86a799e1e8eb", "48c55eb4-b7f8-49a5-bc0d-aa89a4d00aff"],
         // Sałatka grecka z pieczywem · Pita z kurczakiem gyros i warzywami
         "cuisine:GREEK": ["771d5a65-dc3b-4f29-a23f-46084875f1c5", "64328752-781f-4cd9-b4e9-3d56052ea690"],
+        // Tarta z boczkiem i cebulą · Ratatouille z bagietką
+        "cuisine:FRENCH": ["2fc3e422-e623-4ca1-8af7-8879efb082d3", "73b9e066-e6e1-464b-bd9d-83bc42198dbe"],
+        // Falafel pieczony z sosem jogurtowym i pitą · Szakszuka z papryką i cebulą
+        "cuisine:MIDDLE_EASTERN": ["412d73ff-c9b1-450c-9ff0-950845dae87a", "24a81d51-40e7-403b-92f4-cdc0f5a8426e"],
         // Butter chicken z ryżem basmati · Kurczak tikka masala z ryżem
         "cuisine:INDIAN": ["10804db0-e7f7-4d10-a64c-2ee95e7dc052", "a431d59c-7cb7-4562-ba5b-d4138c5606e9"],
         // Pad thai z krewetkami · Zielone curry z kurczakiem
         "cuisine:THAI": ["194ede11-8c59-44d2-abe2-fc79737089e9", "958529a2-5afe-4dd7-a99b-1f309f8cd3b1"],
+        // Makaron udon z wołowiną i warzywami · Ryż smażony z krewetkami i groszkiem
+        "cuisine:ASIAN": ["81ccd206-2a3b-4549-a190-3a76771acd5f", "c006d938-c4d2-4775-bdf1-93665fecbdc8"],
         // Tacos z mieloną wołowiną i serem · Tacos z mielonym indykiem
         "cuisine:MEXICAN": ["78d01993-b5e4-46b9-8f1c-69becd2ebf2a", "d810fe60-e0f6-423d-8ca5-8c53ceaeb646"],
         // Burgery wołowe z frytkami · Burgery z czerwonej fasoli
         "cuisine:AMERICAN": ["b6967ae5-0885-43a3-a5a0-4f0aa022e9d2", "f8e2e53a-0bbe-41b6-aea5-c073830d9dc9"],
+        // Tost z awokado i jajkiem · Miska smoothie z mango i kokosem
+        "cuisine:OTHER": ["1cb9c49e-daa2-4b39-9497-7f301589466d", "f80b7848-23fe-49a3-a9b2-fc5d2697b5e0"],
         // — Diety (podstrona „Dieta”) —
         // Halloumi z pieczonymi warzywami · Gnocchi z warzywami i pesto
         "diet:vegetarian": ["f2b0e3a1-f195-4ab4-9d06-d5e3535ac957", "d6c5944f-3c31-4311-9651-d9cdbe3acaeb"],

@@ -2267,6 +2267,13 @@ struct AssistantHouseholdSplitCard: View {
 
 /// `LMacroGap`: zdanie jako tytuł, cienka linia „średnio vs cel” (indygo
 /// tylko jako akcent), propozycje jako wiersze prowadzące dalej. Nie dashboard.
+///
+/// Wiersz „Jak nadrobić” nie ma czego otworzyć na telefonie — serwer daje
+/// samo zdanie zmiany, bez przepisu (`MacroGapBoosterDTO`). Stuknięcie wysyła
+/// jego `prompt`, a model odpowiada propozycją do zatwierdzenia (karta
+/// z przeglądem dań). Gdy Asystent nie przyjmie wiadomości (wykorzystana
+/// pula, tura w biegu), `AssistantView.refuseAsk` mówi dlaczego — 7.10.2026
+/// stuknięcie po wyczerpaniu puli „nic nie robiło”.
 struct AssistantMacroGapCard: View {
     let card: MacroGapCardDTO
     let onAsk: (String) -> Void

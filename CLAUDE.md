@@ -93,8 +93,12 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   i „Thermomixa”; po dwa: główny i zapas), automat `RecipeCoverPicker` tylko, gdy wybranego nie ma w puli albo ukrywa go profil. „Filtry” działają
   NA ŻYWO (bez szkicu i „Pokaż”), stopka „N z M przepisów” + tekstowe „Gotowe” (lupa odpadła). Filtry kategorii =
   sekcja „Filtrów”, gdy lista stoi w kategorii (ekran albo zakładka wyników, `scope`), bez kuchni i okazji kategorii;
-  bez zakresu — wiersze „Filtry kategorii”. Podstrony Filtrów („Więcej filtrów”, Wyklucz składniki → dział) i filtry
-  „Wybierz przepis” (`RecipePlanFilterPage`) = push z systemowym „wstecz” i „Wyczyść”. „Wyczyść” wszędzie =
+  bez zakresu — wiersze „Filtry kategorii”. Podstrony Filtrów („Więcej filtrów”, Wyklucz składniki → dział) = push
+  z systemowym „wstecz” i „Wyczyść”. „Wybierz przepis” w Planie ma TE SAME Filtry (7.10.2026; `RecipePlanFilterPage`
+  USUNIĘTE): `RecipeFilterSheet(scope: slot.baseCategory, slot:, isPushed: true, onDone:)` wepchnięty w stos arkusza
+  wyboru (pasek: „wstecz”, „Filtry”, różdżka, „Wyczyść”; „Gotowe” wraca do listy), bez „Pory w planie”, własna
+  instancja `RecipeFilterOptions` (świeża przy każdym otwarciu); aspekty kategorii pory liczą się dla KAŻDEGO dania
+  listy (`facetCategory` w `RecipeFilterIndex` i `matches(_:facetCategory:)`); „Ulubione” = kafelek Cech. „Wyczyść” wszędzie =
   `RecipeFilterOptions.reset(in: scope)`; nagłówek wyników i karta kategorii = `summaryLabels(in:)` (z filtrami
   kategorii); plakietka = `activeCount(in:)`. `RecipeCategorySheetView` i `RecipeCategoryFilterSheet` USUNIĘTE.
   Wyłączone dopasowanie (dieta + alergeny) trzyma TYLKO do końca uruchomienia
@@ -131,6 +135,40 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (≤ 0,6 s). Nie wracać do pisania gotowej odpowiedzi ani do karty czekającej na koniec pisania. Nagłówek zakładki
   w trakcie tury = `.attentive` — kręci się JEDEN łuk w wierszu „myślę”. Zdanie „Możesz wyjść — wrócę z odpowiedzią.”
   prosi raz o zgodę na powiadomienia.
+- **Wiersz listy = jeden klocek** (6.10.2026, artefakt „Ustawienia Scoffie”): `EditorialSettingsRow` i lista w Filtrach
+  (`RecipeFilterListRowLabel`) mają te same wymiary — płaski kafelek `EditorialSettingsTileIcon` 30 pt (bez gradientu
+  i poświaty, kolor w GŁĘBOKIM wariancie w obu motywach — `.environment(\.colorScheme, .light)` na wypełnieniu),
+  tytuł 15 semibold, wartość 15 szara, wiersz 52 pt, kreska od tytułu (54 pt), strzałka 11 bold `scFaint`. W Ustawieniach
+  każdy wiersz w SWOIM kolorze (Gospodarstwo indygo, Dieta szałwia, Posiłki masło, Asystent terakota, Powiadomienia
+  koral, Wygląd lawenda `circle.lefthalf.filled`, Pomoc morska `questionmark`, Oceń róż `star.fill`, Prywatność szary
+  `SettingsAccent.slate`), a arkusz bierze kolor wiersza; profil 56/17; wersja = podpis „Scoffie 1.0 (35)” pod
+  „Wyloguj się” (wiersz „Wersja” i `EditorialSettingsInfoTile` USUNIĘTE).
+- **„Twoje dane”** (`ProfileDetailsSheet`, 6.10.2026 wieczór — artefakt „Arkusze Ustawień”, sekcja 1, cztery rundy,
+  „super, pasuje mi, koduj”; arkusze 2–8 z tego artefaktu czekają po kolei): nagłówek = PROFIL (`EditorialSheetHeader`
+  z awatarem w `leading` i e-mailem w nowym slocie `detail` pod tytułem; ołówek obok krzyżyka → alert „Imię” z polem,
+  jak nazwa gospodarstwa; w trybie `isPushed` ten sam profil stoi na górze treści). Na górze WYNIK: kcal na utrzymanie
+  (`numericText`) i BMI na skali ocen (`BMIScale`: progi 18,5 · 25 · 30 na 15–35, znacznik jedzie sprężyną). Sylwetka =
+  cztery `EditorialSettingsRow` (płeć indygo, rok morska, wzrost szałwia, waga róż, glif `chevron.up.chevron.down`,
+  wartość w terakocie, gdy jej wybór jest otwarty) → MAŁY ARKUSZ na 1/3 (`ProfileFieldPickerSheet`, `.fraction(1/3)`
+  jak koło godzin) z `presentationBackgroundInteraction(.enabled(upThrough:))`: reszta NIE gaśnie i przyjmuje dotyk —
+  wynik zmienia się na oczach, a stuknięcie w inny wiersz podmienia wybór bez zamykania (`picking` / `pickerField`);
+  zamyka krzyżyk, przeciągnięcie albo ten sam wiersz, zapis od razu (bez „Gotowe”). Płeć = kafle z „Nie podaję”,
+  rok i wzrost = koło, waga = koło kilogramów i dziesiątych jak w Zdrowiu (dokładność 0,1 kg jak dawne pole).
+  „Nie podaję” wybrane w TYM otwarciu = `saveProfile(clearSex: true)` → jawny `null` (pominięte pole serwer zostawia
+  i stara płeć wracała z `users:me`); `users:me` z `sex: null` kasuje płeć zapamiętaną na innym telefonie
+  (`persistProfileFields`), a niepotwierdzone skasowanie (zapis padł) leży w `settings.profile.sexClearPending`
+  i `saveProfile` ponawia je przy każdym zapisie, aż serwer potwierdzi (inne pola leczą się same — zapis wysyła je
+  zawsze; do tego czasu `users:me` nie wpisuje starej płci). Ołówek i „Usuń konto” przy otwartym małym arkuszu: najpierw zjazd, okno
+  z `onDismiss` (`pendingAlert`) — alertu z widoku prezentującego arkusz system nie pokaże. Zapis przy zejściu
+  (`onDisappear`) w OBU trybach — przeciągnięcie w dół anulowało debounce. Imię tnie `SessionStore.limitedDisplayName`
+  (punkty kodowe, jak `@MaxLength` serwera). `SCWheelPicker` (`Components/`) = `UIPickerView` z kolumnami — WŁASNY,
+  bo dwa `Picker(.wheel)` obok siebie nakładają obszary dotyku (UIKit liczy je z naturalnej szerokości koła); wartość
+  wchodzi, gdy koło stanie; koło przestawia się TYLKO przy zmianie z zewnątrz (`shownRows`, nie `selectedRow` — to
+  cofało wybiegające koło), a przycięty zapis (250 kg zeruje dziesiąte) dociąga w `didSelectRow`. Treningi =
+  `SCIconTilePicker` (`Components/`, wariant A „Kafle”): ikona w kółku w kolorze wysiłku (0–1 indygo `sofa.fill`, 2–3
+  szałwia, 4–5 terakota, 6+ `SCPalette.Toast.ember`), wybrany = pełne kółko (głęboki wariant) + szklana soczewka
+  przesuwana sprężyną z `LensSquish` (wspólne z `RecipeFilterSegment`) + podskok ikony; BEZ podpisu z nazwą poziomu
+  („to lekko aktywny usuń”). Pola tekstowe wzrostu/wagi i ich drafty USUNIĘTE. Kreator (krok 1–2) świadomie bez zmian.
 - **Ustawienia**: zgoda na powiadomienia NIGDY przy starcie — `NotificationPermission.requestIfNotAsked()` w kontekście:
   Ustawienia → Powiadomienia („Włącz powiadomienia” / „Wyłączone w ustawieniach iOS” + „Otwórz ustawienia”), po wysłaniu
   zaproszenia domownika (`SCShareSheet(message:)`, `completed`), po dołączeniu z zaproszenia (pulpit odsłonięty,
@@ -144,6 +182,29 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   Cookidoo → Thermomix. „Pomoc i FAQ” = `SCSafariView` z `https://scoffie.app/support/` (FAQ w kodzie USUNIĘTE — treść
   żyje w scoffie-web `src/pages/support/index.astro`). „Oceń aplikację” = `?action=write-review` w App Store, nie
   `requestReview()`.
+- **Arkusze Ustawień** (6.10.2026 wieczór, artefakt „Arkusze Ustawień”, cztery rundy): Gospodarstwo — podtytuł samo
+  „N osoby”, plakietki „Ty”/„Właściciel” w tincie, „Opuść gospodarstwo” NA KOŃCU listy (nie w stopce), nazwa domu 2–50
+  znaków wszędzie (`SessionStore.householdNameLengthRange`). Dieta — KALORIE NA GÓRZE (Rafał), potem makro, cel, dieta,
+  alergeny; listy celu i diety z kółkiem (dawny układ wygrał z menu), podpisy w jednej linii (kopie lokalne, `UserGoal`/
+  `DietPreference` bez zmian — kreator); podpowiedź „Dla celu „…” wychodzi N kcal · Ustaw” w karcie kalorii.
+  Powiadomienia — na górze PODGLĄD powiadomienia (`NotificationPreviewCard`: znak, „SCOFFIE · teraz”, przykład kanału
+  w tonie `MealReminderService`; stuknięcie/włączenie kanału podmienia przykład i roluje tekst, wyciszone = szary podgląd
+  „Wyciszone”), główny przełącznik jako wiersz (bez zgody „Włącz powiadomienia” / „Wyłączone w ustawieniach iOS ·
+  Otwórz”), kanały „Dla Ciebie” / „Od domowników”. Wygląd — dawne trzy karty z podglądem, po polsku (Automatycznie,
+  Jasny, Ciemny; `AppTheme.system.title` = „Automatycznie”). Posiłki w planie — JEDNA karta: pionowa oś dnia (godzina
+  18 pt, kółko pory na linii, pełna nazwa), wyłączone pory na swoim miejscu z „+ Dodaj”; godzina = `MealTimeEditorSheet`
+  (dodatkowe: `.height(390)`) z wierszem „W planie dnia” + systemowy `Toggle` NAD kołem (`MealTimeEditorSheet.InPlan`;
+  wyłączenie zamyka okienko po 0,3 s) — czerwony przycisk „Wyłącz …” pod kołem odrzucony („z dupy, totalnie nie pasuje”),
+  pigułka obok krzyżyka nie reagowała: ściśnięty `UIDatePicker` łapał dotyk nad sobą, nagłówek i wiersz mają `zIndex(1)` (bez `onDismiss` — „Wyłącz” bez dań działa od razu, z daniami alert po
+  0,45 s); „Wyłącz” też pod przytrzymaniem wiersza (`contextMenu`) i przesunięciem — cała treść to `List(.insetGrouped)`, która MUSI się przewijać (`scrollDisabled`
+  wyłącza też `swipeActions`; tak „Wyłącz” nie działało w #342); wyłączona pora z daniami stoi z „+ Dodaj” i dopiskiem
+  „W tym tygodniu: N dania”, nie jak włączona;
+  pozioma oś (`MealDayTimesCard`) została TYLKO w kreatorze — w Ustawieniach była nieczytelna. Asystent i plan — teksty rolują WYŁĄCZNIE `SCMotion.textRoll` (sprężyna z odbiciem przy wyborze planu odpadła); karta
+  stanu na górze (`PlanStatusHero`: duża liczba pozostałych wiadomości, kropki w próbie, pasek po domownikach w planie),
+  w próbie plany od razu w arkuszu (trzy kafle + „Wybierz X · cena”, zakup przez wspólne `PlanPurchase` z `PlansSheet`),
+  płacący: „Zmień” → `PlansSheet` + „Zarządzaj subskrypcją ↗”; domownik: „Kto opłaca”. Prywatność — przypięty nagłówek,
+  „Regulamin” (nie „Warunki korzystania”), wersja z `LegalDocMeta` jednym podpisem; „Pobierz moje dane” — karta pliku,
+  „Zapisz albo wyślij” (`ShareLink`) w stopce. Wszystko niekompilowane w chwili zapisu (Linux) — sprawdzić na Macu.
 - **Zakupy**: historia → miesiąc → lista = push w arkuszu Zakupów (`ShoppingHistoryRoute`, `ShoppingHistoryPage`,
   `ShoppingHistoryMonthPage`, `ShoppingArchivePage`, `pruneHistoryPath`); „Usuń całą historię” tylko w „…” Historii.
 - **Gotuj**: JEDNA reguła stuknięcia w timer w doku (`CookDockTimer.dockTapAction`) — „do włączenia” = Start, każdy inny
@@ -546,9 +607,14 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   `AgentStore` wisi na `SessionStore`, a nie na arkuszu — rozmowa przeżywa zamknięcie asystenta.
   Kroki postępu (`turn.progress`) przychodzą z serwera jako gotowe zdania po polsku; nie tłumaczyć
   ich po stronie klienta. `AI_ENABLED=false` na serwerze = `503 AI_DISABLED` i ekran mówi to wprost.
-  Od 24.09.2026 to `AssistantMaintenanceView` („mały remont”: znak z kluczem, co działa dalej,
-  „Sprawdź ponownie” = `AgentStore.recheckAvailability`, ciche sprawdzenie przy każdym wejściu na zakładkę)
-  zamiast rozmowy; pole wiadomości znika. Pula wyczerpana to inny stan (`AssistantQuotaSpentCard`).
+  Od 24.09.2026 to `AssistantMaintenanceView` zamiast rozmowy; pole wiadomości znika. Od 6.10.2026 (wersja A
+  z artefaktu „Asystent na przerwie”) pusty stan NA ŚRODKU: krążek z żywym znakiem i kluczem (oddech, klucz kiwa się
+  co ~3 s), „Asystent ma przerwę”, jedno zdanie, szklany „Sprawdź ponownie” (= `AgentStore.recheckAvailability`,
+  kręciołek w miejscu strzałki; „jeszcze nie” = drgnięcie, haptyka, zdanie pod spodem); ciche sprawdzenie przy każdym
+  wejściu na zakładkę zostaje. Powrót na oczach = `AssistantView.comebackHold` (1,3 s): klucz odpada, znak podskakuje
+  (`cheer`), tytuł roluje się na „Asystent wrócił”, potem powitanie i pole. Licznik puli w nagłówku schowany na czas
+  przerwy (`showsMaintenance`). Bez kaskady wejścia; karta trzech kafli „Działa jak zawsze” USUNIĘTA (wyglądały na
+  przyciski, nic nie robiły). Pula wyczerpana to inny stan (`AssistantQuotaSpentCard`).
 - Czysta kartka po przerwie (`AgentStore.rotateIfStale`): 30 min ciszy w rozmowie ALBO 10 min nieobecności
   na zakładce/w tle (`staleAfterAway`, od `setVisible(false)` / `noteWentToBackground`) przy rozmowie bez
   propozycji PENDING; tura w biegu nigdy. Zamiana czyści `AssistantGreetingMemory.forget()`, więc powitanie
@@ -626,6 +692,15 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   próba: „Polecamy „We dwoje”” · wiadomości/mies. + pigułka z ceną) i JEDNA akcja. Kreseczek zużycia
   w karcie nie ma (pełny pasek nic nie mówił) — zostały w panelu powitania, który ma ten sam wiersz
   „co dalej” zamiast osobnej stopki (`AssistantQuotaResetRow` usunięty).
+  7.10.2026 (Rafał: „pozwól mi zamknąć… wyłącz input oraz send… »Zobacz plany« nie działa”): karta ma krzyżyk
+  (`quotaCardDismissed`), po zamknięciu stoi WYŁĄCZONE pole i „Wyślij” z podpowiedzią o puli (`lockedPrompt`: „Darmowe
+  wiadomości wykorzystane” / „Wiadomości wrócą 1 listopada”), a stuknięcie w to pole przywraca kartę. Karta stoi POZA
+  `GlassEffectContainer` pola — w grupie szklany „Zobacz plany” nie przyjmował stuknięć (jak krążek Filtrów, 9af6e15);
+  nie wkładać jej z powrotem do grupy. `PlansSheet` z rozmowy dostaje `onPurchased` → `loadUsage` (blokada schodzi od razu).
+  Akcja karty, która wysyła zdanie (`AssistantView.ask`: wiersze „Jak nadrobić” w `AssistantMacroGapCard`, pigułki,
+  „Wstaw” przy daniu do wyboru, akcje powitania), NIGDY nie ginie po cichu: gdy `store.canSend == false`, `refuseAsk`
+  pokazuje toast z powodem, a przy puli przywraca jej kartę (7.10.2026: trzy propozycje domknięcia białka „nie dawały
+  się otworzyć”, bo `ask` wracał bez śladu po wyczerpaniu puli).
 - Przyciski Asystenta (runda 14): stopka karty = `AssistantButtonSize.compact` (42 pt rysowane, 44 dotyk,
   14 semibold), przycisk samodzielny (arkusz, stopka, plany) = `.regular` (46 pt, 15). Para =
   `AssistantActionPair`: równe połowy, gdy oba tytuły się mieszczą, inaczej stos z główną NA DOLE — główna
@@ -973,14 +1048,16 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (runda 10: karta z kafelkiem POWODU w tincie — lupa, filtry, serce, dieta, ikona pory — tytuł, zdanie
   i akcja, która powód zdejmuje, jako `EditorialPrimaryActionButton`; druga akcja tekstem). W wyborze do
   planu: akcent i ikona PORY
-  (`slot.cozyAccent`, `slot.icon`), data i godzina w `subtitle`, filtry kategorii `slot.baseCategory`
-  bez aspektu „Pora w planie” (`RecipeCategoryFacets.facets(forPicking:slot:)`, arkusz filtrów
-  z `slot:`; wartości dań z INNYCH kategorii liczone w aspektach kategorii pory —
-  `RecipeFilterFactsCache.facetValues(for:in:)`); „Ulubione” to kafelek „Twoje przepisy” w tym arkuszu
-  (`favouritesOnly:`, plakietka filtrów liczy go jako jeden filtr). Lista to ZAWSZE przepisy tej pory
+  (`slot.cozyAccent`, `slot.icon`), data i godzina w `subtitle`; filtry = TE SAME „Filtry” co na
+  Przepisach (7.10.2026, akapit „Przepisy” u góry): `RecipeFilterSheet(scope: slot.baseCategory, slot:,
+  isPushed: true)` bez aspektu „Pora w planie”; wartości dań z INNYCH kategorii liczone w aspektach
+  kategorii pory (`RecipeFilterFactsCache.facts(for:in:)`, `RecipeFilterIndex(facetCategory:)`,
+  `RecipeFilterOptions.matches(_:facetCategory:)`); „Ulubione” = kafelek Cech; plakietka = `activeCount(in:)`.
+  Lista to ZAWSZE przepisy tej pory
   (`fits(slot)`) — „Wszystkie pory” usunięte w rundzie 10 („nie chcę jeść obiadu na śniadanie”).
   „Dla kogo” (`PlanAudienceChips`, w domu jednoosobowym jedno zdanie) stoi w STOPCE nad przyciskiem —
-  tam, gdzie zapada decyzja. Filtry wyboru do planu są własne (nie z Przepisów).
+  tam, gdzie zapada decyzja. STAN filtrów wyboru do planu jest własny (osobna instancja
+  `RecipeFilterOptions`, nie stan Przepisów), ale arkusz i model wspólne.
 - „Dodaj do planu” ze szczegółów (`AddToPlanSheet`, od nowa w rundzie 14 — „paskudny, zrób porządnie”; od 6.10.2026
   ekran stosu szczegółów, `isPushed`): TYLKO znane klocki. Nagłówek = zdjęcie dania (`EditorialRecipeCover` 52 pt)
   + nazwa + fakty (czas, kcal); „Dodaj do planu” i „wstecz” w pasku systemu (w samodzielnym arkuszu — tylko podgląd —
@@ -1050,7 +1127,10 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   (`WeeklyPlan/Components/PlanAudiencePicker.swift`): szklany `PlanAudienceButton` obok przycisku zapisu (awatary
   wybranych / domek) → SYSTEMOWE menu iOS (od 4.10.2026 wieczorem, „uprościć”): `Toggle` „Cały dom”, sekcja „Osoby”
   z ptaszkami, `menuActionDismissBehavior(.disabled)` — zostaje otwarte przy zaznaczaniu kilku; wszystkie = „Cały
-  dom”. Arkusz `PlanAudienceSheet` usunięty. Chipy w przewijaniu
+  dom”. Stuknięcie w OSOBĘ nigdy nie daje „Całego domu” po cichu (7.10.2026, „oba chipy są dom”): ostatniej osoby
+  się nie odznacza, a w domu dwuosobowym osoby się wykluczają (stuknięcie w drugą przełącza) — wcześniej „wybranie”
+  user2 przy wybranym user1 (albo ponowne stuknięcie user2) zapisywało danie dla całego domu, karta mówiła „Zamień
+  dla wszystkich”, a „Dodaj obok” stawiało dwa dania „Wspólne”. Arkusz `PlanAudienceSheet` usunięty. Chipy w przewijaniu
   „Dodaj do planu” odpadły. Porcje w „Dodaj do planu” — ikona `chart.pie.fill`. Pusty stan Zakupów =
   `ShoppingEmptyHero` (szklany koszyk, wokół działy sklepu w swoich kolorach, unoszą się).
 - Zakupy (4.10.2026): pasek postępu, który zjedzie pod górę, ma przypiętą kopię na szkle (`pinnedProgress`,

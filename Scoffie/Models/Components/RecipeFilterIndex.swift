@@ -29,12 +29,19 @@ struct RecipeFilterIndex {
     /// pod przełącznikiem „Dopasowane do Ciebie”.
     var profileHiddenCount: Int { entries.reduce(into: 0) { if $1.hiddenByProfile { $0 += 1 } } }
 
+    /// `facetCategory` — wybór przepisu do planu (7.10.2026): aspekty każdego
+    /// przepisu liczone w kategorii pory, także dań z innej kategorii, więc
+    /// liczby w arkuszu to dokładnie lista wyboru
+    /// (`RecipeFilterOptions.matches(_:facetCategory:)`). `nil` = Przepisy.
     @MainActor
-    init(recipes: [Recipe], personalization: RecipePersonalization) {
+    init(recipes: [Recipe], personalization: RecipePersonalization, facetCategory: RecipesCategory? = nil) {
         var profile = personalization
         profile.isEnabled = true
         entries = recipes.map {
-            Entry(facts: RecipeFilterFactsCache.facts(for: $0), hiddenByProfile: profile.excludes($0))
+            Entry(
+                facts: RecipeFilterFactsCache.facts(for: $0, in: facetCategory),
+                hiddenByProfile: profile.excludes($0)
+            )
         }
 
         var totals: [RecipesCategory: Int] = [:]

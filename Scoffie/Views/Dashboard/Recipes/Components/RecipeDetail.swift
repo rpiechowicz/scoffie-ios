@@ -19,14 +19,13 @@ import SwiftUI
 //     z arkusza „Cel dnia” (odejście od donuta z makiety, patrz
 //     `DetailNutritionCard`).
 //   • „Przygotowanie” (szałwia) — numerowane kroki w jednej karcie.
-//   • „Składniki” (indygo) — pogrupowane w działy w kolejności alejek sklepu
-//     i z polem „mam w domu”. Brakujące idą przyciskiem „Do zakupów” NA
-//     PRAWDZIWĄ listę zakupów tygodnia (`weeklyPlans:addRecipeExtras`) —
-//     serwer liczy ilości sam, z tych samych danych co listę z planu.
+//   • „Składniki” (indygo) — pogrupowane w działy w kolejności alejek sklepu.
+//     Sama lista: odhaczanie „mam w domu” i „Do zakupów” USUNIĘTE 7.10.2026
+//     (Rafał: „nie potrzebujemy tego”) — zakupy robi lista z planu.
 // Na dole pasek z jednym przyciskiem, którego rola zależy od `context`.
 // Obok krzyżyka „Udostępnij” (link do przepisu, `RecipeShareKit.swift`), a cudzy
-// przepis z linku (`.shared`) jest tylko do odczytu: bez serca, zakupów
-// i „mam w domu”, za to z „Zapisz u siebie” obok planu.
+// przepis z linku (`.shared`) jest tylko do odczytu: bez serca, za to
+// z „Zapisz u siebie” obok planu.
 //
 // Makra w kolorach `SCMacroPalette`, a przyciski w wariancie „soft” — jak
 // wszędzie indziej w aplikacji, a nie jak w makiecie (decyzja Rafała 21.09).
@@ -112,10 +111,8 @@ struct RecipeDetailView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.toasts) private var toasts
     @Environment(\.sessionStore) private var sessionStore
-    @Environment(\.shoppingListStore) private var shoppingListStore
     @Environment(\.recipeCatalogStore) private var recipeCatalogStore
     @Environment(\.mealCalendarStore) private var mealStore
-    @Environment(\.datesViewModel) private var datesViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let recipe: Recipe
@@ -128,8 +125,7 @@ struct RecipeDetailView: View {
     /// żeby ekran pokazywał to, co użytkownik już wcześniej ustawił.
     let initialServings: Int
 
-    /// Kontekst wywołania — decyduje o przycisku w dolnym pasku i o tym, czy
-    /// składniki da się dopisać do listy zakupów.
+    /// Kontekst wywołania — decyduje o przycisku w dolnym pasku.
     let context: RecipeDetailContext
 
     /// Wołane przyciskiem „Zapisz porcje" w kontekście `.planned`.
@@ -194,15 +190,6 @@ struct RecipeDetailView: View {
 
     /// Start Gotuj przy trwającej sesji innego dania — pytanie o tamto.
     @State private var isReplaceCookingAsked = false
-
-    /// Składniki odhaczone jako „mam w domu”.
-    ///
-    /// Stan WIZYTY, nie pamięć aplikacji: aplikacja nie ma spiżarni i nie wie,
-    /// co stoi w szafce, więc po ponownym otwarciu przepisu pytamy od nowa.
-    @State private var haveIngredientIds: Set<UUID> = []
-
-    /// Wysyłka brakujących na listę zakupów.
-    @State private var shoppingSend: ShoppingSendState = .idle
 
     @State private var scrollPosition = ScrollPosition(edge: .top)
 
@@ -276,8 +263,8 @@ struct RecipeDetailView: View {
         return lower...upper
     }
 
-    /// Całe porcje do zapisu i do listy zakupów (API przyjmuje liczby
-    /// całkowite) — w górę, żeby nie zabrakło.
+    /// Całe porcje do zapisu (API przyjmuje liczby całkowite) — w górę,
+    /// żeby nie zabrakło.
     private var wholeServings: Int {
         min(Self.servingsRange.upperBound, PlanPortions.plannedServings(forTotalUnits: servingsUnits))
     }
@@ -862,12 +849,7 @@ struct RecipeDetailView: View {
                 eyebrow: ingredientsEyebrow,
                 title: "Składniki",
                 accent: SCPalette.indigo
-            ) {
-                if showsShoppingPill {
-                    shoppingPill
-                        .transition(.scale(scale: 0.85, anchor: .trailing).combined(with: .opacity))
-                }
-            }
+            ) { EmptyView() }
 
             DetailCard {
                 VStack(spacing: 0) {
@@ -892,154 +874,18 @@ struct RecipeDetailView: View {
                             if groupIndex > 0 { DetailHairline() }
                         }
                     }
-
-                    if showsIngredientsFooter {
-                        ingredientsFooter
-                            .overlay(alignment: .top) { DetailHairline() }
-                    }
                 }
             }
             .padding(.horizontal, 20)
-            .sensoryFeedback(.selection, trigger: haveIngredientIds)
         }
     }
 
-    @ViewBuilder
     private func ingredientRow(_ ingredient: Ingredient) -> some View {
-        let amount = RecipeDetailFormat.ingredientAmount(ingredient)
-        let name = RecipeDetailFormat.ingredientName(ingredient.name)
-
-        if canSendToShopping {
-            let have = haveIngredientIds.contains(ingredient.id)
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    if have {
-                        haveIngredientIds.remove(ingredient.id)
-                    } else {
-                        haveIngredientIds.insert(ingredient.id)
-                    }
-                }
-            } label: {
-                DetailIngredientRow(name: name, amount: amount, have: have, showsCheckbox: true)
-            }
-            .buttonStyle(PlanPressStyle(scale: 0.985))
-            .accessibilityLabel("\(name), \(amount)")
-            .accessibilityValue(have ? "mam w domu" : "brakuje")
-            .accessibilityHint("Zaznacz, jeśli masz w domu")
-            .accessibilityAddTraits(have ? [.isButton, .isSelected] : .isButton)
-        } else {
-            DetailIngredientRow(name: name, amount: amount, have: false, showsCheckbox: false)
-                .accessibilityElement(children: .combine)
-        }
-    }
-
-    /// Jedna linijka pod składnikami — co się stanie z brakującymi.
-    private var ingredientsFooter: some View {
-        Group {
-            if !canSendToShopping {
-                // Posiłek z planu ma swoje składniki na liście od chwili, gdy
-                // trafił do planu — dopisywanie ich drugi raz podwoiłoby zakupy.
-                Text("Ten posiłek jest w planie — jego składniki są już na liście zakupów.")
-                    .foregroundStyle(look.dim)
-            } else if case .failed(let message) = shoppingSend {
-                Text(message)
-                    .foregroundStyle(SCPalette.terracotta)
-            } else if isShoppingSentForCurrentState, case .sent(_, let count, let weekStart) = shoppingSend {
-                let products = Text(PolishPlural.products(count))
-                    .foregroundStyle(look.muted)
-                    .fontWeight(.semibold)
-                let verb = PolishPlural.form(count, one: "czeka", few: "czekają", many: "czeka")
-                Text("Dopisane — \(products) \(verb) na liście zakupów \(Self.weekPhrase(weekStart)).")
-                    .foregroundStyle(look.dim)
-            } else if missingIngredientIds.isEmpty {
-                Text("Masz wszystko — możesz gotować.")
-                    .foregroundStyle(look.dim)
-            } else {
-                let count = missingIngredientIds.count
-                let missing = Text("\(count) \(PolishPlural.form(count, one: "brakujący", few: "brakujące", many: "brakujących"))")
-                    .foregroundStyle(look.muted)
-                    .fontWeight(.semibold)
-                let verb = PolishPlural.form(count, one: "trafi", few: "trafią", many: "trafi")
-                Text("Zaznacz, co masz — \(missing) \(verb) na listę zakupów.")
-                    .foregroundStyle(look.dim)
-            }
-        }
-        .font(.sc(size: 12.5))
-        .lineSpacing(2)
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
-        .contentTransition(.opacity)
-        .animation(.easeInOut(duration: 0.2), value: footerKey)
-    }
-
-    /// Klucz do animacji stopki — zmienia się razem z jej treścią.
-    private var footerKey: String {
-        "\(missingIngredientIds.count).\(shoppingSend.key).\(isShoppingSentForCurrentState)"
-    }
-
-    /// „Do zakupów ›” w nagłówku sekcji składników.
-    private var shoppingPill: some View {
-        let isSent = isShoppingSentForCurrentState
-        let isSending = shoppingSend == .sending
-        let isEnabled = !missingIngredientIds.isEmpty && !isSending && !isSent
-        let accent = isSent ? SCPalette.sage : SCPalette.indigo
-
-        return Button(action: sendMissingToShopping) {
-            HStack(spacing: 5) {
-                if isSending {
-                    ProgressView()
-                        .controlSize(.mini)
-                        .tint(accent)
-                        .transition(.scale.combined(with: .opacity))
-                } else if isSent {
-                    Image(systemName: "checkmark")
-                        .font(.sc(size: 11, weight: .heavy))
-                        .transition(.scale.combined(with: .opacity))
-                }
-
-                Text(isSent ? "Na liście" : "Do zakupów")
-                    .contentTransition(.interpolate)
-
-                if !isSent && !isSending {
-                    Image(systemName: "chevron.right")
-                        .font(.sc(size: 10, weight: .bold))
-                        .transition(.opacity)
-                }
-            }
-            .font(.sc(size: 12.5, weight: .bold))
-            .foregroundStyle(accent)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .scSoftCapsule(accent)
-            .fixedSize()
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.94))
-        .disabled(!isEnabled)
-        .opacity(isEnabled || isSent || isSending ? 1 : 0.4)
-        .animation(.spring(response: 0.32, dampingFraction: 0.82), value: shoppingSend.key)
-        .animation(.spring(response: 0.32, dampingFraction: 0.82), value: isSent)
-        .sensoryFeedback(.success, trigger: shoppingSend.key) { _, new in new.hasPrefix("sent") }
-        .accessibilityLabel(isSent ? "Brakujące są na liście zakupów" : "Dopisz brakujące do listy zakupów")
-    }
-
-    // MARK: - Lista zakupów: brakujące
-
-    /// Dopisywać da się tylko z katalogu. Posiłek z planu ma już składniki
-    /// na liście tygodnia — drugi raz podwoiłby zakupy, a cudzego przepisu
-    /// (`.shared`) serwer na listę nie przyjmie.
-    private var canSendToShopping: Bool {
-        if case .catalog = context { return true }
-        return false
-    }
-
-    /// Linijka pod składnikami mówi o zakupach — przy cudzym przepisie nie
-    /// ma o czym.
-    private var showsIngredientsFooter: Bool {
-        if case .shared = context { return false }
-        return true
+        DetailIngredientRow(
+            name: RecipeDetailFormat.ingredientName(ingredient.name),
+            amount: RecipeDetailFormat.ingredientAmount(ingredient)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     /// „Udostępnij” obok krzyżyka — wszędzie poza cudzym przepisem.
@@ -1047,98 +893,6 @@ struct RecipeDetailView: View {
         if case .shared = context { return false }
         return true
     }
-
-    /// „Do zakupów” pojawia się dopiero, gdy użytkownik zaczął odhaczać, co
-    /// ma — bez tego wszystkie składniki są „brakujące” i przycisk nie ma
-    /// z czego wybierać. Zostaje w trakcie i po wysyłce, żeby było widać wynik.
-    private var showsShoppingPill: Bool {
-        guard canSendToShopping else { return false }
-        switch shoppingSend {
-        case .sending, .sent, .failed: return true
-        case .idle: return !haveIngredientIds.isEmpty && !missingIngredientIds.isEmpty
-        }
-    }
-
-    private var missingIngredientIds: [UUID] {
-        recipe.ingredients.map(\.id).filter { !haveIngredientIds.contains($0) }
-    }
-
-    private var currentShoppingSignature: ShoppingSendState.Signature {
-        .init(missing: Set(missingIngredientIds), servings: servingsUnits)
-    }
-
-    /// Wysłane i od tamtej pory nic się nie zmieniło — ani odhaczenia, ani
-    /// porcje. Każda zmiana przywraca „Do zakupów”, a ponowna wysyłka
-    /// podmienia ilości po stronie serwera, zamiast je dublować.
-    private var isShoppingSentForCurrentState: Bool {
-        if case .sent(let signature, _, _) = shoppingSend {
-            return signature == currentShoppingSignature
-        }
-        return false
-    }
-
-    /// Tydzień, na którego listę trafią brakujące: ten, który użytkownik
-    /// ogląda w Planie — ale nigdy wcześniejszy niż bieżący, bo zakupy do
-    /// minionego tygodnia nie mają sensu.
-    private var targetWeekStart: String {
-        let current = PlanWeek.dateKey(PlanWeek.monday(of: Date()))
-        return max(datesViewModel.weekStartISO, current)
-    }
-
-    private func sendMissingToShopping() {
-        let missing = missingIngredientIds
-        guard !missing.isEmpty, shoppingSend != .sending else { return }
-
-        let signature = currentShoppingSignature
-        let weekStart = targetWeekStart
-        // Lista zakupów przyjmuje całe porcje — 1,5 idzie jako 2.
-        let requestedServings = wholeServings
-        withAnimation { shoppingSend = .sending }
-
-        Task { @MainActor in
-            do {
-                let added = try await shoppingListStore.addRecipeExtras(
-                    weekStart: weekStart,
-                    recipeId: recipe.id.uuidString.lowercased(),
-                    servings: requestedServings,
-                    ingredientIds: missing.map { $0.uuidString.lowercased() }
-                )
-                shoppingSend = .sent(signature: signature, count: added, weekStart: weekStart)
-                toasts.success(
-                    "Dopisano do listy zakupów",
-                    "\(PolishPlural.products(added)) \(Self.weekPhrase(weekStart))."
-                )
-            } catch {
-                // Błąd łączności ma w aplikacji jedno miejsce (trwały pasek
-                // toastu) — `inlineMessage` oddaje wtedy `nil` i przycisk po
-                // prostu wraca do stanu, w którym można go nacisnąć ponownie.
-                if let message = UserFacingErrorMapper.inlineMessage(from: error) {
-                    shoppingSend = .failed(message)
-                } else {
-                    shoppingSend = .idle
-                }
-            }
-        }
-    }
-
-    /// „na ten tydzień” / „na przyszły tydzień” / „na tydzień od 5 października”.
-    private static func weekPhrase(_ weekStart: String) -> String {
-        let monday = PlanWeek.monday(of: Date())
-        if weekStart == PlanWeek.dateKey(monday) { return "na ten tydzień" }
-        if let next = PlanWeek.calendar.date(byAdding: .weekOfYear, value: 1, to: monday),
-           weekStart == PlanWeek.dateKey(next) {
-            return "na przyszły tydzień"
-        }
-        guard let date = PlanWeek.date(fromKey: weekStart) else { return "na tydzień \(weekStart)" }
-        return "na tydzień od \(weekDayFormatter.string(from: date))"
-    }
-
-    private static let weekDayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "pl_PL")
-        formatter.dateFormat = "d MMMM"
-        return formatter
-    }()
 
     // MARK: - Dolny pasek akcji
 
@@ -1673,19 +1427,14 @@ struct RecipeDetailView: View {
     // MARK: - Debug
 
     /// `SCOFFIE_DEBUG_DETAIL_SCROLL=<pt>` przewija ekran od razu po wejściu,
-    /// `SCOFFIE_DEBUG_DETAIL_SERVINGS=<n>` ustawia porcje, a
-    /// `SCOFFIE_DEBUG_DETAIL_HAVE=<n>` odhacza pierwsze n składników — do
-    /// porównania z artboardami makiety na zrzucie z symulatora.
+    /// a `SCOFFIE_DEBUG_DETAIL_SERVINGS=<n>` ustawia porcje — do porównania
+    /// z artboardami makiety na zrzucie z symulatora.
     private func applyDebugLaunchOptions() {
         #if DEBUG
         let environment = ProcessInfo.processInfo.environment
         if let raw = environment["SCOFFIE_DEBUG_DETAIL_SERVINGS"], let count = Int(raw) {
             let whole = min(Self.servingsRange.upperBound, max(Self.servingsRange.lowerBound, count))
             servingsUnits = whole * PlanPortions.unitsPerServing
-        }
-        if let raw = environment["SCOFFIE_DEBUG_DETAIL_HAVE"], let count = Int(raw) {
-            let ordered = DetailIngredientGroup.make(from: recipe.ingredients).flatMap(\.ingredients)
-            haveIngredientIds = Set(ordered.prefix(count).map(\.id))
         }
         if let raw = environment["SCOFFIE_DEBUG_DETAIL_SCROLL"], let offset = Double(raw) {
             Task { @MainActor in
@@ -1714,32 +1463,6 @@ private enum SharedSaveState: Equatable {
     case idle
     case saving
     case saved
-}
-
-// MARK: - Stan wysyłki na listę zakupów
-
-private enum ShoppingSendState: Equatable {
-    /// Co było brakujące i na ile porcji — po tym poznajemy, czy od wysyłki
-    /// coś się zmieniło.
-    struct Signature: Equatable {
-        let missing: Set<UUID>
-        /// Porcje w jednostkach 1/20 — 1,5 i 2 to różne wysyłki.
-        let servings: Int
-    }
-
-    case idle
-    case sending
-    case sent(signature: Signature, count: Int, weekStart: String)
-    case failed(String)
-
-    var key: String {
-        switch self {
-        case .idle: return "idle"
-        case .sending: return "sending"
-        case .sent(_, let count, let week): return "sent.\(count).\(week)"
-        case .failed: return "failed"
-        }
-    }
 }
 
 // MARK: - Tokeny ekranu
@@ -2416,12 +2139,10 @@ private struct DetailIngredientGroup {
     }
 }
 
-/// Wiersz składnika: pole „mam w domu” · nazwa · ilość.
+/// Wiersz składnika: nazwa · ilość.
 private struct DetailIngredientRow: View {
     let name: String
     let amount: String
-    let have: Bool
-    let showsCheckbox: Bool
 
     @Environment(\.colorScheme) private var scheme
 
@@ -2429,14 +2150,10 @@ private struct DetailIngredientRow: View {
         let look = DetailLook(scheme: scheme)
 
         HStack(alignment: .center, spacing: 12) {
-            if showsCheckbox {
-                SCCheckbox(on: have, accent: SCPalette.indigo)
-            }
-
             Text(name)
                 .font(.sc(size: 15))
                 .tracking(-0.2)
-                .foregroundStyle(have ? look.muted : look.fg)
+                .foregroundStyle(look.fg)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -2450,8 +2167,6 @@ private struct DetailIngredientRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 9)
-        .contentShape(Rectangle())
-        .animation(.easeInOut(duration: 0.2), value: have)
     }
 }
 

@@ -435,8 +435,8 @@ struct WelcomeView: View {
         case 2, 3, 4:
             return true
         case 5:
-            // Te same granice, co w Ustawieniach i na serwerze (`CreateHouseholdDto`
-            // 2…64). Od Fazy 0 backend egzekwuje je także na WebSockecie —
+            // Te same granice, co w Ustawieniach (2…50, `SessionStore.householdNameLengthRange`;
+            // serwer — `CreateHouseholdDto` — wpuszcza do 64). Od Fazy 0 backend egzekwuje je także na WebSockecie —
             // 1-znakowa nazwa wracałaby jako VALIDATION_ERROR z generycznym
             // komunikatem i kreator nie dałby się dokończyć.
             return SessionStore.isValidHouseholdName(householdName)

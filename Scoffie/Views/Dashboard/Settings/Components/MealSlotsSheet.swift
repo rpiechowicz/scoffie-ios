@@ -1,27 +1,25 @@
 import SwiftUI
 
-/// Ustawienia → „Posiłki w planie".
+/// Ustawienia → „Posiłki w planie” (wersja 4 · czytelnie, 6.10.2026).
 ///
-/// Odpowiada na dwa pytania po kolei: **które** posiłki gospodarstwo planuje
-/// i **o której** się je. Drugie to oś dnia z kreatora (`MealDayTimesCard`,
-/// od 24.09.2026 zamiast osobnego arkusza z listą godzin) — stuknięcie
-/// w posiłek otwiera koło godzin w arkuszu do połowy ekranu. Obie decyzje
-/// obowiązują cały dom, ale to osobne zapisy.
+/// JEDNA karta „Twój dzień”: pionowa oś dnia ze wszystkimi sześcioma porami
+/// w kolejności doby. Włączona pora = godzina dużą cyfrą, kółko w kolorze pory
+/// na linii dnia, pełna nazwa i szewron — stuknięcie otwiera koło godzin
+/// w arkuszu na 1/3 ekranu (`MealTimeEditorSheet`). Pora, której dom nie je,
+/// stoi przygaszona W SWOIM miejscu z pigułką „Dodaj” — od razu widać, co da
+/// się dołożyć i gdzie wypadnie. Dawne karty „Dodatkowe posiłki”, wiersz
+/// „Zawsze w planie” i akapity odpadły.
 ///
-/// Trzy decyzje projektowe:
+/// Wyłączenie pory dodatkowej: przesunięcie wiersza w lewo (jak usuwanie
+/// w Mailu) albo „Wyłącz” obok krzyżyka w okienku godziny. Dlatego treść to
+/// `List(.insetGrouped)` — `swipeActions` działa tylko w liście, i to tylko
+/// w PRZEWIJANEJ (`scrollDisabled` wyłącza też przesunięcie).
 ///
-/// 1. **Ekran listuje trzy pozycje, nie sześć.** Śniadania, obiadu i kolacji
-///    nie da się wyłączyć, więc ich wiersze były wierszami bez decyzji —
-///    trzy kłódki i przypis tłumaczący, czemu nic się nie klika. Zeszły do
-///    jednej karty reguły, w którą nikt nie próbuje stuknąć, bo nie wygląda
-///    jak wiersz.
-/// 2. **Wybór to karta, nie przełącznik przy krawędzi.** Celem dotyku jest
-///    cały prostokąt, a stan niesie tło, obwódka i znacznik — nie ma
-///    kontrolki o stałej szerokości, którą długość nazwy mogłaby przesunąć.
-///    `Toggle` wewnątrz `Button` to zresztą loteria hit-testingu.
-/// 3. **Wyłączenie nie kasuje jedzenia.** Jeśli w slocie coś stoi, pytamy
-///    o potwierdzenie i mówimy wprost, że posiłki zostają. Plan pokazuje taki
-///    slot mimo wyłączenia — dane nie znikają po cichu.
+/// Wyłączenie nie kasuje jedzenia: jeśli w porze coś stoi, pytamy
+/// o potwierdzenie, a Plan pokazuje ją dalej (`visibleSlots(planned:)`).
+/// Tu taka pora stoi jak każda wyłączona — z „Dodaj” i dopiskiem
+/// „W tym tygodniu: 2 dania” (wcześniej stała jak włączona, tylko
+/// przygaszona, i wyglądało, jakby „Wyłącz” nie zadziałało).
 struct MealSlotsSheet: View {
     var onClose: () -> Void
 
@@ -38,13 +36,19 @@ struct MealSlotsSheet: View {
     @State private var timesErrorMessage: String?
     /// Rozkład godzin, którego nie udało się zapisać — zasila „Spróbuj ponownie".
     @State private var lastFailedTimes: MealSlotSchedule?
+    /// Pora, której godzinę zmienia teraz okienko z kołem (wiersz podświetlony).
+    @State private var editing: MealSlot?
+    /// Liczniki „pop” świeżo dodanych pór — wyzwalacz `keyframeAnimator`.
+    @State private var popCounts: [MealSlot: Int] = [:]
+
+    @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 56
 
     private var configuration: MealSlotConfiguration { sessionStore.mealSlots }
     private var schedule: MealSlotSchedule { sessionStore.mealSlotSchedule }
 
     /// Posiłki, które Plan faktycznie rysuje w dniu — włączone i te wyłączone,
-    /// w których zostały dania. Gdyby tych drugich nie było na osi, ich
-    /// godzina byłaby widoczna w Planie i nieedytowalna.
+    /// w których zostały dania. Gdyby tych drugich nie było na osi jako
+    /// zwykłych wierszy, ich godzina byłaby widoczna w Planie i nieedytowalna.
     private var timeSlots: [MealSlot] {
         let planned = MealSlot.allCases.filter { slot in
             datesViewModel.dates.contains { date in
@@ -55,59 +59,124 @@ struct MealSlotsSheet: View {
     }
 
     var body: some View {
-        // Liczone raz na przemalowanie: `plannedCount` przechodzi po całym
-        // tygodniu razy liczba slotów, a wołane z każdej karty osobno robiłoby
-        // tę samą robotę trzy razy.
-        let counts = plannedCounts()
+        let shown = timeSlots
+        // Kolejność liczona po porach, które są w dniu (wiersze z godziną).
+        let pair = schedule.outOfOrderPair(among: shown.filter { configuration.isEnabled($0) })
+        let count = configuration.enabled.count
 
         return ZStack {
             SCPageBackground(scheme: scheme)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Przypięty nad treścią — lista kart jest dłuższa niż ekran,
-                // a krzyżyk nie ma prawa odjeżdżać razem z nią.
+                // Masło — kolor wiersza „Posiłki w planie” w Ustawieniach.
                 EditorialSheetHeader(
                     eyebrow: "Gospodarstwo",
                     title: "Posiłki w planie",
                     icon: "fork.knife",
+                    accent: SCPalette.butter,
+                    subtitle: "\(count) \(Self.mealsPlural(count)) w dniu",
                     onClose: onClose
                 )
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
                 .padding(.bottom, 12)
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        leadSentence
-                        coreRuleCard
-
-                        VStack(alignment: .leading, spacing: 10) {
-                            EditorialSheetSectionLabel(title: "Dodatkowe posiłki")
-
-                            ForEach(MealSlot.optionalSlots) { slot in
-                                optionalCard(slot, planned: counts[slot] ?? 0)
+                // Cała treść to `List`, bo tylko lista daje systemowe
+                // `swipeActions` („Wyłącz” przesunięciem). Lista MUSI się
+                // przewijać — `scrollDisabled` wyłącza też gest przesunięcia
+                // (tak nie działało „Wyłącz” w pierwszej wersji, 6.10.2026).
+                // `insetGrouped` rysuje kartę z zaokrąglonymi rogami sam.
+                List {
+                    Section {
+                        ForEach(Array(MealSlot.allCases.enumerated()), id: \.element) { index, slot in
+                            axisRow(
+                                slot,
+                                isFirst: index == 0,
+                                isLast: index == MealSlot.allCases.count - 1,
+                                isShown: configuration.isEnabled(slot),
+                                warning: pair?.later == slot ? pair?.earlier : nil
+                            )
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.scTileBg(scheme))
+                            // To samo pod przytrzymaniem — gest przesunięcia nie każdy zna.
+                            .contextMenu {
+                                if configuration.isEnabled(slot), MealSlot.optionalSlots.contains(slot) {
+                                    Button(role: .destructive) {
+                                        toggle(slot, to: false)
+                                    } label: {
+                                        Label("Wyłącz \(slot.accusativeName)", systemImage: "minus.circle")
+                                    }
+                                }
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                if configuration.isEnabled(slot), MealSlot.optionalSlots.contains(slot) {
+                                    Button(role: .destructive) {
+                                        toggle(slot, to: false)
+                                    } label: {
+                                        Label("Wyłącz", systemImage: "minus.circle")
+                                    }
+                                    .tint(.red)
+                                }
                             }
                         }
 
-                        mealTimesSection
+                        if pair != nil {
+                            orderNotice
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.scTileBg(scheme))
+                        }
+                    } header: {
+                        EditorialSheetSectionLabel(title: "Twój dzień")
+                            .textCase(nil)
+                    } footer: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Wspólne dla całego domu. Śniadanie, obiad i kolacja są zawsze. Dodatkową porę wyłączysz, przesuwając ją w lewo.")
+                                .font(.sc(size: 12.5, weight: .regular))
+                                .foregroundStyle(Color.scFaint(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
 
-                        introCard
-                        saveStatus
+                            if !schedule.isDefault {
+                                Button("Przywróć domyślne godziny") {
+                                    saveTimes(.default)
+                                }
+                                .font(.sc(size: 12.5, weight: .semibold))
+                                .foregroundStyle(SCPalette.terracotta)
+                                .buttonStyle(.plain)
+                            }
 
-                        Text("Wyłączony posiłek znika z planu, ale zaplanowane dania w nim zostają.")
-                            .font(.sc(size: 12, weight: .regular))
-                            .foregroundStyle(Color.scFaint(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 6)
+                            saveStatus
+                            timesStatus
+                        }
+                        .textCase(nil)
+                        .padding(.top, 4)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 6)
-                    .padding(.bottom, 40)
                 }
+                .listStyle(.insetGrouped)
+                .listRowSpacing(0)
+                .environment(\.defaultMinListRowHeight, 0)
+                .scrollContentBackground(.hidden)
+                .contentMargins(.horizontal, 20, for: .scrollContent)
+                .contentMargins(.top, 0, for: .scrollContent)
                 .scrollIndicators(.hidden)
                 .scScrollEdgeFade()
+                .animation(.smooth(duration: 0.22), value: configuration.enabled)
+                .animation(.smooth(duration: 0.22), value: pair == nil)
+                .animation(.smooth(duration: 0.22), value: schedule.isDefault)
             }
+        }
+        // Koło godzin we własnym arkuszu, nie w karcie: `DatePicker(.wheel)`
+        // przejmuje pionowe przeciągnięcia i w przewijanej treści zjadał
+        // przewijanie oraz gest zamknięcia arkusza.
+        .sheet(item: $editing) { slot in
+            editorSheet(slot)
+                // Jedna trzecia ekranu — nad nią dalej widać oś dnia.
+                // Pory dodatkowe mają „Wyłącz” obok krzyżyka i koło w pełnych
+                // 216 pt (ściśnięte wystawało nad nagłówek i zjadało stuknięcie).
+                .presentationDetents([MealSlot.optionalSlots.contains(slot) ? .height(370) : .fraction(1.0 / 3.0)])
+                .dashboardLiquidSheet(cornerRadius: 26)
         }
         .alert(
             disableAlertTitle,
@@ -136,181 +205,301 @@ struct MealSlotsSheet: View {
         "Wyłączyć \u{201E}\(pendingDisable?.title ?? "")\u{201D}?"
     }
 
-    // MARK: - Zdanie wiodące
+    // MARK: - Oś dnia
 
-    /// Skład dnia jednym zdaniem z liczbą. Zastępuje dawny pasek chipów:
-    /// niesie tę samą informację, a nie ma stanu, nie da się w nie stuknąć
-    /// i nie ma czego zgnieść na wąskim ekranie.
-    private var leadSentence: some View {
-        let count = configuration.enabled.count
+    /// Ostatni wiersz karty, gdy godziny nie idą po kolei.
+    private var orderNotice: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.sc(size: 11.5, weight: .semibold))
+                .foregroundStyle(SCPalette.terracotta)
 
-        return (
-            Text("Dzień w planie ma teraz ")
+            Text("Plan i tak pokaże posiłki w stałej kolejności dnia.")
+                .font(.sc(size: 12.5, weight: .regular))
                 .foregroundStyle(Color.scMuted(scheme))
-            + Text("\(count) \(Self.mealsPlural(count))")
-                .font(.sc(size: 13.5, weight: .semibold))
-                .foregroundStyle(Color.scLabel(scheme))
-            + Text(". Śniadanie, obiad i kolację jecie zawsze — resztę dokładacie tutaj.")
-                .foregroundStyle(Color.scMuted(scheme))
-        )
-        .font(.sc(size: 13.5, weight: .regular))
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 6)
-    }
-
-    // MARK: - Reguła: trójka obowiązkowa
-
-    private var coreRuleCard: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 5) {
-                ForEach(MealSlot.core) { slot in
-                    EditorialSettingsTileIcon(
-                        icon: slot.icon,
-                        color: slot.cozyAccent,
-                        size: 26,
-                        radius: 8
-                    )
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(MealSlot.core.map(\.title).joined(separator: " · "))
-                    .font(.sc(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-
-                Text("Zawsze w planie — na nich stoi lista zakupów.")
-                    .font(.sc(size: 11.5, weight: .regular))
-                    .foregroundStyle(Color.scFaint(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 12)
     }
 
-    // MARK: - Posiłki dodatkowe
+    /// Wiersz osi. `isShown` — pora jest w dniu Planu (włączona albo
+    /// wyłączona z daniami); inaczej stoi przygaszona z „Dodaj”.
+    ///
+    /// „Pop” siedzi na kontenerze, nie na wierszu włączonej pory: licznik
+    /// rośnie przy stuknięciu w „Dodaj”, zanim konfiguracja przestawi wiersz,
+    /// a animator wstawiony razem z nowym wierszem nie zagrałby wcale.
+    private func axisRow(
+        _ slot: MealSlot,
+        isFirst: Bool,
+        isLast: Bool,
+        isShown: Bool,
+        warning: MealSlot?
+    ) -> some View {
+        ZStack {
+            if isShown {
+                onRow(
+                    slot,
+                    isFirst: isFirst,
+                    isLast: isLast,
+                    isDimmed: !configuration.isEnabled(slot),
+                    warning: warning
+                )
+            } else {
+                offRow(slot, isFirst: isFirst, isLast: isLast, planned: plannedCount(for: slot))
+            }
+        }
+        .keyframeAnimator(initialValue: 1.0, trigger: popCounts[slot] ?? 0) { row, scale in
+            row.scaleEffect(scale)
+        } keyframes: { _ in
+            KeyframeTrack {
+                SpringKeyframe(1.04, duration: 0.12, spring: .snappy)
+                SpringKeyframe(1, duration: 0.3, spring: .bouncy)
+            }
+        }
+    }
 
-    private func optionalCard(_ slot: MealSlot, planned: Int) -> some View {
-        let isEnabled = configuration.isEnabled(slot)
+    private func onRow(
+        _ slot: MealSlot,
+        isFirst: Bool,
+        isLast: Bool,
+        isDimmed: Bool,
+        warning: MealSlot?
+    ) -> some View {
+        let time = schedule.time(for: slot)
+        let isEditing = editing == slot
+        let timeColor: Color = (warning != nil || isEditing)
+            ? SCPalette.terracotta
+            : Color.scLabel(scheme)
 
         return Button {
-            toggle(slot, to: !isEnabled)
+            editing = slot
         } label: {
-            HStack(spacing: 14) {
-                EditorialSettingsTileIcon(
-                    icon: slot.icon,
-                    color: slot.cozyAccent,
-                    size: 44,
-                    radius: 12
-                )
-                .opacity(isEnabled ? 1 : 0.45)
+            HStack(spacing: 10) {
+                Group {
+                    if let time {
+                        Text(time)
+                            .font(.sc(size: 18, weight: .bold))
+                            .tracking(-0.3)
+                            .monospacedDigit()
+                            .foregroundStyle(timeColor)
+                            .contentTransition(.numericText())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    } else {
+                        Text("kiedy\nchcesz")
+                            .font(.sc(size: 11.5, weight: .semibold))
+                            .foregroundStyle(Color.scMuted(scheme))
+                            .multilineTextAlignment(.trailing)
+                            .lineLimit(2)
+                    }
+                }
+                .frame(width: 62, alignment: .trailing)
 
-                VStack(alignment: .leading, spacing: 3) {
+                axisMark(isFirst: isFirst, isLast: isLast, gap: 30 + 8) {
+                    Image(systemName: slot.icon)
+                        .font(.sc(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(slot.cozyAccent))
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
                     Text(slot.title)
-                        .font(.sc(size: 17, weight: .heavy))
-                        .tracking(-0.3)
-                        .foregroundStyle(isEnabled ? Color.scLabel(scheme) : Color.scMuted(scheme))
+                        .font(.sc(size: 16, weight: .semibold))
+                        .tracking(-0.2)
+                        .foregroundStyle(Color.scLabel(scheme))
+                        .lineLimit(1)
 
-                    Text(slot.settingsSubtitle)
-                        .font(.sc(size: 12, weight: .regular))
-                        .foregroundStyle(Color.scMuted(scheme))
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    // Widoczne tylko wtedy, gdy jest co stracić z oczu:
-                    // wyłączony slot, w którym zostało jedzenie.
-                    if !isEnabled, planned > 0 {
-                        Text("W tym tygodniu stoją tu \(planned) \(Self.mealsPlural(planned))")
-                            .font(.sc(size: 11, weight: .medium))
-                            .foregroundStyle(Color.scFaint(scheme))
+                    if let warning {
+                        Text(warningText(earlier: warning))
+                            .font(.sc(size: 12.5, weight: .medium))
+                            .foregroundStyle(SCPalette.terracotta)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Pole wyboru, nie kółko: posiłków dodatkowych włącza się
-                // dowolnie wiele naraz, a „wiele z wielu” to w aplikacji
-                // `SCCheckbox` (kółko jest dla wyboru jednego — `SCRadioMark`).
-                // Świadomie nie `Toggle`: przełącznik w klikalnej karcie
-                // zjadałby stuknięcia raz sobie, raz karcie.
-                SCCheckbox(on: isEnabled, accent: SCPalette.terracotta)
+                Image(systemName: "chevron.right")
+                    .font(.sc(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.scFaint(scheme))
             }
-            .padding(14)
-            .frame(minHeight: 84)
-            // Włączona karta jak zaznaczony `SCChoiceTile`: tint i obwódka
-            // akcentu.
-            .scChoiceSurface(
-                RoundedRectangle(cornerRadius: 16, style: .continuous),
-                isOn: isEnabled,
-                offFill: Color.scTileBg(scheme),
-                style: .tile
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(.leading, 14)
+            .padding(.trailing, 14)
+            .frame(height: rowHeight)
+            .opacity(isDimmed ? 0.5 : 1)
+            .background(SCPalette.terracotta.opacity(isEditing ? 0.08 : 0))
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .animation(.smooth(duration: 0.20), value: isEnabled)
-        .accessibilityLabel("\(slot.title). \(slot.settingsSubtitle)")
-        .accessibilityAddTraits(isEnabled ? [.isButton, .isSelected] : .isButton)
-        .accessibilityHint(isEnabled ? "Stuknij, aby wyłączyć" : "Stuknij, aby włączyć")
+        .buttonStyle(PlanPressStyle())
+        .animation(.smooth(duration: 0.22), value: time)
+        .animation(.smooth(duration: 0.2), value: isEditing)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(slot.title), \(time ?? "bez stałej pory")")
+        .accessibilityHint("Stuknij, aby zmienić porę")
+        .accessibilityAddTraits(.isButton)
     }
 
-    // MARK: - Pory posiłków
+    /// Pora, której dom nie je: na swoim miejscu, przygaszona, z „Dodaj”.
+    private func offRow(_ slot: MealSlot, isFirst: Bool, isLast: Bool, planned: Int) -> some View {
+        HStack(spacing: 10) {
+            Text(schedule.time(for: slot) ?? "—")
+                .font(.sc(size: 18, weight: .medium))
+                .tracking(-0.3)
+                .monospacedDigit()
+                .foregroundStyle(Color.scFaint(scheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(width: 62, alignment: .trailing)
 
-    /// Oś dnia z kreatora (`MealDayTimesCard`) — stuknięcie w posiłek otwiera
-    /// koło godzin w arkuszu do połowy ekranu. Godziny obowiązują cały dom
-    /// i zapisują się od razu.
-    private var mealTimesSection: some View {
-        let slots = timeSlots
-        let enabled = Set(configuration.enabled)
-
-        return VStack(alignment: .leading, spacing: 10) {
-            EditorialSheetSectionLabel(title: "Pory posiłków")
-
-            MealDayTimesCard(
-                slots: slots,
-                schedule: schedule,
-                dimmed: Set(slots.filter { !enabled.contains($0) }),
-                onSetTime: { slot, minutes in
-                    saveTimes(schedule.setting(slot, toMinutes: minutes))
-                }
-            )
-            .animation(.smooth(duration: 0.24), value: slots)
-
-            MealTimesOrderNotice(slots: slots, schedule: schedule)
-
-            if let timesErrorMessage {
-                VStack(alignment: .leading, spacing: 6) {
-                    SCInlineErrorText(timesErrorMessage)
-
-                    if let lastFailedTimes {
-                        SCRetryButton { saveTimes(lastFailedTimes) }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 6)
+            axisMark(isFirst: isFirst, isLast: isLast, gap: 14 + 12) {
+                Circle()
+                    .strokeBorder(
+                        slot.cozyAccent.opacity(0.6),
+                        style: StrokeStyle(lineWidth: 2, dash: [3, 2.5])
+                    )
+                    .frame(width: 14, height: 14)
             }
 
-            if !schedule.isDefault {
-                Button("Przywróć domyślne godziny") {
-                    saveTimes(.default)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(slot.title)
+                    .font(.sc(size: 16, weight: .medium))
+                    .tracking(-0.2)
+                    .foregroundStyle(Color.scMuted(scheme))
+                    .lineLimit(1)
+
+                // Wyłączona, ale w tym tygodniu zostały w niej dania — Plan
+                // dalej ją pokazuje, więc mówimy, dlaczego.
+                if planned > 0 {
+                    Text("W tym tygodniu: \(planned) \(Self.dishesPlural(planned))")
+                        .font(.sc(size: 12.5, weight: .regular))
+                        .foregroundStyle(Color.scFaint(scheme))
+                        .lineLimit(1)
                 }
-                .font(.sc(size: 12, weight: .semibold))
-                .foregroundStyle(SCPalette.terracotta)
-                .padding(.horizontal, 6)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                popCounts[slot, default: 0] += 1
+                toggle(slot, to: true)
+            } label: {
+                HStack(spacing: 2) {
+                    Image(systemName: "plus")
+                        .font(.sc(size: 13, weight: .semibold))
+                    Text("Dodaj")
+                        .font(.sc(size: 13.5, weight: .semibold))
+                }
+                .foregroundStyle(Color.scLabel(scheme))
+                .padding(.leading, 8)
+                .padding(.trailing, 12)
+                .frame(height: 32)
+                .scChromeGlass(in: Capsule(style: .continuous))
+                .contentShape(Capsule(style: .continuous))
+            }
+            .buttonStyle(PlanPressStyle(scale: 0.94))
+            .accessibilityLabel("Dodaj \(slot.accusativeName)")
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 12)
+        .frame(height: rowHeight)
+    }
+
+    /// Znak pory na linii dnia. Linia to dwa odcinki — nad i pod znakiem —
+    /// z przerwą `gap`, a nie jedna kreska pod kółkami: tło karty jest
+    /// półprzezroczyste, więc „obwódka w kolorze tła” nie zakryłaby kreski.
+    /// Pierwszy wiersz nie ma odcinka u góry, ostatni u dołu.
+    private func axisMark<Mark: View>(
+        isFirst: Bool,
+        isLast: Bool,
+        gap: CGFloat,
+        @ViewBuilder mark: () -> Mark
+    ) -> some View {
+        let rule = Color.scRule(scheme)
+
+        return ZStack {
+            VStack(spacing: 0) {
+                Rectangle()
+                    .fill(isFirst ? Color.clear : rule)
+                    .frame(width: 2)
+                    .frame(maxHeight: .infinity)
+                Color.clear
+                    .frame(width: 2, height: gap)
+                Rectangle()
+                    .fill(isLast ? Color.clear : rule)
+                    .frame(width: 2)
+                    .frame(maxHeight: .infinity)
+            }
+            mark()
+        }
+        .frame(width: 30)
+        .frame(maxHeight: .infinity)
+        .accessibilityHidden(true)
+    }
+
+    private func warningText(earlier: MealSlot) -> String {
+        let time = schedule.time(for: earlier).map { " (\($0))" } ?? ""
+        return "Nie później niż \(earlier.lowercaseName)\(time)"
+    }
+
+    // MARK: - Okienko godziny
+
+    private func editorSheet(_ slot: MealSlot) -> some View {
+        MealTimeEditorSheet(
+            slot: slot,
+            minutes: schedule.minutes(for: slot),
+            onPick: { picked in
+                guard picked != schedule.minutes(for: slot) else { return }
+                saveTimes(schedule.setting(slot, toMinutes: picked))
+            },
+            onClearTime: {
+                editing = nil
+                saveTimes(schedule.setting(slot, toMinutes: nil))
+            },
+            onClose: { editing = nil },
+            inPlan: inPlanToggle(for: slot)
+        )
+    }
+
+    /// „Wyłącz” / „Włącz” obok krzyżyka — tylko przy porach dodatkowych
+    /// (obowiązkowych nie da się wyłączyć). Wyłączenie od razu zamyka okienko
+    /// (oś pod spodem pokazuje skutek); włączenie zostawia je otwarte, bo
+    /// zwykle chce się od razu ustawić godzinę.
+    private func inPlanToggle(for slot: MealSlot) -> MealTimeEditorSheet.InPlan? {
+        guard MealSlot.optionalSlots.contains(slot) else { return nil }
+        return MealTimeEditorSheet.InPlan(
+            isOn: configuration.isEnabled(slot),
+            set: { isOn in
+                if isOn {
+                    popCounts[slot, default: 0] += 1
+                    toggle(slot, to: true)
+                } else {
+                    editing = nil
+                    disableFromEditor(slot)
+                }
+            }
+        )
+    }
+
+    /// „Wyłącz” z okienka godziny. Bez dań — od razu, oś zmienia się, gdy
+    /// okienko jeszcze schodzi. Z daniami — potwierdzenie, ale dopiero po
+    /// zejściu okienka: alert nie pokaże się nad schodzącym arkuszem (wcześniej
+    /// czekało to na `onDismiss`, który nie zawsze przychodził, i „Wyłącz”
+    /// nic nie robiło).
+    private func disableFromEditor(_ slot: MealSlot) {
+        guard plannedCount(for: slot) > 0 else {
+            apply(configuration.disabling(slot))
+            return
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            pendingDisable = slot
         }
     }
+
+    // MARK: - Zapis godzin
 
     /// Bez stanu „Zapisuję…" — zapis jest optymistyczny, oś pokazuje nową
     /// godzinę, zanim cokolwiek poleci po sieci. Zostaje tylko nieudany zapis.
@@ -326,31 +515,21 @@ struct MealSlotsSheet: View {
         }
     }
 
-    // MARK: - Zasięg i stan zapisu
+    // MARK: - Stan zapisu
 
-    private var introCard: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "person.2.fill")
-                .font(.sc(size: 13, weight: .semibold))
-                .foregroundStyle(SCPalette.sage)
-                .frame(width: 28, height: 28)
-                .background(Circle().fill(SCPalette.sage.opacity(scheme == .dark ? 0.18 : 0.12)))
+    @ViewBuilder
+    private var timesStatus: some View {
+        if let timesErrorMessage {
+            VStack(alignment: .leading, spacing: 6) {
+                SCInlineErrorText(timesErrorMessage)
 
-            Text("Lista posiłków jest wspólna dla całego gospodarstwa — plan tygodnia i lista zakupów są jedne dla wszystkich domowników.")
-                .font(.sc(size: 13, weight: .regular))
-                .foregroundStyle(Color.scMuted(scheme))
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                if let lastFailedTimes {
+                    SCRetryButton { saveTimes(lastFailedTimes) }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 6)
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.scTileBg(scheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
-        )
     }
 
     /// Świadomie **bez** stanu „Zapisuję…".
@@ -376,14 +555,6 @@ struct MealSlotsSheet: View {
     }
 
     // MARK: - Akcje
-
-    private func plannedCounts() -> [MealSlot: Int] {
-        var counts: [MealSlot: Int] = [:]
-        for slot in MealSlot.optionalSlots {
-            counts[slot] = plannedCount(for: slot)
-        }
-        return counts
-    }
 
     /// Ile posiłków stoi w tym slocie w oglądanym tygodniu. Zasila ostrzeżenie
     /// przy wyłączaniu i podpis „w tym tygodniu".
@@ -418,6 +589,13 @@ struct MealSlotsSheet: View {
 
     /// Polska liczba mnoga: 1 posiłek, 2–4 posiłki, 5–21 posiłków,
     /// 22 posiłki… Reguła idzie po ostatniej cyfrze z wyjątkiem nastek.
+    private static func dishesPlural(_ count: Int) -> String {
+        if count == 1 { return "danie" }
+        let lastTwo = count % 100
+        if (12...14).contains(lastTwo) { return "dań" }
+        return (2...4).contains(count % 10) ? "dania" : "dań"
+    }
+
     private static func mealsPlural(_ count: Int) -> String {
         if count == 1 { return "posiłek" }
         let lastTwo = count % 100

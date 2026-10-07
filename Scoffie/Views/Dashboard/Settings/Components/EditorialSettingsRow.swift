@@ -1,11 +1,11 @@
 import SwiftUI
 
-// One row inside a settings card group. Source: settings.jsx → `Row`.
-//   Container — `padding: '14px 16px', gap: 14`, hairline below except last.
-//   Tile icon (left) — 32pt rounded gradient square with white SF symbol.
-//   Title — 15.5pt 600 label color.
-//   Optional value — 14pt muted, sits before the chevron / toggle.
-//   Right accessory — chevron (default), Toggle, custom view, or none.
+/// Wiersz w karcie listy — ten sam co lista w Filtrach (`RecipeFilterListRowLabel`,
+/// 6.10.2026, artefakt „Ustawienia Scoffie”): płaski kafelek 30 pt
+/// (`EditorialSettingsTileIcon`), tytuł 15 semibold, wartość 15 szara przed
+/// strzałką / przełącznikiem, wiersz 52 pt, kreska od tytułu (12 + 30 + 12).
+/// Dawny wiersz z makiety „settings.jsx” (`Row`: 14/16 pt, kafel 32 z gradientem,
+/// tytuł 15,5, wartość 14) był o ~8 pt wyższy i inny niż reszta aplikacji.
 struct EditorialSettingsRow<Trailing: View>: View {
     let icon: String
     let iconColor: Color
@@ -33,36 +33,35 @@ struct EditorialSettingsRow<Trailing: View>: View {
                 Rectangle()
                     .fill(Color.scRule(scheme))
                     .frame(height: 1)
-                    // Indent matches the icon width + gap so the rule
-                    // visually starts under the title, not the tile.
-                    .padding(.leading, 16 + 32 + 14)
+                    // Kreska zaczyna się pod tytułem, nie pod kafelkiem.
+                    .padding(.leading, 12 + 30 + 12)
             }
         }
     }
 
     private var rowBody: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             EditorialSettingsTileIcon(icon: icon, color: iconColor)
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(.sc(size: 15.5, weight: .semibold))
-                    .foregroundStyle(Color.scLabel(scheme))
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(title)
+                .font(.sc(size: 15, weight: .semibold))
+                .tracking(-0.3)
+                .foregroundStyle(Color.scLabel(scheme))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             if let value, !value.isEmpty {
                 Text(value)
-                    .font(.sc(size: 14, weight: .regular))
+                    .font(.sc(size: 15))
                     .foregroundStyle(Color.scMuted(scheme))
                     .lineLimit(1)
             }
 
             trailing()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .frame(minHeight: 52)
         .contentShape(Rectangle())
     }
 }
@@ -88,18 +87,13 @@ extension EditorialSettingsRow where Trailing == EditorialSettingsChevron {
     }
 }
 
-// Right-side chevron — 14pt, 35% / 30% opacity. Source: settings.jsx →
-// `RowChevron`.
+/// Strzałka wiersza — ta sama co w liście Filtrów (11 pt bold, `scFaint`).
 struct EditorialSettingsChevron: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Image(systemName: "chevron.right")
-            .font(.sc(size: 12, weight: .heavy))
-            .foregroundStyle(
-                scheme == .dark
-                ? SCPalette.labelDark.opacity(0.35)
-                : SCPalette.labelLight.opacity(0.30)
-            )
+            .font(.sc(size: 11, weight: .bold))
+            .foregroundStyle(Color.scFaint(scheme))
     }
 }
