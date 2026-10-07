@@ -421,8 +421,16 @@ struct DietPreferencesForm: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .animation(.smooth(duration: 0.18), value: value)
-        .animation(.smooth(duration: 0.22), value: clampedShare)
+        // JEDNA animacja na liczbę, procent i pasek (7.10.2026): dwie o różnej
+        // długości na tym samym wierszu kończyły ruch w różnych chwilach,
+        // a w środku przejmowała go animacja transakcji (stuknięcie celu).
+        .animation(.smooth(duration: 0.22), value: MacroRowMotion(value: value, share: clampedShare))
+    }
+
+    /// Klucz animacji wiersza makro — gramy i udział zmieniają się razem.
+    private struct MacroRowMotion: Equatable {
+        let value: Int
+        let share: Double
     }
 
     private func macroRowLine(
