@@ -1031,10 +1031,11 @@ struct SettingsView: View {
         title: String,
         @ViewBuilder rows: () -> Rows
     ) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let rows = rows()
+        return VStack(alignment: .leading, spacing: 0) {
             EditorialSheetSectionLabel(title: title)
             EditorialSettingsCardGroup {
-                rows()
+                rows
             }
         }
     }
