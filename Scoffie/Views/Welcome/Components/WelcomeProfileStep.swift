@@ -22,13 +22,11 @@ struct WelcomeProfileStep: View {
     /// Ziarno awatara — id konta, jak w Ustawieniach.
     let seed: String
 
-    /// Wiersz Sylwetki, którego wybór stoi w małym arkuszu.
-    @State private var picking: ProfileField? = nil
+    /// Mały arkusz z wyborem i okno „Imię” czekające na jego zjazd — ten
+    /// sam mechanizm co w `ProfileDetailsSheet` (`ProfilePickerGate`).
+    @State private var pickerGate = ProfilePickerGate()
     @State private var nameDraft = ""
     @State private var isEditingName = false
-    /// Okno „Imię” czeka, aż mały arkusz zjedzie — alertu z widoku, który
-    /// prezentuje arkusz, system nie pokaże (jak w `ProfileDetailsSheet`).
-    @State private var renamesAfterPicker = false
 
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -61,33 +59,19 @@ struct WelcomeProfileStep: View {
                 heightCm: $heightCm,
                 weightKg: $weightKg,
                 activity: $activity,
-                picking: $picking,
-                onPickerDismiss: { pickerDidDismiss() }
+                gate: pickerGate
             )
-        }
-        .onChange(of: picking) { _, current in
-            // Nowy wybór odwołuje okno czekające na zjazd poprzedniego.
-            if current != nil { renamesAfterPicker = false }
         }
         .profileNameAlert(isPresented: $isEditingName, draft: $nameDraft) {
             saveName()
         }
     }
 
+    /// Okno od razu — albo po zjeździe małego arkusza (także gdy właśnie
+    /// zjeżdża po krzyżyku).
     private func startEditingName() {
         nameDraft = trimmedName
-        guard picking != nil else {
-            isEditingName = true
-            return
-        }
-        renamesAfterPicker = true
-        picking = nil
-    }
-
-    private func pickerDidDismiss() {
-        guard picking == nil, renamesAfterPicker else { return }
-        renamesAfterPicker = false
-        isEditingName = true
+        pickerGate.present { isEditingName = true }
     }
 
     /// Puste imię się nie zapisuje — „Zapisz” jest wtedy wyłączone.

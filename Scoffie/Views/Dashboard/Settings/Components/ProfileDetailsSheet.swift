@@ -68,16 +68,10 @@ struct ProfileDetailsSheet: View {
     @State private var nameDraft = ""
     @State private var isEditingName = false
 
-    /// Wiersz, którego wybór stoi teraz w małym arkuszu (`nil` = zamknięty).
-    /// Sam arkusz prezentuje `ProfileBodyForm`.
-    @State private var picking: ProfileField?
-    /// Mały arkusz jest na ekranie — od otwarcia do KOŃCA zjazdu (`onDismiss`),
-    /// dłużej niż `picking`, które gaśnie już na początku zjazdu.
-    @State private var pickerOnScreen = false
-    /// Okno („Imię”, „Usunąć konto?”) czekające, aż mały arkusz zjedzie —
-    /// alert z widoku, który właśnie prezentuje arkusz, system odrzuca, a ołówek
-    /// i „Usuń konto” da się stuknąć przy otwartym wyborze.
-    @State private var pendingAlert: PendingAlert?
+    /// Mały arkusz z wyborem i okna czekające na jego zjazd — wspólny
+    /// mechanizm z kreatorem (`ProfilePickerGate`): ołówek i „Usuń konto” da
+    /// się stuknąć przy otwartym wyborze.
+    @State private var pickerGate = ProfilePickerGate()
 
     private enum PendingAlert {
         case rename
@@ -162,13 +156,6 @@ struct ProfileDetailsSheet: View {
                 clearsSex = false
             }
         }
-        // Mały arkusz otwarty (wiersz Sylwetki) — okno czeka na jego zjazd,
-        // a nowy wybór odwołuje okno czekające na zjazd poprzedniego.
-        .onChange(of: picking) { _, current in
-            guard current != nil else { return }
-            pickerOnScreen = true
-            pendingAlert = nil
-        }
         .profileNameAlert(isPresented: $isEditingName, draft: $nameDraft) {
             saveName()
         }
@@ -213,8 +200,7 @@ struct ProfileDetailsSheet: View {
                     heightCm: $heightCm,
                     weightKg: $weightKg,
                     activity: activityLevel,
-                    picking: $picking,
-                    onPickerDismiss: { pickerDidDismiss() }
+                    gate: pickerGate
                 )
 
                 deleteAccountSection
@@ -276,14 +262,9 @@ struct ProfileDetailsSheet: View {
     }
 
     /// Okno od razu — albo, gdy na ekranie stoi mały arkusz z wyborem, dopiero
-    /// po jego zjeździe (`pickerDidDismiss`).
+    /// po jego zjeździe (`ProfilePickerGate.present`).
     private func present(_ alert: PendingAlert) {
-        guard pickerOnScreen else {
-            show(alert)
-            return
-        }
-        pendingAlert = alert
-        picking = nil
+        pickerGate.present { show(alert) }
     }
 
     private func show(_ alert: PendingAlert) {
@@ -291,15 +272,6 @@ struct ProfileDetailsSheet: View {
         case .rename:        isEditingName = true
         case .deleteAccount: isConfirmingDeletion = true
         }
-    }
-
-    private func pickerDidDismiss() {
-        // Wiersz stuknięty w trakcie zjazdu otwiera arkusz od nowa — wtedy
-        // dalej jest na ekranie.
-        pickerOnScreen = picking != nil
-        guard !pickerOnScreen, let alert = pendingAlert else { return }
-        pendingAlert = nil
-        show(alert)
     }
 
     /// Puste imię się nie zapisuje — „Zapisz” jest wtedy wyłączone.

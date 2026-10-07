@@ -1,3 +1,4 @@
+import Observation
 import SwiftUI
 
 // Treść „Twoich danych” — JEDNA dla arkusza Ustawień (`ProfileDetailsSheet`)
@@ -56,6 +57,64 @@ enum ProfileField: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Mały arkusz i okna
+
+/// Stan małego arkusza z wyborem — JEDEN mechanizm dla „Twoich danych”
+/// w Ustawieniach i kroku 1 kreatora (7.10.2026, przegląd: kreator sprawdzał
+/// tylko `picking`, a ono gaśnie już na POCZĄTKU zjazdu — ołówek stuknięty
+/// w ciągu ~0,3 s po krzyżyku chciał pokazać okno nad zjeżdżającym arkuszem,
+/// system go nie pokazywał, a `isPresented` mogło zostać `true` i okno nie
+/// otwierało się już wcale).
+///
+/// Okno („Imię”, „Usunąć konto?”) idzie przez `present(_:)`: od razu, gdy
+/// arkusza nie ma, a gdy jest na ekranie (od otwarcia do KOŃCA zjazdu) —
+/// arkusz zjeżdża, a okno pokazuje się w `onDismiss`. Nowy wybór odwołuje
+/// okno czekające na zjazd poprzedniego. Alertu z widoku, który prezentuje
+/// arkusz, system nie pokaże.
+@Observable
+final class ProfilePickerGate {
+    /// Wiersz, którego wybór stoi teraz w małym arkuszu (`nil` = zamknięty).
+    var picking: ProfileField?
+    /// Co pokazuje arkusz, gdy `picking` już zgasło (zjazd) — inaczej
+    /// zjeżdżałby pusty.
+    private(set) var shownField: ProfileField = .year
+    /// Arkusz jest na ekranie — od otwarcia do końca zjazdu, dłużej niż
+    /// `picking`, które gaśnie na początku zjazdu.
+    private(set) var isOnScreen = false
+    @ObservationIgnored private var pending: (() -> Void)?
+
+    /// Ten sam wiersz zamyka arkusz, inny podmienia jego wybór.
+    func pick(_ field: ProfileField) {
+        if picking == field {
+            picking = nil
+        } else {
+            shownField = field
+            picking = field
+            isOnScreen = true
+            pending = nil
+        }
+    }
+
+    /// Okno od razu — albo po zjeździe małego arkusza.
+    func present(_ action: @escaping () -> Void) {
+        guard isOnScreen else {
+            action()
+            return
+        }
+        pending = action
+        picking = nil
+    }
+
+    /// `onDismiss` arkusza. Wiersz stuknięty w trakcie zjazdu otwiera arkusz
+    /// od nowa — wtedy dalej jest na ekranie i okno czeka.
+    func didDismiss() {
+        isOnScreen = picking != nil
+        guard !isOnScreen, let action = pending else { return }
+        pending = nil
+        action()
+    }
+}
+
 // MARK: - Wynik, Sylwetka, Treningi
 
 /// Wynik (kcal na utrzymanie i BMI na skali ocen), Sylwetka (cztery wiersze
@@ -73,19 +132,11 @@ struct ProfileBodyForm: View {
     @Binding var heightCm: Int
     @Binding var weightKg: Double
     @Binding var activity: ActivityLevel
-    /// Wiersz, którego wybór stoi teraz w małym arkuszu (`nil` = zamknięty).
-    /// Trzyma go rodzic: okno („Imię”, „Usuń konto”) musi najpierw zdjąć mały
-    /// arkusz — alertu z widoku, który prezentuje arkusz, system nie pokaże.
-    @Binding var picking: ProfileField?
-    /// Koniec zjazdu małego arkusza (`onDismiss`) — tu rodzic pokazuje okno,
-    /// które na ten zjazd czekało.
-    var onPickerDismiss: (() -> Void)?
+    /// Stan małego arkusza — trzyma go rodzic, bo jego okna („Imię”, „Usuń
+    /// konto”) idą przez `gate.present(_:)`.
+    let gate: ProfilePickerGate
 
     @Environment(\.colorScheme) private var scheme
-
-    /// Co pokazuje mały arkusz, gdy `picking` już zgasło (zjazd) — inaczej
-    /// zjeżdżałby pusty.
-    @State private var lastField: ProfileField = .year
 
     init(
         sexRaw: Binding<String>,
@@ -93,16 +144,14 @@ struct ProfileBodyForm: View {
         heightCm: Binding<Int>,
         weightKg: Binding<Double>,
         activity: Binding<ActivityLevel>,
-        picking: Binding<ProfileField?>,
-        onPickerDismiss: (() -> Void)? = nil
+        gate: ProfilePickerGate
     ) {
         _sexRaw = sexRaw
         _yearOfBirth = yearOfBirth
         _heightCm = heightCm
         _weightKg = weightKg
         _activity = activity
-        _picking = picking
-        self.onPickerDismiss = onPickerDismiss
+        self.gate = gate
     }
 
     static var currentYear: Int { Calendar.current.component(.year, from: Date()) }
@@ -129,15 +178,15 @@ struct ProfileBodyForm: View {
                 .padding(.horizontal, 6)
                 .padding(.top, 10)
         }
-        .sheet(isPresented: pickerPresented, onDismiss: { onPickerDismiss?() }) {
+        .sheet(isPresented: pickerPresented, onDismiss: { gate.didDismiss() }) {
             ProfileFieldPickerSheet(
-                field: picking ?? lastField,
+                field: gate.picking ?? gate.shownField,
                 sexRaw: $sexRaw,
                 yearOfBirth: $yearOfBirth,
                 heightCm: $heightCm,
                 weightKg: $weightKg,
                 yearRange: Self.yearRange,
-                onClose: { picking = nil }
+                onClose: { gate.picking = nil }
             )
             // Jedna trzecia ekranu, jak koło godzin w „Posiłkach w planie”.
             .presentationDetents([.fraction(1.0 / 3.0)])
@@ -245,7 +294,7 @@ struct ProfileBodyForm: View {
                     iconColor: field.color,
                     title: field.title,
                     isLast: field == .weight,
-                    action: { pick(field) }
+                    action: { gate.pick(field) }
                 ) {
                     rowValue(field)
                 }
@@ -258,7 +307,7 @@ struct ProfileBodyForm: View {
 
     /// Wartość wiersza w terakocie, dopóki jej wybór stoi w małym arkuszu.
     private func rowValue(_ field: ProfileField) -> some View {
-        let isActive = picking == field
+        let isActive = gate.picking == field
         let text = value(for: field)
 
         return HStack(spacing: 6) {
@@ -290,21 +339,11 @@ struct ProfileBodyForm: View {
         }
     }
 
-    /// Ten sam wiersz zamyka arkusz, inny podmienia jego wybór.
-    private func pick(_ field: ProfileField) {
-        if picking == field {
-            picking = nil
-        } else {
-            lastField = field
-            picking = field
-        }
-    }
-
     private var pickerPresented: Binding<Bool> {
         Binding(
-            get: { picking != nil },
+            get: { gate.picking != nil },
             set: { isPresented in
-                if !isPresented { picking = nil }
+                if !isPresented { gate.picking = nil }
             }
         )
     }
