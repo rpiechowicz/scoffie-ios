@@ -49,13 +49,28 @@ struct WelcomeView: View {
     @State private var step: Int
     @State private var direction: Int = 1
     @State private var name: String
+    // Odpowiedzi wymagane (7.10.2026, Rafał: „wymuszanie, aby user podał dane
+    // wszystkie”): to, czego użytkownik jeszcze nie podał, jest `nil`, a nie
+    // wartością domyślną — „Dalej” czeka (`isNextEnabled`), a zapis niczego
+    // nie wysyła za niego. Rok to wyjątek: koło zawsze stoi na jakimś roku,
+    // więc „brak” = bieżący rok (wiek 0) poza `ageRange`.
     @State private var yearOfBirth: Int
-    @State private var heightCm: Int
-    @State private var weightKg: Double
+    @State private var heightCm: Int?
+    @State private var weightKg: Double?
     @State private var sex: Sex?
-    @State private var goal: UserGoal
-    @State private var activity: ActivityLevel
-    @State private var diet: DietPreference
+    /// „Nie podaję” — płeć to wymagana ODPOWIEDŹ, nie wymagana płeć.
+    @State private var sexDeclined: Bool
+    /// „Nie podaję” stuknięte w tym kreatorze — dopiero wtedy zapis kasuje
+    /// płeć na serwerze (`saveProfile(clearSex:)`), jak `clearsSex`
+    /// w „Twoich danych”. Odtworzone przy wznowieniu niczego nie kasuje.
+    @State private var clearsSex = false
+    @State private var goal: UserGoal?
+    @State private var activity: ActivityLevel?
+    @State private var diet: DietPreference?
+    /// Ostatni krok zaliczony „Dalej” (`WelcomeProgress`). Cel, aktywność
+    /// i dieta są w magazynie zawsze — start sesji wpisuje tam domyślny
+    /// wiersz serwera — więc „zapisane” znaczy tu „zaliczone w kreatorze”.
+    @State private var answeredStep: Int
     @State private var calorieGoal: Int
     @State private var allergens: Set<Allergen>
     /// Wartości alergenów zapisane na koncie, których ten build nie rozumie.
@@ -122,44 +137,66 @@ struct WelcomeView: View {
         let storedName = protectedStore.string(forKey: "settings.user.displayName") ?? initialDisplayName
         _name = State(initialValue: storedName.isEmpty ? initialDisplayName : storedName)
 
+        // Postęp kreatora (7.10.2026) — patrz `answeredStep`.
+        let answered = defaults.integer(forKey: WelcomeProgress.answeredStepKey)
+        _answeredStep = State(initialValue: answered)
+
+        // Sylwetka: wartość w magazynie = podana (przerwany kreator albo konto
+        // z danymi); nowe konto ma tam pusto, bo serwer trzyma `null`.
         let storedYear = protectedStore.integer(forKey: "settings.profile.yearOfBirth")
         _yearOfBirth = State(
-            initialValue: storedYear > 0 ? storedYear : BodyMetrics.defaultYearOfBirth
+            initialValue: storedYear > 0 ? storedYear : Calendar.current.component(.year, from: Date())
         )
 
         let storedHeight = protectedStore.integer(forKey: "settings.profile.heightCm")
-        _heightCm = State(initialValue: storedHeight > 0 ? storedHeight : BodyMetrics.defaultHeightCm)
+        _heightCm = State(initialValue: storedHeight > 0 ? storedHeight : nil)
 
         let storedWeight = protectedStore.double(forKey: "settings.profile.weightKg")
-        _weightKg = State(initialValue: storedWeight > 0 ? storedWeight : BodyMetrics.defaultWeightKg)
+        _weightKg = State(initialValue: storedWeight > 0 ? storedWeight : nil)
 
         let storedSex = protectedStore.string(forKey: "settings.profile.sex") ?? ""
-        _sex = State(initialValue: Sex(rawValue: storedSex))
+        let resolvedSex = Sex(rawValue: storedSex)
+        _sex = State(initialValue: resolvedSex)
+        // Krok 1 zaliczony bez płci = wtedy padło „Nie podaję”.
+        _sexDeclined = State(initialValue: resolvedSex == nil && answered >= 1)
 
-        let storedGoal = protectedStore.string(forKey: "settings.diet.goal") ?? UserGoal.healthy.rawValue
-        let resolvedGoal = UserGoal(rawValue: storedGoal) ?? .healthy
+        // Cel, aktywność i dieta — tylko z zaliczonego kroku (`answeredStep`),
+        // nie z domyślnego wiersza serwera.
+        let resolvedGoal: UserGoal? = answered >= 2
+            ? protectedStore.string(forKey: "settings.diet.goal").flatMap { UserGoal(rawValue: $0) }
+            : nil
         _goal = State(initialValue: resolvedGoal)
 
-        let storedActivityRaw = protectedStore.integer(forKey: "settings.diet.activityLevel")
-        let storedActivity = ActivityLevel(rawValue: storedActivityRaw) ?? .light
+        let storedActivity: ActivityLevel? = answered >= 2
+            ? ActivityLevel(rawValue: protectedStore.integer(forKey: "settings.diet.activityLevel"))
+            : nil
         _activity = State(initialValue: storedActivity)
 
-        let storedDiet = protectedStore.string(forKey: "settings.diet.preference") ?? DietPreference.none.rawValue
-        _diet = State(initialValue: DietPreference(rawValue: storedDiet) ?? .none)
+        let storedDiet: DietPreference? = answered >= 3
+            ? protectedStore.string(forKey: "settings.diet.preference").flatMap { DietPreference(rawValue: $0) }
+            : nil
+        _diet = State(initialValue: storedDiet)
 
+        // Podpowiedź z tych samych danych, z których liczy ją `bodyMetrics`
+        // w trakcie — bez celu nie ma podpowiedzi, a kalorie ustawią się
+        // same przy wyborze celu (`calorieSuggestionToken`).
         let storedCalorieGoal = protectedStore.integer(forKey: "settings.diet.calorieGoal")
-        let seedMetrics = BodyMetrics(
-            heightCm: storedHeight > 0 ? storedHeight : BodyMetrics.defaultHeightCm,
-            weightKg: storedWeight > 0 ? storedWeight : BodyMetrics.defaultWeightKg,
-            yearOfBirth: storedYear > 0 ? storedYear : 1992,
-            activityRaw: storedActivity.rawValue,
-            sexRaw: storedSex
-        )
-        let seedSuggestion = resolvedGoal.suggestedCalories(for: seedMetrics)
-        let initialKcal = storedCalorieGoal > 0 ? storedCalorieGoal : seedSuggestion
+        let seedMetrics: BodyMetrics? = storedActivity.flatMap { level in
+            BodyMetrics(
+                heightCm: storedHeight,
+                weightKg: storedWeight,
+                yearOfBirth: storedYear,
+                activityRaw: level.rawValue,
+                sexRaw: storedSex
+            )
+        }
+        let seedSuggestion: Int? = resolvedGoal?.suggestedCalories(for: seedMetrics)
+        let initialKcal = storedCalorieGoal > 0
+            ? storedCalorieGoal
+            : (seedSuggestion ?? UserGoal.healthy.suggestedCalories)
         _calorieGoal = State(initialValue: initialKcal)
         _calorieAdjustedManually = State(
-            initialValue: storedCalorieGoal > 0 && storedCalorieGoal != seedSuggestion
+            initialValue: storedCalorieGoal > 0 && seedSuggestion != nil && storedCalorieGoal != seedSuggestion
         )
 
         let storedAllergensRaw = protectedStore.string(forKey: "settings.diet.allergens") ?? ""
@@ -242,22 +279,28 @@ struct WelcomeView: View {
         // z kroku 1 oraz treningów z kroku 2 — stąd wspólny token zamiast
         // samego `goal`.
         .onChange(of: calorieSuggestionToken) { _, _ in
-            guard !calorieAdjustedManually else { return }
+            guard !calorieAdjustedManually, let suggestedCalories else { return }
             withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                 calorieGoal = suggestedCalories
             }
         }
         .onChange(of: calorieGoal) { _, newValue in
-            if newValue != suggestedCalories {
+            // Bez celu nie ma podpowiedzi, od której dałoby się odejść.
+            if let suggestedCalories, newValue != suggestedCalories {
                 calorieAdjustedManually = true
             }
+        }
+        // Tylko stuknięcie „Nie podaję” (zmiana), nie stan odtworzony w `init`.
+        .onChange(of: sexDeclined) { _, declined in
+            clearsSex = declined
         }
     }
 
     /// Sylwetka z kroków 1 i 2. `nil`, dopóki użytkownik ich nie wypełni —
     /// wtedy podpowiedź schodzi do płaskiej wartości przypisanej do celu.
     private var bodyMetrics: BodyMetrics? {
-        BodyMetrics(
+        guard let heightCm, let weightKg, let activity else { return nil }
+        return BodyMetrics(
             heightCm: heightCm,
             weightKg: weightKg,
             yearOfBirth: yearOfBirth,
@@ -266,20 +309,22 @@ struct WelcomeView: View {
         )
     }
 
-    private var suggestedCalories: Int {
-        goal.suggestedCalories(for: bodyMetrics)
+    /// `nil` bez wybranego celu (7.10.2026) — kalorie liczą się od wyboru.
+    private var suggestedCalories: Int? {
+        goal?.suggestedCalories(for: bodyMetrics)
     }
 
     /// Rozbicie celu na makro do podglądu w kroku 3. Ten sam rachunek, co
     /// w Ustawieniach → „Dieta i alergeny" — bez nadpisań, bo w kreatorze
     /// nie ma czym ich zrobić.
     private var macroTargets: MacroTargets? {
-        bodyMetrics?.macroTargets(for: goal, calories: calorieGoal)
+        guard let goal else { return nil }
+        return bodyMetrics?.macroTargets(for: goal, calories: calorieGoal)
     }
 
     /// Zmienia się przy każdej danej, która wpływa na podpowiedź.
     private var calorieSuggestionToken: String {
-        "\(goal.rawValue)|\(heightCm)|\(weightKg)|\(yearOfBirth)|\(activity.rawValue)|\(sex?.rawValue ?? "")"
+        "\(goal?.rawValue ?? "")|\(heightCm ?? 0)|\(weightKg ?? 0)|\(yearOfBirth)|\(activity?.rawValue ?? 0)|\(sex?.rawValue ?? "")"
     }
 
     // MARK: - Jeden przepływ: przewodnik + kreator
@@ -384,7 +429,8 @@ struct WelcomeView: View {
                 heightCm: $heightCm,
                 weightKg: $weightKg,
                 sex: $sex,
-                activity: activity
+                sexDeclined: $sexDeclined,
+                activity: activity ?? .light
             )
         case 2:
             WelcomeStep2GoalView(goal: $goal, activity: $activity)
@@ -432,10 +478,16 @@ struct WelcomeView: View {
         switch step {
         case 1:
             return !trimmedName.isEmpty
-                && (1900...Calendar.current.component(.year, from: Date())).contains(yearOfBirth)
-                && (80...260).contains(heightCm)
-                && (30...300).contains(weightKg)
-        case 2, 3, 4:
+                && isYearAnswered
+                && isHeightAnswered
+                && isWeightAnswered
+                && (sex != nil || sexDeclined)
+        case 2:
+            return goal != nil && activity != nil
+        case 3:
+            // Alergeny opcjonalne — brak wyboru = brak alergii.
+            return diet != nil
+        case 4:
             return true
         case 5:
             // Te same granice, co w Ustawieniach (2…50, `SessionStore.householdNameLengthRange`;
@@ -446,6 +498,16 @@ struct WelcomeView: View {
         default:
             return true
         }
+    }
+
+    private var isYearAnswered: Bool { WelcomeProgress.isYearAnswered(yearOfBirth) }
+
+    private var isHeightAnswered: Bool {
+        heightCm.map { WelcomeProgress.heightRange.contains($0) } ?? false
+    }
+
+    private var isWeightAnswered: Bool {
+        weightKg.map { WelcomeProgress.weightRange.contains($0) } ?? false
     }
 
     private var trimmedName: String {
@@ -492,6 +554,12 @@ struct WelcomeView: View {
         // delivered shifted / corrupted parameter values to the closure
         // body — using the store reference avoids the indirection.
         let store = sessionStore
+        // Krok zaliczony — PRZED zapisem, bo `savePreferencesStep` czyta
+        // z `answeredStep`, co już padło (alergeny dopiero po kroku 3).
+        if (1...3).contains(step), step > answeredStep {
+            answeredStep = step
+            UserDefaults.standard.set(step, forKey: WelcomeProgress.answeredStepKey)
+        }
         retryPendingSaves(store)
         switch step {
         case 1:
@@ -542,12 +610,16 @@ struct WelcomeView: View {
 
     @MainActor
     private func saveProfileStep(_ store: SessionStore) async {
+        // Tylko to, co podane (7.10.2026): `nil` = pole pominięte w zapisie.
+        // Po „Dalej” z kroku 1 wszystko jest podane; strażniki chronią
+        // ponowienie, gdy ktoś wrócił i wyczyścił pole.
         let ok = await store.saveProfile(
             displayName: trimmedName,
-            yearOfBirth: yearOfBirth,
-            heightCm: heightCm,
-            weightKg: weightKg,
+            yearOfBirth: isYearAnswered ? yearOfBirth : nil,
+            heightCm: isHeightAnswered ? heightCm : nil,
+            weightKg: isWeightAnswered ? weightKg : nil,
             sex: sex?.rawValue,
+            clearSex: sex == nil && sexDeclined && clearsSex,
             // Formularz kreatora, nie lokalna kopia — bez czekania na `users:me`
             // (7.10.2026, `ensureProfileBaseline`).
             confirmBaselineFirst: false
@@ -560,12 +632,15 @@ struct WelcomeView: View {
     private func savePreferencesStep(_ store: SessionStore) async {
         // Unia z nieznanymi — kreator nie kasuje alergenu z nowszego buildu.
         let allergenRaws = Array(Set(allergens.map(\.rawValue)).union(unknownAllergens)).sorted()
+        // Tylko odpowiedzi (7.10.2026): po kroku 2 cel, aktywność i kalorie
+        // z nich policzone; dieta i alergeny dopiero po kroku 3 — wcześniej
+        // pusta lista alergenów byłaby odpowiedzią udzieloną za użytkownika.
         let ok = await store.saveUserPreferences(
-            diet: diet.rawValue,
-            calorieGoal: calorieGoal,
-            allergens: allergenRaws,
-            goal: goal.rawValue,
-            activityLevel: activity.rawValue,
+            diet: diet?.rawValue,
+            calorieGoal: goal != nil ? calorieGoal : nil,
+            allergens: answeredStep >= 3 ? allergenRaws : nil,
+            goal: goal?.rawValue,
+            activityLevel: activity?.rawValue,
             // Formularz kreatora to świadoma decyzja użytkownika, nie lokalna
             // kopia — nie czeka na odczyt z serwera (nowe konto i tak ma tam
             // domyślny wiersz). 7.10.2026, patrz `ensurePreferencesBaseline`.
@@ -592,6 +667,30 @@ struct WelcomeView: View {
                 ? "Nie zapisaliśmy tego na serwerze — dane są w telefonie, ponowimy przy następnym kroku."
                 : nil
         }
+    }
+}
+
+/// Wymagane odpowiedzi kreatora (7.10.2026, Rafał: „wymuszanie, aby user
+/// podał dane wszystkie, bo inaczej button będzie dalej wyłączony”).
+///
+/// Zakresy = te, z których aplikacja i serwer liczą zapotrzebowanie
+/// (`BodyMetrics.init?`, backend `body-metrics.util.ts`) i które ustawia
+/// „Twoje dane” (`ProfileField.heights` / `weights`) — podany wzrost zawsze
+/// daje wynik. Wiek od 16, bo od tylu lat jest aplikacja (regulamin
+/// i polityka, `AuthFooterView`; zgoda Asystenta też pyta o 16). Rok liczony
+/// jak wszędzie w aplikacji: bieżący rok minus rok urodzenia.
+enum WelcomeProgress {
+    /// Ostatni krok kreatora zaliczony „Dalej”. Kasowany razem z sesją
+    /// (`SessionStore.clearPersistedSession`), jak `TourCompletion`.
+    static let answeredStepKey = "onboarding.wizardAnsweredStep"
+
+    static let ageRange = 16...110
+    static let heightRange = 120...230
+    static let weightRange: ClosedRange<Double> = 30...250
+
+    static func isYearAnswered(_ yearOfBirth: Int, now: Date = Date()) -> Bool {
+        let currentYear = Calendar.current.component(.year, from: now)
+        return ageRange.contains(currentYear - yearOfBirth)
     }
 }
 

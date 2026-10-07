@@ -206,6 +206,9 @@ struct SCHeaderIconWell: View {
 // arkusza mogła stroić odstępy bez dziedziczenia `marginTop: 20` z listy.
 struct EditorialSheetSectionLabel: View {
     let title: String
+    /// `nil` = zwykła szarość (`scFaint`). Kreator barwi tu brakującą
+    /// odpowiedź na terakotę (`WelcomeSection.isMissing`, 7.10.2026).
+    var color: Color? = nil
 
     @Environment(\.colorScheme) private var scheme
 
@@ -213,7 +216,7 @@ struct EditorialSheetSectionLabel: View {
         Text(title.uppercased())
             .font(.sc(size: 10.5, weight: .bold))
             .tracking(1.4)
-            .foregroundStyle(Color.scFaint(scheme))
+            .foregroundStyle(color ?? Color.scFaint(scheme))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6)
             .padding(.bottom, 6)

@@ -5,7 +5,9 @@ import SwiftUI
 // rozpoznawalnej wartości. Wiersze diety są tymi samymi wierszami, co cele
 // w kroku 2 i dieta w Ustawieniach.
 struct WelcomeStep3PreferencesView: View {
-    @Binding var diet: DietPreference
+    /// Wymagana odpowiedź (7.10.2026): `nil` do wyboru, „Bez diety” też jest
+    /// odpowiedzią. Alergeny zostają opcjonalne — brak = brak alergii.
+    @Binding var diet: DietPreference?
     @Binding var calorieGoal: Int
     @Binding var allergens: Set<Allergen>
     /// Rozbicie dziennego celu na makro — policzone z sylwetki i celu
@@ -51,7 +53,7 @@ struct WelcomeStep3PreferencesView: View {
                     }
                 }
 
-                WelcomeSection(title: "Sposób odżywiania") {
+                WelcomeSection(title: "Sposób odżywiania", isMissing: diet == nil) {
                     VStack(spacing: 0) {
                         ForEach(Array(DietPreference.allCases.enumerated()), id: \.element.id) { index, candidate in
                             WelcomeOptionRow(
@@ -228,7 +230,7 @@ struct WelcomeStep3PreferencesView: View {
 }
 
 #Preview("Dark") {
-    StatefulPreviewContainer(diet: .none, kcal: 2300, allergens: []) { diet, kcal, allergens in
+    StatefulPreviewContainer(diet: nil, kcal: 2300, allergens: []) { diet, kcal, allergens in
         ZStack {
             SCPageBackground(scheme: .dark).ignoresSafeArea()
             WelcomeStep3PreferencesView(diet: diet, calorieGoal: kcal, allergens: allergens)
@@ -248,16 +250,16 @@ struct WelcomeStep3PreferencesView: View {
 }
 
 private struct StatefulPreviewContainer<Content: View>: View {
-    @State private var diet: DietPreference
+    @State private var diet: DietPreference?
     @State private var kcal: Int
     @State private var allergens: Set<Allergen>
-    let content: (Binding<DietPreference>, Binding<Int>, Binding<Set<Allergen>>) -> Content
+    let content: (Binding<DietPreference?>, Binding<Int>, Binding<Set<Allergen>>) -> Content
 
     init(
-        diet: DietPreference,
+        diet: DietPreference?,
         kcal: Int,
         allergens: Set<Allergen>,
-        @ViewBuilder content: @escaping (Binding<DietPreference>, Binding<Int>, Binding<Set<Allergen>>) -> Content
+        @ViewBuilder content: @escaping (Binding<DietPreference?>, Binding<Int>, Binding<Set<Allergen>>) -> Content
     ) {
         _diet = State(initialValue: diet)
         _kcal = State(initialValue: kcal)

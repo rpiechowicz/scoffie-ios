@@ -2333,6 +2333,9 @@ final class SessionStore {
         // wpadałaby prosto w pytania o wzrost i alergeny, bo flaga
         // z poprzedniej sesji nadal leżałaby w `UserDefaults`.
         defaults.removeObject(forKey: TourCompletion.storageKey)
+        // Postęp kreatora tak samo (7.10.2026): bez tego kolejne konto
+        // zastałoby cel i dietę „zaliczone” przez poprzednie.
+        defaults.removeObject(forKey: WelcomeProgress.answeredStepKey)
         clearPersistedProfileFields()
         clearPersistedPreferences()
         // Cały chroniony plik (profil, dieta, e-mail, imię — 7.10.2026), nie
