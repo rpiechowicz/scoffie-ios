@@ -239,9 +239,6 @@ final class SessionStore {
         if let raw, !raw.isEmpty {
             defaults.set(raw, forKey: Keys.onboardingCompletedAt)
             onboardingCompletedAt = Self.parseOnboardingDate(raw)
-            // Onboarding zamknięty — szkic kreatora nie ma już czego wznawiać
-            // (7.10.2026). Wylogowanie kasuje go razem z chronionym plikiem.
-            WelcomeDraft.clear()
         } else {
             defaults.removeObject(forKey: Keys.onboardingCompletedAt)
             onboardingCompletedAt = nil
@@ -294,6 +291,10 @@ final class SessionStore {
         Task { @MainActor [weak self] in
             await self?.refreshHouseholdMembers(force: true)
             await self?.refreshPendingInvitations()
+        }
+        // Niepotwierdzony szkic kreatora — ponawiamy przy każdym powrocie.
+        Task { @MainActor [weak self] in
+            await self?.flushWelcomeDraft()
         }
         // Odczyt preferencji przy starcie sesji padł — bez potwierdzonej
         // kopii ekran diety nie zapisze zmian, a Przepisy nie znają alergenów
@@ -996,6 +997,10 @@ final class SessionStore {
         // continue to display while this runs in the background.
         Task { @MainActor [weak self] in
             await self?.loadUserPreferences()
+            // Szkic kreatora po zakończonym onboardingu = zapisy, których
+            // serwer nie potwierdził (zabita aplikacja) — PO odczycie, bo
+            // szkic jest nowszą intencją niż wiersz serwera.
+            await self?.flushWelcomeDraft()
             // Strefa czasowa mogła się zmienić między sesjami (podróż), a
             // serwer potrzebuje jej do ciszy nocnej — odsyłamy stan
             // przełączników od razu po ich wczytaniu.
@@ -3327,6 +3332,64 @@ final class SessionStore {
             UserDefaults.standard.set(UUID().uuidString, forKey: ProfileKeys.sexClearPending)
         }
         SCProtectedSettings.shared.removeObject(forKey: ProfileKeys.sex)
+    }
+
+    /// Trwa `flushWelcomeDraft` — drugi (powrót na pierwszy plan) nie rusza.
+    private var welcomeDraftFlushRunning = false
+
+    /// Szkic kreatora (`WelcomeDraft`) po zakończonym onboardingu: wysyła go
+    /// jeszcze raz i kasuje dopiero po zapisach POTWIERDZONYCH przez serwer
+    /// (7.10.2026, Codex runda 3). Zapisy kroków idą w tle przez kolejki,
+    /// a `completeOnboarding` przestawia aplikację od razu — zabicie aplikacji
+    /// gubiło niewysłane odpowiedzi. Woła to koniec kreatora, start sesji (po
+    /// odczycie preferencji) i powrót na pierwszy plan. Te same kolejki,
+    /// epoka i `confirmBaselineFirst: false` co zapisy kreatora — szkic to
+    /// formularz użytkownika, nowszy niż wiersz serwera. Przed końcem
+    /// onboardingu nic nie robi: wtedy szkicem żyje kreator.
+    @MainActor
+    func flushWelcomeDraft() async {
+        guard let userId = currentUserId, !userId.isEmpty,
+              onboardingCompletedAt != nil, !welcomeDraftFlushRunning,
+              let draft = WelcomeDraft.load(forUserId: userId)
+        else { return }
+        welcomeDraftFlushRunning = true
+        defer { welcomeDraftFlushRunning = false }
+
+        let profileSaved = await saveProfile(
+            displayName: draft.name,
+            yearOfBirth: draft.yearOfBirth,
+            heightCm: draft.heightCm,
+            weightKg: draft.weightKg,
+            sex: draft.sex,
+            confirmBaselineFirst: false
+        )
+        var preferencesSaved = true
+        if draft.answeredStep >= 2, let goal = draft.goal.flatMap({ UserGoal(rawValue: $0) }) {
+            // Kalorie jak w kreatorze: ręcznie przesunięte ze szkicu, inaczej
+            // podpowiedź z tych samych danych.
+            let metrics = BodyMetrics(
+                heightCm: draft.heightCm ?? 0,
+                weightKg: draft.weightKg ?? 0,
+                yearOfBirth: draft.yearOfBirth ?? 0,
+                activityRaw: draft.activityLevel ?? 0,
+                sexRaw: draft.sex ?? ""
+            )
+            let dietAnswered = draft.answeredStep >= 3
+            preferencesSaved = await saveUserPreferences(
+                diet: dietAnswered ? draft.diet : nil,
+                calorieGoal: draft.calorieGoal ?? goal.suggestedCalories(for: metrics),
+                allergens: dietAnswered ? draft.allergens : nil,
+                goal: goal.rawValue,
+                activityLevel: draft.activityLevel,
+                confirmBaselineFirst: false
+            )
+        }
+        // Ten sam szkic tego samego konta (w międzyczasie nikt go nie zmienił
+        // ani nie wylogował się).
+        if profileSaved, preferencesSaved, currentUserId == userId,
+           WelcomeDraft.load(forUserId: userId) == draft {
+            WelcomeDraft.clear()
+        }
     }
 
     /// Persist the profile slice (display name + biometrics) for the

@@ -629,6 +629,10 @@ struct WelcomeView: View {
                         await store.saveMealSlotSchedule(schedule)
                     }
                     await store.completeOnboarding()
+                    // Szkic kroków 1–3 jedzie jeszcze raz za zapisami kroków
+                    // (te same kolejki) i znika dopiero po ich potwierdzeniu;
+                    // gdy padnie, ponowi go start sesji albo powrót aplikacji.
+                    await store.flushWelcomeDraft()
                 }
             }
         default:
@@ -756,10 +760,11 @@ enum WelcomeProgress {
 ///
 /// W chronionym magazynie (dane zdrowotne — nie `UserDefaults`), jako JSON
 /// pod jednym kluczem, zwykłym `set` (bez znacznika edycji z ręki — nie
-/// miesza się z licznikami strażnika). Kasowany po zakończeniu onboardingu
-/// (`SessionStore.persistOnboardingCompletedAt`) i przy wylogowaniu /
-/// usunięciu konta (`SCProtectedSettings.removeAll`). Szkic innego konta
-/// (`userId`) jest pomijany.
+/// miesza się z licznikami strażnika). Po zakończeniu onboardingu wysyłany
+/// jeszcze raz i kasowany dopiero po zapisach potwierdzonych przez serwer
+/// (`SessionStore.flushWelcomeDraft`: koniec kreatora, start sesji, powrót
+/// aplikacji); przy wylogowaniu / usunięciu konta znika z
+/// `SCProtectedSettings.removeAll`. Szkic innego konta (`userId`) jest pomijany.
 nonisolated struct WelcomeDraft: Codable, Equatable {
     static let storageKey = "onboarding.draft"
 
