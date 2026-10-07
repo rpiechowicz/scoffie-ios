@@ -3,11 +3,9 @@ import SwiftUI
 // Kreator, krok 2 — cel i aktywność. Jeden z pięciu celów (te same wiersze,
 // co w Ustawieniach → „Dieta i alergeny”) i liczba treningów w tygodniu.
 // Wybór zmienia stan od razu; `WelcomeView` wysyła go na serwer przy „Dalej”.
-// Oba wybory wymagane (7.10.2026): startują niewybrane (`nil`), a etykieta
-// sekcji bez odpowiedzi stoi w terakocie.
 struct WelcomeStep2GoalView: View {
-    @Binding var goal: UserGoal?
-    @Binding var activity: ActivityLevel?
+    @Binding var goal: UserGoal
+    @Binding var activity: ActivityLevel
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -21,7 +19,7 @@ struct WelcomeStep2GoalView: View {
                     subtitle: "Dobierzemy do tego kalorie i przepisy."
                 )
 
-                WelcomeSection(title: "Główny cel", isMissing: goal == nil) {
+                WelcomeSection(title: "Główny cel") {
                     VStack(spacing: 0) {
                         ForEach(Array(UserGoal.allCases.enumerated()), id: \.element.id) { index, candidate in
                             WelcomeOptionRow(
@@ -47,7 +45,7 @@ struct WelcomeStep2GoalView: View {
                 // Karta jak „Aktywność” w Ustawieniach → „Twoje dane”
                 // (24.09.2026): nagłówek z ikoną i jednym zdaniem, pod nim
                 // chipy. Gołe chipy na tle wyglądały jak inny ekran.
-                WelcomeSection(title: "Aktywność", isMissing: activity == nil) {
+                WelcomeSection(title: "Aktywność") {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack(spacing: 12) {
                             EditorialSettingsTileIcon(icon: "figure.run", color: SCPalette.terracotta)
@@ -139,7 +137,7 @@ private struct ActivityChip: View {
 }
 
 #Preview("Light") {
-    StatefulPreviewContainer(initialGoal: nil, initialActivity: nil) { goal, activity in
+    StatefulPreviewContainer(initialGoal: .lose, initialActivity: .light) { goal, activity in
         ZStack {
             SCPageBackground(scheme: .light).ignoresSafeArea()
             WelcomeStep2GoalView(goal: goal, activity: activity)
@@ -149,14 +147,14 @@ private struct ActivityChip: View {
 }
 
 private struct StatefulPreviewContainer<Content: View>: View {
-    @State private var goal: UserGoal?
-    @State private var activity: ActivityLevel?
-    let content: (Binding<UserGoal?>, Binding<ActivityLevel?>) -> Content
+    @State private var goal: UserGoal
+    @State private var activity: ActivityLevel
+    let content: (Binding<UserGoal>, Binding<ActivityLevel>) -> Content
 
     init(
-        initialGoal: UserGoal?,
-        initialActivity: ActivityLevel?,
-        @ViewBuilder content: @escaping (Binding<UserGoal?>, Binding<ActivityLevel?>) -> Content
+        initialGoal: UserGoal,
+        initialActivity: ActivityLevel,
+        @ViewBuilder content: @escaping (Binding<UserGoal>, Binding<ActivityLevel>) -> Content
     ) {
         _goal = State(initialValue: initialGoal)
         _activity = State(initialValue: initialActivity)
