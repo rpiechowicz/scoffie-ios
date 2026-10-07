@@ -277,12 +277,12 @@ struct SettingsView: View {
     /// Rozpiętość dnia — od pierwszej do ostatniej pory wśród planowanych
     /// posiłków. Mówi to, po co użytkownik wchodzi w ten ekran, i mieści się
     /// w wierszu. Trójka obowiązkowa ma porę zawsze, więc oba końce istnieją.
-    /// Wartość wiersza „Asystent i plan": nazwa kupionego planu albo stan
-    /// próbny. Pusto, dopóki nie wiemy — zgadywanie „Dostęp próbny" u kogoś,
+    /// Wartość wiersza „Asystent i plan": nazwa kupionego planu albo
+    /// „Darmowa pula". Pusto, dopóki nie wiemy — zgadywanie „Darmowa pula" u kogoś,
     /// kto płaci, byłoby gorsze niż brak wartości.
     private var planAccessRowValue: String {
         guard let planAccess else { return "" }
-        if planAccess.isTrial { return "Dostęp próbny" }
+        if planAccess.isTrial { return "Darmowa pula" }
         return planAccess.product.map { "Plan \($0)" } ?? "Plan domu"
     }
 

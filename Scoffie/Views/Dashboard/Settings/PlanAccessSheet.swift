@@ -164,7 +164,7 @@ struct PlanAccessSheet: View {
     private func badgeText(_ usage: AgentUsageDTO) -> String {
         switch accessState(for: usage) {
         case .trial:
-            return "Dostęp próbny"
+            return "Darmowa pula"
         case .granted:
             return "Plan domu"
         case .paying, .member:
@@ -214,12 +214,14 @@ struct PlanAccessSheet: View {
         }
     }
 
-    /// Krótka notka obok plakietki: próba jest jednorazowa, płatny plan
-    /// mówi, kiedy się odnawia (albo kończy, gdy odnawianie jest wyłączone).
+    /// Krótka notka obok plakietki: darmowa pula — kiedy wraca (od 7.10.2026
+    /// co 30 dni od pierwszego użycia), płatny plan — kiedy się odnawia (albo
+    /// kończy, gdy odnawianie jest wyłączone).
     private func heroNote(_ usage: AgentUsageDTO) -> String? {
         switch accessState(for: usage) {
         case .trial:
-            return "jednorazowy"
+            if let date = Self.parseISO(usage.resetsAt) { return "wraca \(Self.relativeDay(date))" }
+            return usage.renews == false ? "jednorazowa" : "odnawialna"
         case .paying:
             if let sub = currentSubscription, sub.status != "GRACE", sub.operatorHold == nil,
                let end = Self.parseISO(sub.expiresAt) {
@@ -1353,7 +1355,7 @@ struct AssistantQuotaPips: View {
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(isEmpty
-            ? "Pula wiadomości na próbę wyczerpana"
-            : "Zostało \(remaining) z \(limit) wiadomości na próbę")
+            ? "Darmowe wiadomości wykorzystane"
+            : "Zostało \(remaining) z \(limit) darmowych wiadomości")
     }
 }

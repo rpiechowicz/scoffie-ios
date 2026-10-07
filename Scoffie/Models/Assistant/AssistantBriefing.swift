@@ -311,7 +311,7 @@ enum AssistantBriefingResolver {
             return AssistantBriefing(
                 kind: .trialExhausted,
                 headline: "Darmowe wiadomości są wykorzystane.",
-                supporting: "Rozmowy i zapisany plan zostają. Pełny asystent jest w planach.",
+                supporting: "Rozmowy i zapisany plan zostają. Pula wróci sama — albo od razu z planem.",
                 visual: .plain,
                 primary: AssistantBriefing.Action(title: "Zobacz plany", kind: .openPlans),
                 // Bez asystenta aplikacja działa dalej — plan i zakupy są pod
