@@ -54,9 +54,9 @@ struct AuthFooterView: View {
 /// (`src/common/legal-documents.ts`) — wersja z przyszłości jest odrzucana,
 /// a starsza niż minimalna nie otwiera bramki asystenta.
 enum LegalDocMeta {
-    static let version = "1.2"
-    static let effectiveDate = "2 października 2026"
-    static let documentVersionISO = "2026-10-02"
+    static let version = "1.3"
+    static let effectiveDate = "22 października 2026"
+    static let documentVersionISO = "2026-10-22"
     static let contactEmail = "support@scoffie.app"
 }
 
@@ -235,7 +235,7 @@ private struct LegalBullet: View {
 
 // MARK: - Polityka prywatności
 //
-// Treść 1:1 ze strony (scoffie-web `src/pages/privacy`, wersja 1.2, 2 października 2026).
+// Treść 1:1 ze strony (scoffie-web `src/pages/privacy`, wersja 1.3, 22 października 2026).
 // Zmiana tutaj = zmiana na stronie, potem Android (`scripts/gen-legal-content.py`).
 // Istotna zmiana (nowy odbiorca, nowy cel) = też podbicie wersji tu
 // (`LegalDocMeta`) i w `src/common/legal-documents.ts` na serwerze — inaczej nikt
@@ -386,7 +386,7 @@ struct PrivacyPolicyContent: View {
                 LegalBullet("kopie zapasowe bazy — 30 dni, potem nadpisywane,")
                 LegalBullet("wiadomości e-mail — adres, temat i treść przez 30 dni od wysyłki, potem zostaje sam ślad nadania bez tych danych, usuwany po roku; adres z listy odrzuceń — do usunięcia na prośbę użytkownika,")
                 LegalBullet("logi techniczne — nie dłużej niż 90 dni,")
-                LegalBullet("ślad tożsamości zakupowej (pseudonim wyliczony z identyfikatora logowania, bez możliwości odtworzenia go z powrotem) wraz z licznikiem i datą rozpoczęcia bezpłatnej puli oraz zapisem opłaconej subskrypcji — BEZTERMINOWO, także po usunięciu konta. To jedyny ślad, który zostaje. Bez niego bezpłatna pula zaczynałaby się od nowa przy każdym nowym koncie, a opłacona subskrypcja nie wróciłaby po ponownym zalogowaniu tym samym Apple ID. Podstawa: prawnie uzasadniony interes (art. 6 ust. 1 lit. f RODO) — zapobieganie nadużyciu bezpłatnej puli i odtworzenie opłaconego świadczenia.")
+                LegalBullet("ślad tożsamości zakupowej (pseudonim wyliczony z identyfikatora logowania, bez możliwości odtworzenia go z powrotem) wraz z licznikami wykorzystania i datą rozpoczęcia bezpłatnej puli oraz zapisem opłaconej subskrypcji — BEZTERMINOWO, także po usunięciu konta. To jedyny ślad, który zostaje. Bez niego bezpłatna pula zaczynałaby się od nowa przy każdym nowym koncie, a opłacona subskrypcja nie wróciłaby po ponownym zalogowaniu tym samym Apple ID. Podstawa: prawnie uzasadniony interes (art. 6 ust. 1 lit. f RODO) — zapobieganie nadużyciu bezpłatnej puli i odtworzenie opłaconego świadczenia.")
                 LegalBullet("po usunięciu konta dane są usuwane niezwłocznie, nie później niż w ciągu 30 dni (w tym z kopii zapasowych po ich rotacji), z zastrzeżeniem obowiązków prawnych, ochrony roszczeń i opisanego wyżej śladu tożsamości zakupowej. Własne przepisy dodane do wspólnego gospodarstwa pozostają w nim (bez powiązania z usuniętym kontem), bo korzystają z nich pozostali domownicy.")
             }
         }
@@ -429,7 +429,7 @@ struct PrivacyPolicyContent: View {
 
 // MARK: - Warunki korzystania
 //
-// Treść 1:1 ze strony (scoffie-web `src/pages/terms`, wersja 1.2 — treść jak w 1.1, numer wspólny z polityką).
+// Treść 1:1 ze strony (scoffie-web `src/pages/terms`, wersja 1.3, 22 października 2026 — odnawiana bezpłatna pula).
 // Ceny planów na stronie biorą się z `pricing.plans` — zmiana ceny = tu i tam.
 // Android generuje z tego pliku `LegalContent.kt` (`scripts/gen-legal-content.py`).
 
@@ -480,7 +480,7 @@ struct TermsOfServiceContent: View {
                 LegalParagraph("Korzystanie z asystenta wymaga odrębnej zgody na przekazanie danych o diecie i alergiach do Anthropic (Polityka prywatności, sekcja 6). Dane innych domowników są przekazywane wyłącznie za ich własną zgodą.")
                 LegalParagraph("Limity. Liczba wiadomości i zapisanych planów jest ograniczona na gospodarstwo w każdym okresie rozliczeniowym. Pula odnawia się w dniu odnowienia subskrypcji — kupiona 15 września wraca 15 października, a nie pierwszego. Bezpłatna pula odnawia się co 30 dni, licząc od pierwszego użycia. Aktualny stan i datę odnowienia pokazuje Aplikacja. Usługodawca może czasowo ograniczyć lub wstrzymać asystenta (np. z powodu kosztów lub awarii dostawcy) — pozostałe funkcje Aplikacji działają wtedy bez zmian.")
                 LegalParagraph("Treści. Zabronione jest używanie asystenta do celów niezgodnych z prawem, do obchodzenia zabezpieczeń Aplikacji lub do generowania treści niezwiązanych z planowaniem posiłków. Niewłaściwą odpowiedź asystenta można zgłosić Usługodawcy („Zgłoś odpowiedź” w Aplikacji lub e-mailem).")
-                LegalParagraph("Odpłatność. Asystent działa w dwóch trybach: bezpłatna pula i płatny plan. Bezpłatna pula to niewielka liczba wiadomości i zapisów planu, przypisana do osoby (nie do gospodarstwa), odnawiana co 30 dni od pierwszego użycia. Większa pula wymaga wykupienia planu.")
+                LegalParagraph("Odpłatność. Asystent działa w dwóch trybach: bezpłatna pula i płatny plan. Bezpłatna pula to niewielka liczba wiadomości i zapisów planu, przypisana do osoby (nie do gospodarstwa), odnawiana co 30 dni od pierwszego użycia. Wielkość bezpłatnej puli i okres jej odnawiania Usługodawca może zmienić, informując o tym z wyprzedzeniem w Aplikacji. Większa pula wymaga wykupienia planu.")
                 LegalParagraph("Plany. Solo (29,99 zł/mies.), We dwoje (39,99 zł/mies.) i Rodzina (49,99 zł/mies.). Różnią się wyłącznie wielkością puli wiadomości i zapisanych planów na okres rozliczeniowy — nie liczbą osób w gospodarstwie i nie zakresem funkcji. Aktualne limity każdego planu pokazuje Aplikacja przed zakupem oraz App Store w opisie produktu.")
                 LegalParagraph("Pula jest wspólna dla całego gospodarstwa. Wykupienie planu przez jednego domownika daje asystenta wszystkim pozostałym, bez dokupywania miejsc i bez żadnej dodatkowej czynności; wszyscy korzystają z tej samej puli. Opuszczenie gospodarstwa przez płatnika kończy dostęp pozostałych z tego samego dnia.")
                 LegalParagraph("Odnowienie i rezygnacja. Subskrypcja odnawia się automatycznie co miesiąc, dopóki nie zostanie anulowana co najmniej 24 godziny przed końcem bieżącego okresu. Opłata jest pobierana przez Apple w ciągu 24 godzin przed początkiem nowego okresu. Subskrypcją zarządza się w Ustawieniach iOS (Apple ID → Subskrypcje) albo przyciskiem „Zarządzaj subskrypcją” w Aplikacji; usunięcie Aplikacji ani konta w Aplikacji NIE anuluje subskrypcji.")
