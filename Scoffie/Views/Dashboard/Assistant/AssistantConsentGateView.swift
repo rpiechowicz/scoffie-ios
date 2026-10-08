@@ -114,7 +114,7 @@ struct AssistantConsentGateView: View {
             Button("Anuluj", role: .cancel) {}
             Button("Cofnij zgodę", role: .destructive) { revoke() }
         } message: {
-            Text("Asystent przestanie dla Ciebie działać, a Twoje dane o diecie nie będą już wysyłane do modelu. Zapisane rozmowy zostają, dopóki ich nie usuniesz.")
+            Text("Asystent przestanie dla Ciebie działać, a Twoje dane o diecie nie będą już wysyłane do Anthropic. Zapisane rozmowy zostają, dopóki ich nie usuniesz.")
         }
     }
 
@@ -166,7 +166,7 @@ struct AssistantConsentGateView: View {
                         title: "Zanim zaczniemy",
                         subtitle: isGranted || currentDraft.errorMessage != nil
                             ? nil
-                            : "Zanim Asystent wyśle cokolwiek do modelu, potrzebuje Twojej zgody.",
+                            : "Zanim Asystent wyśle cokolwiek do modelu Claude firmy Anthropic, potrzebuje Twojej zgody.",
                         typing: isGranted || headerTyped ? nil : 0
                     )
                     .padding(.bottom, 8)
@@ -219,7 +219,7 @@ struct AssistantConsentGateView: View {
                 isOn: isGranted ? .constant(true) : draftBinding.confirmsData,
                 icon: "hand.raised.fill",
                 color: SCPalette.sage,
-                title: "Zgadzam się, żeby Scoffie przetwarzał moje dane o diecie i alergiach w asystencie",
+                title: "Zgadzam się, żeby Scoffie wysyłał moje dane o diecie i alergiach do Anthropic (model Claude, USA), by Asystent mógł odpowiadać",
                 caption: "Wyraźna zgoda (art. 9 ust. 2 lit. a RODO) w zakresie opisanym wyżej.",
                 isLast: true
             )
@@ -241,9 +241,12 @@ struct AssistantConsentGateView: View {
         }
         .padding(.top, 14)
 
-        // Dostawca i podwykonawcy zostają w polityce prywatności
-        // (sekcja 6, wiersz wyżej) — na ekranie asystent występuje
-        // jako Scoffie, bez nazw modeli i firm trzecich.
+        // Od 7.10.2026 ekran NAZYWA odbiorcę danych: Anthropic, model Claude,
+        // USA (karta „Co wysyłamy” i potwierdzenie wyżej) — App Review 5.1.2(i)
+        // wymaga, żeby zgoda na przekazanie danych osobowych zewnętrznemu AI
+        // mówiła, komu je dajemy. Dawniej celowo bez nazw firm trzecich.
+        // Podstawa przekazania poza EOG i lista podwykonawców zostają
+        // w polityce prywatności (sekcja 6, wiersz wyżej).
         Text("Asystent to program — może się mylić i nie zastępuje dietetyka ani lekarza. Zgodę cofniesz w każdej chwili w menu asystenta.")
             .font(.sc(size: 12.5))
             .lineSpacing(3)
@@ -322,8 +325,9 @@ struct AssistantConsentGateView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// „Co wysyłamy do modelu” jako lista z kropkami szałwii; „Czego nie
-    /// wysyłamy” jedną linią na półce `wash`.
+    /// „Co wysyłamy do modelu” — kto dostaje dane (Anthropic, model Claude)
+    /// i lista z kropkami szałwii; „Czego nie wysyłamy” jedną linią na
+    /// półce `wash`.
     private var dataCard: some View {
         EditorialSettingsCardGroup {
             VStack(alignment: .leading, spacing: 10) {
@@ -332,6 +336,13 @@ struct AssistantConsentGateView: View {
                     .tracking(1.4)
                     .textCase(.uppercase)
                     .foregroundStyle(AssistantLook.sage(scheme))
+                // Odbiorca wprost (App Review 5.1.2(i)) — jak w sekcji 6
+                // polityki: model Claude, Anthropic, Stany Zjednoczone.
+                Text("Asystent działa na modelu Claude firmy Anthropic (USA). Przy każdej wiadomości wysyłamy tam:")
+                    .font(.sc(size: 13.5))
+                    .lineSpacing(3)
+                    .foregroundStyle(AssistantLook.muted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Self.sentItems, id: \.self) { item in
                         HStack(alignment: .top, spacing: 10) {

@@ -163,7 +163,7 @@ struct ProfileDetailsSheet: View {
             Button("Anuluj", role: .cancel) {}
             Button("Usuń konto", role: .destructive) { deleteAccount() }
         } message: {
-            Text("Wypiszemy Cię z gospodarstwa i trwale usuniemy konto razem z Twoim profilem, preferencjami i odhaczonymi posiłkami. Tego nie da się cofnąć.")
+            Text("Wypiszemy Cię z gospodarstwa i trwale usuniemy konto razem z Twoim profilem, preferencjami i odhaczonymi posiłkami. Tego nie da się cofnąć. Subskrypcję w App Store anulujesz osobno w ustawieniach Apple ID.")
         }
         // Każda zmiana kasuje poprzedni zapis i planuje nowy 600 ms później —
         // kręcenie kołem nie robi round-tripa na każdy rok. Pierwsze odpalenie

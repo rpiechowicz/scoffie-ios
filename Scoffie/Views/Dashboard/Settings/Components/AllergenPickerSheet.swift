@@ -258,8 +258,8 @@ struct AllergenPickerSheet: View {
         }
     }
 
-    /// Trzy grupy alergenów i dopisek o laktozie — ta sama lista w arkuszu
-    /// i na ekranie wepchniętym.
+    /// Trzy grupy alergenów i dwa ciche dopiski (laktoza, niepełne
+    /// oznaczenia) — ta sama lista w arkuszu i na ekranie wepchniętym.
     private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -275,6 +275,16 @@ struct AllergenPickerSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 6)
                     .padding(.top, 12)
+
+                // Ukrywanie przepisów stoi na oznaczeniach z katalogu i składu —
+                // nie obiecujemy pewności tam, gdzie chodzi o zdrowie (App Review
+                // 1.4.1). Ten sam cichy krój co dopisek o laktozie.
+                Text("Oznaczenia alergenów mogą być niepełne — zawsze sprawdzaj skład.")
+                    .font(.sc(size: 12))
+                    .foregroundStyle(Color.scFaint(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 6)
+                    .padding(.top, 6)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 8)
