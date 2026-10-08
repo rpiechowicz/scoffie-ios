@@ -802,6 +802,11 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   wiadomości wykorzystane” / „Wiadomości wrócą 1 listopada”), a stuknięcie w to pole przywraca kartę. Karta stoi POZA
   `GlassEffectContainer` pola — w grupie szklany „Zobacz plany” nie przyjmował stuknięć (jak krążek Filtrów, 9af6e15);
   nie wkładać jej z powrotem do grupy. `PlansSheet` z rozmowy dostaje `onPurchased` → `loadUsage` (blokada schodzi od razu).
+  7.10.2026 (Rafał: „odnawiana pula dla free co 30 dni, żeby zachęcić”): darmowa pula WRACA co 30 dni od pierwszego
+  użycia (backend, `AI_TRIAL_RENEW_DAYS`) — `tier` dalej `TRIAL`, ale `resetsAt` ma datę. `AssistantQuotaFacts.resetsAt`
+  bierze ją także na darmowej puli; `AssistantQuotaNextRow` przy darmowej z datą = „Wraca 6 listopada” + „za N dni”,
+  plan jako podpis „Bez czekania: „We dwoje” · cena”; bez daty (pula jednorazowa) — dawny „Polecamy”. Blokada pola
+  schodzi o `resetsAt` (`quotaLockEnd`) — także w starszych buildach. Słownictwo: „Darmowa pula”, nie „Dostęp próbny”.
   Akcja karty, która wysyła zdanie (`AssistantView.ask`: wiersze „Jak nadrobić” w `AssistantMacroGapCard`, pigułki,
   „Wstaw” przy daniu do wyboru, akcje powitania), NIGDY nie ginie po cichu: gdy `store.canSend == false`, `refuseAsk`
   pokazuje toast z powodem, a przy puli przywraca jej kartę (7.10.2026: trzy propozycje domknięcia białka „nie dawały

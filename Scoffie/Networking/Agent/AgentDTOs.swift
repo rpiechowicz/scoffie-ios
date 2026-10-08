@@ -212,9 +212,11 @@ struct AgentUsageDTO: Decodable, Equatable {
     let householdId: String
     /// `YYYY-MM` (PRO) albo `trial` (jednorazowa pula na próbę).
     let period: String
-    /// Kiedy pula wraca; `nil` na próbie — nie odnawia się.
+    /// Kiedy pula wraca. Od 7.10.2026 także darmowa (co 30 dni od pierwszego
+    /// użycia); `nil` = darmowa pula jeszcze nieużyta albo jednorazowa.
     let resetsAt: String?
-    /// Czy pula wraca co miesiąc; starszy serwer nie oddaje pola (= tak).
+    /// Czy pula wraca; starszy serwer nie oddaje pola (= tak). Darmowa: `false`
+    /// tylko przy odnawianiu wyłączonym na serwerze.
     let renews: Bool?
     /// `TRIAL` albo `PRO` (starszy serwer: `FREE` = pula miesięczna).
     let tier: String

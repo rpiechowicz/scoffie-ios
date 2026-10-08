@@ -743,6 +743,7 @@ struct AssistantView: View {
             calendar: calendar,
             displayName: SCProtectedSettings.shared.string(forKey: "settings.user.displayName"),
             trialExhausted: store.isLockedByTrialQuota,
+            trialResets: quotaFacts?.resetDay != nil,
             isNewUser: isNewUser,
             thisWeek: thisWeek,
             nextWeek: nextWeek,
@@ -1237,7 +1238,10 @@ struct AssistantView: View {
     /// moment” obiecywało coś, co nie nastąpi do odnowienia planu.
     private var lockedPrompt: String {
         guard store.lockReason == .quota else { return "Chwila przerwy — spróbuj za moment" }
-        if store.usage?.isTrial == true { return "Darmowe wiadomości wykorzystane" }
+        if store.usage?.isTrial == true {
+            if let day = quotaFacts?.resetDay { return "Darmowe wiadomości wrócą \(day)" }
+            return "Darmowe wiadomości wykorzystane"
+        }
         if let day = quotaFacts?.resetDay { return "Wiadomości wrócą \(day)" }
         return "Wiadomości wrócą z odnowieniem planu"
     }

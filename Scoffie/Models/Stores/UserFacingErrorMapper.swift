@@ -237,7 +237,7 @@ enum UserFacingErrorMapper {
         // ale od kart zapisuje się przyciskiem — wtedy to jest odpowiedź HTTP
         // i kopia niżej jest potrzebna.
         "AI_DISABLED": "Asystent jest teraz niedostępny.",
-        "AI_QUOTA_EXCEEDED": "Limit rozmów z asystentem na ten miesiąc został wyczerpany.",
+        "AI_QUOTA_EXCEEDED": "Limit wiadomości do asystenta w tym okresie został wyczerpany.",
         "AI_BUDGET_PAUSED": "Asystent jest dziś niedostępny. Spróbuj jutro.",
         "AI_UPSTREAM_PAUSED": "Asystent ma chwilową przerwę. Spróbuj za minutę.",
         "AI_TURN_IN_PROGRESS": "Poprzednia wiadomość jest jeszcze przetwarzana.",
@@ -248,7 +248,7 @@ enum UserFacingErrorMapper {
         "AI_PROVIDER_ERROR": "Asystent nie mógł dokończyć zadania. Spróbuj ponownie za chwilę.",
         "AI_CANCELLED": "Zatrzymane. Plan bez zmian.",
         "AI_CONSENT_REQUIRED": "Asystent potrzebuje Twojej zgody — włączysz ją w otwartym arkuszu albo w Ustawieniach → Asystent AI.",
-        "AI_PLAN_QUOTA_EXCEEDED": "Zapisy planów w tym okresie wykorzystane. Rozmowa działa dalej — zapis wróci przy odnowieniu planu.",
+        "AI_PLAN_QUOTA_EXCEEDED": "Zapisy planów w tym okresie wykorzystane. Rozmowa działa dalej — zapis wróci z odnowieniem puli.",
         "COOKIDOO_DISABLED": "Połączenie z Cookidoo jest na razie wyłączone.",
         "RECIPE_EXCLUDED_INGREDIENT": "Ten przepis ma składnik, którego ktoś z jedzących nie je.",
         // Propozycje: użytkownik klika przycisk W KARCIE, więc kopia mówi

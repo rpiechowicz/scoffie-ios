@@ -243,7 +243,7 @@ struct PlansSheet: View {
     private func currentStatusDetail(plan: SubscriptionPlan?, usage: AgentUsageDTO?) -> String {
         guard plan != nil else {
             return usage?.isTrial == true
-                ? "Teraz korzystasz z jednorazowej puli próbnej."
+                ? "Teraz korzystasz z darmowej puli. Plan daje więcej wiadomości co miesiąc."
                 : "Wybierz plan, żeby asystent działał co miesiąc."
         }
         if let usage, !usage.isThePayer, let payer = usage.payerName, !payer.isEmpty {

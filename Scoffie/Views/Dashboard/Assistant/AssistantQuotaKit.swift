@@ -2,7 +2,8 @@ import StoreKit
 import SwiftUI
 
 // Widoki „pula wykorzystana”: ile poszło (kreseczki zamiast samego zdania),
-// kiedy wraca (plan miesięczny) albo co daje plan (próba) — i że plan oraz
+// kiedy wraca (plan miesięczny i — od 7.10.2026 — darmowa pula co 30 dni)
+// albo co daje plan (darmowa bez odnowienia) — i że plan oraz
 // zakupy działają dalej bez asystenta. Liczby WYŁĄCZNIE z serwera
 // (`AgentUsageDTO`); plan z katalogu tylko PODPOWIADA („Polecamy”), nigdy nie
 // mówi „Twój” — patrz CLAUDE.md, „Plany asystenta”.
@@ -14,8 +15,8 @@ struct AssistantQuotaFacts: Equatable {
     let messages: AgentQuotaDTO
     let plans: AgentQuotaDTO
     let isTrial: Bool
-    /// Kiedy pula wraca; `nil` na próbie (nie odnawia się) albo gdy serwer
-    /// nie podał daty.
+    /// Kiedy pula wraca; `nil`, gdy serwer nie podał daty (darmowa pula
+    /// jednorazowa albo starszy serwer).
     let resetsAt: Date?
     /// Plan polecany dla wielkości domu — tylko na próbie i tylko, gdy znamy
     /// liczbę domowników.
@@ -40,7 +41,7 @@ struct AssistantQuotaFacts: Equatable {
             messages: usage.messages,
             plans: usage.plans,
             isTrial: usage.isTrial,
-            resetsAt: usage.isTrial ? nil : AgentStore.parseTimestamp(usage.resetsAt),
+            resetsAt: AgentStore.parseTimestamp(usage.resetsAt),
             suggestion: suggestion
         )
     }
@@ -179,8 +180,9 @@ struct AssistantQuotaPanel: View {
 
 // MARK: - Wiersz „co dalej”
 
-/// Jedna linijka o tym, co dalej: przy planie miesięcznym — kiedy pula wraca
-/// (data + odliczanie w pigułce), na próbie — polecany plan z ceną w pigułce.
+/// Jedna linijka o tym, co dalej: kiedy pula wraca (data + odliczanie
+/// w pigułce; darmowa dopisuje pod spodem plan „bez czekania”), a darmowa bez
+/// daty — polecany plan z ceną w pigułce.
 /// Wspólna dla karty zamiast pola i panelu w powitaniu. `nil` treści = nic.
 struct AssistantQuotaNextRow: View {
     let facts: AssistantQuotaFacts?
@@ -196,6 +198,16 @@ struct AssistantQuotaNextRow: View {
     }
 
     private var content: Info? {
+        if isTrial, let day = facts?.resetDay {
+            // Darmowa pula wraca co 30 dni (od 7.10.2026): najpierw kiedy,
+            // plan tylko jako droga „bez czekania”.
+            return Info(
+                icon: "arrow.clockwise",
+                title: "Wraca \(day)",
+                detail: facts?.suggestion.map { "Bez czekania: „\($0.name)” · \($0.price)" },
+                pill: facts?.resetDistance()
+            )
+        }
         if isTrial {
             guard let suggestion = facts?.suggestion else { return nil }
             return Info(
