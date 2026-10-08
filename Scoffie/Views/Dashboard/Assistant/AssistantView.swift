@@ -743,6 +743,7 @@ struct AssistantView: View {
             calendar: calendar,
             displayName: SCProtectedSettings.shared.string(forKey: "settings.user.displayName"),
             trialExhausted: store.isLockedByTrialQuota,
+            trialResets: quotaFacts?.resetDay != nil,
             isNewUser: isNewUser,
             thisWeek: thisWeek,
             nextWeek: nextWeek,

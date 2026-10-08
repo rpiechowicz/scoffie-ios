@@ -173,6 +173,9 @@ struct AssistantBriefingContext {
     var displayName: String?
     /// Pula na próbę wykorzystana — nic nie da się wysłać.
     var trialExhausted = false
+    /// Darmowa pula wraca (serwer podał datę odnowienia). Starszy serwer
+    /// i `AI_TRIAL_RENEW_DAYS=0` — nie, wtedy powitanie nie obiecuje powrotu.
+    var trialResets = false
     /// Konto bez żadnego planu i bez żadnej rozmowy — Scoffie nic jeszcze
     /// o tym domu nie wie i nie ma prawa udawać, że wie.
     var isNewUser = false
@@ -311,7 +314,9 @@ enum AssistantBriefingResolver {
             return AssistantBriefing(
                 kind: .trialExhausted,
                 headline: "Darmowe wiadomości są wykorzystane.",
-                supporting: "Rozmowy i zapisany plan zostają. Pula wróci sama — albo od razu z planem.",
+                supporting: c.trialResets
+                    ? "Rozmowy i zapisany plan zostają. Pula wróci sama — albo od razu z planem."
+                    : "Rozmowy i zapisany plan zostają. Pełny asystent jest w planach.",
                 visual: .plain,
                 primary: AssistantBriefing.Action(title: "Zobacz plany", kind: .openPlans),
                 // Bez asystenta aplikacja działa dalej — plan i zakupy są pod

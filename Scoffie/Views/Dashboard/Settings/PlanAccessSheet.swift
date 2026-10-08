@@ -214,13 +214,14 @@ struct PlanAccessSheet: View {
         }
     }
 
-    /// Krótka notka obok plakietki: darmowa pula — kiedy wraca (od 7.10.2026
-    /// co 30 dni od pierwszego użycia), płatny plan — kiedy się odnawia (albo
+    /// Krótka notka obok plakietki: darmowa pula — kiedy się odnawia (od
+    /// 7.10.2026 co 30 dni od pierwszego użycia; „wraca” sugerowałoby pustą
+    /// pulę, a ta może być w połowie), płatny plan — kiedy się odnawia (albo
     /// kończy, gdy odnawianie jest wyłączone).
     private func heroNote(_ usage: AgentUsageDTO) -> String? {
         switch accessState(for: usage) {
         case .trial:
-            if let date = Self.parseISO(usage.resetsAt) { return "wraca \(Self.relativeDay(date))" }
+            if let date = Self.parseISO(usage.resetsAt) { return "odnawia się \(Self.relativeDay(date))" }
             return usage.renews == false ? "jednorazowa" : "odnawialna"
         case .paying:
             if let sub = currentSubscription, sub.status != "GRACE", sub.operatorHold == nil,
