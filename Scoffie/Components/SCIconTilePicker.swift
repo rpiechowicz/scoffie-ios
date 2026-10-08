@@ -19,6 +19,9 @@ struct SCIconTileChoice<Value: Hashable> {
 /// sprężyną z „rozciągnięciem” (`LensSquish`), a ikona nowo wybranego podskakuje.
 /// Bez podpisu z nazwą poziomu pod spodem (Rafał: „to lekko aktywny usuń”) —
 /// ikona i kolor mówią wystarczająco.
+///
+/// Wybór, którego nie ma wśród opcji (kreator, 7.10.2026: `Value` opcjonalne
+/// i `nil` = „jeszcze bez odpowiedzi”), nie zapala żadnego kafla ani soczewki.
 struct SCIconTilePicker<Value: Hashable>: View {
     let choices: [SCIconTileChoice<Value>]
     @Binding var selection: Value
@@ -41,13 +44,15 @@ struct SCIconTilePicker<Value: Hashable>: View {
 
     var body: some View {
         let count = max(choices.count, 1)
-        let index = choices.firstIndex { $0.value == selection } ?? 0
+        // `nil` = wyboru nie ma wśród opcji — żaden kafel nie świeci.
+        let matched = choices.firstIndex { $0.value == selection }
+        let index = matched ?? 0
         let tileWidth = max(0, (width - Self.spacing * CGFloat(count - 1)) / CGFloat(count))
         let accent = choices.indices.contains(index) ? choices[index].color : SCPalette.terracotta
 
         HStack(spacing: Self.spacing) {
             ForEach(Array(choices.enumerated()), id: \.offset) { offset, choice in
-                tile(choice, at: offset, isOn: offset == index)
+                tile(choice, at: offset, isOn: offset == matched)
             }
         }
         .background(alignment: .leading) {
@@ -77,7 +82,7 @@ struct SCIconTilePicker<Value: Hashable>: View {
                     }
                 }
                 .offset(x: (tileWidth + Self.spacing) * CGFloat(index))
-                .opacity(width > 0 ? 1 : 0)
+                .opacity(width > 0 && matched != nil ? 1 : 0)
                 .allowsHitTesting(false)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }

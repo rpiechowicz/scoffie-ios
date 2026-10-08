@@ -182,7 +182,8 @@ final class CookSessionStore {
         CookTimerNotifications.cancelAll()
         CookAlarmScheduler.shared.sync(nil)
         CookLiveActivity.shared.sync(nil)
-        try? FileManager.default.removeItem(at: Self.fileURL)
+        // Także ze starego miejsca (7.10.2026), gdyby migracja go nie przeniosła.
+        AppCacheDirectory.removeEverywhere(Self.fileURL.lastPathComponent)
     }
 
     // MARK: - Koniec timera poza ekranem trybu
@@ -273,16 +274,17 @@ final class CookSessionStore {
 
     /// Sesja należy do konta — po wylogowaniu nie ma prawa wrócić u kogoś innego.
     static func clearCache() {
-        try? FileManager.default.removeItem(at: fileURL)
+        // Także ze starego miejsca (7.10.2026), gdyby migracja go nie przeniosła.
+        AppCacheDirectory.removeEverywhere(fileURL.lastPathComponent)
         // Alarm systemowy i Live Activity przeżyłyby wylogowanie.
         CookAlarmScheduler.shared.sync(nil)
         CookLiveActivity.shared.sync(nil)
     }
 
+    /// 7.10.2026 (audyt 2.5): w katalogu offline wykluczonym z kopii zapasowej
+    /// (wcześniej sam `Application Support`) — stary plik przenosi `AppCacheDirectory`.
     private static var fileURL: URL {
-        FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("cook-session-v1.json")
+        AppCacheDirectory.url(for: "cook-session-v1.json")
     }
 
     private func save() {

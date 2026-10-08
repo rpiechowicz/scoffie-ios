@@ -274,6 +274,81 @@ struct RecipeFitOffChip: View {
     }
 }
 
+// MARK: - Alergie jeszcze nieznane
+
+/// Telefon nie ma kopii diety (odtworzony z kopii zapasowej, reinstalacja),
+/// a odczyt z serwera trwa albo się nie udał — lista NIE odsiewa wtedy
+/// alergenów i musi to powiedzieć wprost (7.10.2026, Codex runda 4). Jedna
+/// reguła w Przepisach, kategorii i wyborze do planu. Przy
+/// `SessionStore.preferencesAvailability == .ready` (zwykły stan) albo
+/// wyłączonym dopasowaniu (wtedy mówi to „Bez dopasowania”) nie rysuje nic.
+/// Karta jak `RecipeListContextCard`: `scTileBg` + `scTileStroke`, bez cienia.
+struct RecipePreferencesNotice: View {
+    let isPersonalizationEnabled: Bool
+    var horizontalPadding: CGFloat = 20
+    var bottomPadding: CGFloat = 12
+
+    @Environment(\.sessionStore) private var sessionStore
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let availability = sessionStore.preferencesAvailability
+        if isPersonalizationEnabled, availability != .ready {
+            card(isLoading: availability == .loading)
+                .padding(.horizontal, horizontalPadding)
+                .padding(.bottom, bottomPadding)
+                .transition(.opacity)
+        }
+    }
+
+    private func card(isLoading: Bool) -> some View {
+        HStack(spacing: 12) {
+            if isLoading {
+                ProgressView()
+                    .frame(width: 32, height: 32)
+            } else {
+                SCHeaderIconWell(icon: "exclamationmark.shield", accent: SCPalette.terracotta, size: 32)
+            }
+
+            Text(isLoading
+                 ? "Wczytuję Twoje alergie…"
+                 : "Nie udało się wczytać Twoich alergii — przepisy bez dopasowania")
+                .font(.sc(size: 13.5, weight: .semibold))
+                .tracking(-0.2)
+                .foregroundStyle(Color.scLabel(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !isLoading {
+                Button {
+                    Task { await sessionStore.loadUserPreferences() }
+                } label: {
+                    Text("Spróbuj ponownie")
+                        .font(.sc(size: 13.5, weight: .semibold))
+                        .tracking(-0.2)
+                        .foregroundStyle(SCPalette.terracotta)
+                        .lineLimit(1)
+                        .padding(.horizontal, 14)
+                        .frame(height: 32)
+                        .scSoftCapsule(SCPalette.terracotta)
+                        .contentShape(Capsule(style: .continuous))
+                }
+                .buttonStyle(PlanPressStyle(scale: 0.94))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.scTileBg(scheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.scTileStroke(scheme), lineWidth: 1)
+        )
+    }
+}
+
 // MARK: - Wiersze
 
 /// Wiersze przepisów z kreskami między nimi. Tryb decyduje o końcówce

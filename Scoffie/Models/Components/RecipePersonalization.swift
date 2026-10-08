@@ -29,7 +29,9 @@ struct RecipePersonalization: Equatable {
 
     // MARK: - Odczyt z UserDefaults
 
-    /// Klucze `@AppStorage` współdzielone z Ustawieniami i ekranem powitalnym.
+    /// Klucze współdzielone z Ustawieniami i ekranem powitalnym. Dieta,
+    /// alergeny, cel i kcal od 7.10.2026 w `SCProtectedSettings`
+    /// (`@ProtectedSetting`); `enabled` (przełącznik) zostaje w `@AppStorage`.
     enum Keys {
         static let diet = "settings.diet.preference"
         static let allergens = "settings.diet.allergens"

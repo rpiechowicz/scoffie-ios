@@ -543,25 +543,26 @@ struct AssistantProposalReviewSheet: View {
         }
     }
 
-    /// Dzień = jedna karta w stroju kafla, wiersze rozdzielone włoskową kreską
-    /// od miniatury w prawo (jak listy iOS).
+    /// Dzień = jedna karta listy Ustawień (`EditorialSettingsCardGroup`,
+    /// 7.10.2026 — dawniej własna karta o promieniu 20 z kreską w kolorze
+    /// obwódki), wiersze rozdzielone kreską listy (`scRule`) od miniatury
+    /// w prawo, jak listy iOS.
     private func sectionCard(_ rows: [ProposalReview.Row]) -> some View {
-        let shape = RoundedRectangle(cornerRadius: AssistantCardMetrics.listRadius, style: .continuous)
-        return VStack(spacing: 0) {
-            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                if index > 0 {
-                    Rectangle()
-                        .fill(Color.scTileStroke(scheme))
-                        .frame(height: 1)
-                        .padding(.leading, 14 + Self.thumb + 12)
+        EditorialSettingsCardGroup {
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(Color.scRule(scheme))
+                            .frame(height: 1)
+                            .padding(.leading, 14 + Self.thumb + 12)
+                    }
+                    rowView(row)
+                        .id(row.id)
                 }
-                rowView(row)
-                    .id(row.id)
             }
+            .padding(.vertical, 4)
         }
-        .padding(.vertical, 4)
-        .background(shape.fill(Color.scTileBg(scheme)))
-        .overlay(shape.strokeBorder(Color.scTileStroke(scheme), lineWidth: 1))
     }
 
     // MARK: Wiersz
@@ -784,19 +785,24 @@ struct AssistantProposalReviewSheet: View {
         }
     }
 
+    /// Zapis i „Otwórz plan” = wspólny przycisk Asystenta w szałwii
+    /// (`AssistantPrimaryButton(tint:)`, jak zapis w karcie propozycji) —
+    /// prywatna kopia `ProposalAcceptButton` odpadła 7.10.2026.
     @ViewBuilder
     private func footerButton(_ copy: ProposalEndCopy) -> some View {
         if let applyTitle {
-            ProposalAcceptButton(
-                title: isBusy ? "Zapisuję…" : applyTitle,
-                icon: "checkmark",
+            AssistantPrimaryButton(
+                action: AssistantCardAction(title: isBusy ? "Zapisuję…" : applyTitle, icon: "checkmark", action: onApply),
                 isBusy: isBusy,
-                action: onApply
+                tint: AssistantLook.sage(scheme)
             )
             .transition(.opacity)
         } else if status == .applied, let onOpenPlan {
-            ProposalAcceptButton(title: "Otwórz plan", icon: "arrow.right", action: onOpenPlan)
-                .transition(.opacity)
+            AssistantPrimaryButton(
+                action: AssistantCardAction(title: "Otwórz plan", icon: "arrow.right", action: onOpenPlan),
+                tint: AssistantLook.sage(scheme)
+            )
+            .transition(.opacity)
         } else if !isBusy {
             AssistantGhostButton(
                 action: AssistantCardAction(title: copy.composeTitle, icon: "square.and.pencil") {
@@ -871,48 +877,6 @@ private struct ProposalRegenerateLink: View {
         }
         .buttonStyle(PlanPressStyle(scale: 0.97))
         .accessibilityHint("Asystent przygotuje nowy zestaw zamiast tego")
-    }
-}
-
-/// Zgoda na całość: pigułka „soft” w szałwii — ten sam przycisk co
-/// `AssistantPrimaryButton` (rozmiar `.regular`), tylko w kolorze zapisu.
-private struct ProposalAcceptButton: View {
-    let title: String
-    var icon: String = "checkmark"
-    var isBusy: Bool = false
-    let action: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    private let size = AssistantButtonSize.regular
-
-    var body: some View {
-        let sage = AssistantLook.sage(scheme)
-        Button(action: action) {
-            HStack(spacing: 7) {
-                if isBusy {
-                    ProgressView().controlSize(.small).tint(sage)
-                }
-                Text(title)
-                    .font(.sc(size: size.fontSize, weight: .semibold))
-                    .tracking(-0.3)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .contentTransition(.numericText())
-                if !isBusy {
-                    Image(systemName: icon)
-                        .font(.sc(size: size.iconSize, weight: .bold))
-                }
-            }
-            .foregroundStyle(sage)
-            .padding(.horizontal, size.horizontalPadding)
-            .frame(maxWidth: .infinity)
-            .frame(height: size.height)
-            .scSoftCapsule(sage)
-            .contentShape(Capsule())
-        }
-        .buttonStyle(PlanPressStyle(scale: 0.985))
-        .disabled(isBusy)
     }
 }
 

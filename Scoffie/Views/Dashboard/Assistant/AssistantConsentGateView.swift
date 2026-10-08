@@ -50,7 +50,7 @@ struct AssistantConsentGateView: View {
     /// Poniżej 16 blokujemy; od 17 ptaszek „mam 16 lat" jest z góry —
     /// dokładnie 16 po roku może jeszcze nie mieć urodzin, więc pyta.
     static var profileAgeByYear: Int? {
-        let year = UserDefaults.standard.integer(forKey: "settings.profile.yearOfBirth")
+        let year = SCProtectedSettings.shared.integer(forKey: "settings.profile.yearOfBirth")
         guard year > 0 else { return nil }
         return Calendar.current.component(.year, from: Date()) - year
     }
@@ -87,6 +87,15 @@ struct AssistantConsentGateView: View {
                 NavigationStack {
                     content
                         .toolbar(.hidden, for: .navigationBar)
+                        // Polityka w arkuszu z menu = PUSH w jego stosie
+                        // (7.10.2026, „najwyżej jeden arkusz”), jak dokumenty
+                        // w „Prywatność i regulamin”. Dawniej drugi arkusz
+                        // (`LegalDocumentSheet`) na arkuszu zgody.
+                        .navigationDestination(isPresented: $showPrivacyPolicy) {
+                            LegalDocumentPage(title: "Polityka prywatności") {
+                                PrivacyPolicyContent()
+                            }
+                        }
                 }
                 .presentationDragIndicator(.visible)
             }
@@ -94,7 +103,9 @@ struct AssistantConsentGateView: View {
         .interactiveDismissDisabled(consents.isBusy)
         .onAppear { if ageFromProfile { draftBinding.wrappedValue.confirmsAge = true } }
         .task { await consents.refresh() }
-        .sheet(isPresented: $showPrivacyPolicy) {
+        // W zakładce (krok wprowadzenia) nad zgodą nie stoi żaden arkusz —
+        // tam polityka zostaje jedynym arkuszem.
+        .sheet(isPresented: inlinePolicySheet) {
             LegalDocumentSheet(title: "Polityka prywatności", icon: "hand.raised.fill", accent: SCPalette.indigo) {
                 PrivacyPolicyContent()
             }
@@ -103,8 +114,17 @@ struct AssistantConsentGateView: View {
             Button("Anuluj", role: .cancel) {}
             Button("Cofnij zgodę", role: .destructive) { revoke() }
         } message: {
-            Text("Asystent przestanie dla Ciebie działać, a Twoje dane o diecie nie będą już wysyłane do modelu. Zapisane rozmowy zostają, dopóki ich nie usuniesz.")
+            Text("Asystent przestanie dla Ciebie działać, a Twoje dane o diecie nie będą już wysyłane do Anthropic. Zapisane rozmowy zostają, dopóki ich nie usuniesz.")
         }
+    }
+
+    /// Arkusz polityki tylko w zakładce; w arkuszu z menu polityka wjeżdża
+    /// pushem (`navigationDestination` wyżej).
+    private var inlinePolicySheet: Binding<Bool> {
+        Binding(
+            get: { presentation == .inline && showPrivacyPolicy },
+            set: { showPrivacyPolicy = $0 }
+        )
     }
 
     @ViewBuilder
@@ -146,7 +166,7 @@ struct AssistantConsentGateView: View {
                         title: "Zanim zaczniemy",
                         subtitle: isGranted || currentDraft.errorMessage != nil
                             ? nil
-                            : "Zanim Asystent wyśle cokolwiek do modelu, potrzebuje Twojej zgody.",
+                            : "Zanim Asystent wyśle cokolwiek do modelu Claude firmy Anthropic, potrzebuje Twojej zgody.",
                         typing: isGranted || headerTyped ? nil : 0
                     )
                     .padding(.bottom, 8)
@@ -169,58 +189,81 @@ struct AssistantConsentGateView: View {
         }
     }
 
-    /// Wspólne sekcje zakładki i arkusza.
+    /// Wspólne sekcje zakładki i arkusza — od 7.10.2026 na klockach list
+    /// Ustawień: karta `EditorialSettingsCardGroup`, etykieta sekcji
+    /// `EditorialSheetSectionLabel`, wiersze `EditorialSettingsRow` (kafelek,
+    /// zdanie, `SCCheckbox` po prawej). Dawne `AssistantGroup`/`AssistantRow`
+    /// i terakotowy odnośnik do polityki odpadły; treść bez zmian.
     @ViewBuilder
     private var sections: some View {
         dataCard
+            .padding(.top, 14)
 
         if isUnderage, !isGranted {
             underageNotice
                 .padding(.top, 14)
         }
 
-        AssistantGroup(title: "Twoje potwierdzenia", aside: { confirmationsBadge }) {
+        confirmationsHeader
+            .padding(.top, 20)
+        EditorialSettingsCardGroup {
             confirmRow(
                 isOn: isGranted ? .constant(true) : draftBinding.confirmsAge,
+                icon: "person.fill.checkmark",
+                color: SCPalette.indigo,
                 title: "Mam ukończone 16 lat",
                 caption: ageFromProfile ? "Zaznaczone według roku urodzenia z Twojego profilu" : nil,
-                first: true
+                isLast: false
             )
             confirmRow(
                 isOn: isGranted ? .constant(true) : draftBinding.confirmsData,
-                title: "Zgadzam się, żeby Scoffie przetwarzał moje dane o diecie i alergiach w asystencie",
+                icon: "hand.raised.fill",
+                color: SCPalette.sage,
+                title: "Zgadzam się, żeby Scoffie wysyłał moje dane o diecie i alergiach do Anthropic (model Claude, USA), by Asystent mógł odpowiadać",
                 caption: "Wyraźna zgoda (art. 9 ust. 2 lit. a RODO) w zakresie opisanym wyżej.",
-                first: false
+                isLast: true
             )
         }
-        .padding(.top, 2)
         .opacity(isGranted || isUnderage ? 0.9 : 1)
         .disabled(isGranted || isUnderage)
 
-        // Dostawca i podwykonawcy zostają w polityce prywatności
-        // (sekcja 6, link niżej) — na ekranie asystent występuje
-        // jako Scoffie, bez nazw modeli i firm trzecich.
+        // Polityka jak dokument w „Prywatność i regulamin” — wiersz listy
+        // z kafelkiem, nie terakotowy odnośnik.
+        EditorialSettingsCardGroup {
+            EditorialSettingsRow(
+                icon: "doc.text.fill",
+                iconColor: SettingsAccent.slate,
+                title: "Polityka prywatności",
+                value: "Sekcja 6",
+                isLast: true,
+                action: { showPrivacyPolicy = true }
+            )
+        }
+        .padding(.top, 14)
+
+        // Od 7.10.2026 ekran NAZYWA odbiorcę danych: Anthropic, model Claude,
+        // USA (karta „Co wysyłamy” i potwierdzenie wyżej) — App Review 5.1.2(i)
+        // wymaga, żeby zgoda na przekazanie danych osobowych zewnętrznemu AI
+        // mówiła, komu je dajemy. Dawniej celowo bez nazw firm trzecich.
+        // Podstawa przekazania poza EOG i lista podwykonawców zostają
+        // w polityce prywatności (sekcja 6, wiersz wyżej).
         Text("Asystent to program — może się mylić i nie zastępuje dietetyka ani lekarza. Zgodę cofniesz w każdej chwili w menu asystenta.")
             .font(.sc(size: 12.5))
             .lineSpacing(3)
-            .foregroundStyle(AssistantLook.faint(scheme))
+            .foregroundStyle(Color.scFaint(scheme))
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 12)
-            .padding(.top, 14)
+            .padding(.horizontal, 6)
+            .padding(.top, 10)
+    }
 
-        Button {
-            showPrivacyPolicy = true
-        } label: {
-            HStack(spacing: 5) {
-                Text("Polityka prywatności, sekcja 6")
-                Image(systemName: "chevron.right").font(.sc(size: 10, weight: .bold))
-            }
-            .font(.sc(size: 13.5, weight: .semibold))
-            .foregroundStyle(AssistantLook.terra(scheme))
+    /// Etykieta sekcji potwierdzeń z licznikiem „0 z 2” po prawej.
+    private var confirmationsHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            EditorialSheetSectionLabel(title: "Twoje potwierdzenia")
+            confirmationsBadge
+                .padding(.trailing, 6)
+                .padding(.bottom, 6)
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
     }
 
     // MARK: - Klocki
@@ -228,24 +271,21 @@ struct AssistantConsentGateView: View {
     /// Rok urodzenia z profilu mówi „mniej niż 16" — potwierdzenia są
     /// wygaszone, przycisk nieaktywny. Serwer sprawdza to samo przy zapisie.
     private var underageNotice: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "person.crop.circle.badge.exclamationmark")
-                .font(.sc(size: 16, weight: .semibold))
-                .foregroundStyle(SCPalette.terracotta)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Asystent jest dostępny od 16 lat")
-                    .font(.sc(size: 14.5, weight: .semibold))
-                    .foregroundStyle(Color.scLabel(scheme))
-                Text("Według roku urodzenia w Twoim profilu to jeszcze nie ten wiek. Jeśli rok jest błędny, popraw go w Ustawieniach → Profil i wróć tutaj.")
-                    .font(.sc(size: 12.5))
-                    .lineSpacing(2)
-                    .foregroundStyle(Color.scMuted(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
+        // Karta jak każda inna (jeden kolor kart) — ostrzeżenie mówi
+        // terakotowy kafelek, nie tło w tincie.
+        EditorialSettingsCardGroup {
+            EditorialSettingsRow(
+                icon: "person.crop.circle.badge.exclamationmark",
+                iconColor: SCPalette.terracotta,
+                title: "Asystent jest dostępny od 16 lat",
+                subtitle: "Według roku urodzenia w Twoim profilu to jeszcze nie ten wiek. Jeśli rok jest błędny, popraw go w Ustawieniach → Profil i wróć tutaj.",
+                isLast: true,
+                wrapsText: true,
+                action: nil
+            ) {
+                EmptyView()
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(SCPalette.terracotta.opacity(0.10)))
     }
 
     /// Licznik zamiast napisu „oba wymagane": 0 z 2 → 1 z 2 → 2 z 2 (zielone),
@@ -266,40 +306,43 @@ struct AssistantConsentGateView: View {
             .animation(SCMotion.textRoll, value: done)
     }
 
-    /// Stan zgody w tincie szałwii: kafelek z tarczą, „Zgoda włączona” i pod
-    /// spodem wersja dokumentu — ten sam układ, co kafelek z tytułem
-    /// w wierszach Ustawień, zamiast jednej linijki ściśniętej do 85 %.
+    /// Stan zgody: wiersz listy z kafelkiem tarczy w szałwii, „Zgoda włączona”
+    /// i wersją dokumentu w podpisie — w karcie jak każda inna (7.10.2026;
+    /// dawniej osobna płyta w tincie szałwii).
     private var statusBar: some View {
-        HStack(spacing: 12) {
-            SCHeaderIconWell(icon: "checkmark.shield.fill", accent: SCPalette.sage, size: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Zgoda włączona")
-                    .font(.sc(size: 15, weight: .bold))
-                    .foregroundStyle(AssistantLook.sage(scheme))
-                Text("Wersja \(LegalDocMeta.version) z \(LegalDocMeta.effectiveDate)")
-                    .font(.sc(size: 12.5))
-                    .foregroundStyle(AssistantLook.muted(scheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+        EditorialSettingsCardGroup {
+            EditorialSettingsRow(
+                icon: "checkmark.shield.fill",
+                iconColor: SCPalette.sage,
+                title: "Zgoda włączona",
+                subtitle: "Wersja \(LegalDocMeta.version) z \(LegalDocMeta.effectiveDate)",
+                isLast: true,
+                action: nil
+            ) {
+                EmptyView()
             }
-            Spacer(minLength: 0)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(AssistantLook.sageTint(scheme)))
         .accessibilityElement(children: .combine)
     }
 
-    /// „Co wysyłamy do modelu” jako lista z kropkami szałwii; „Czego nie
-    /// wysyłamy” jedną linią na półce `wash`.
+    /// „Co wysyłamy do modelu” — kto dostaje dane (Anthropic, model Claude)
+    /// i lista z kropkami szałwii; „Czego nie wysyłamy” jedną linią na
+    /// półce `wash`.
     private var dataCard: some View {
-        AssistantGroup {
+        EditorialSettingsCardGroup {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Co wysyłamy do modelu")
                     .font(.sc(size: 10.5, weight: .bold))
                     .tracking(1.4)
                     .textCase(.uppercase)
                     .foregroundStyle(AssistantLook.sage(scheme))
+                // Odbiorca wprost (App Review 5.1.2(i)) — jak w sekcji 6
+                // polityki: model Claude, Anthropic, Stany Zjednoczone.
+                Text("Asystent działa na modelu Claude firmy Anthropic (USA). Przy każdej wiadomości wysyłamy tam:")
+                    .font(.sc(size: 13.5))
+                    .lineSpacing(3)
+                    .foregroundStyle(AssistantLook.muted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Self.sentItems, id: \.self) { item in
                         HStack(alignment: .top, spacing: 10) {
@@ -338,7 +381,11 @@ struct AssistantConsentGateView: View {
             .padding(.bottom, 13)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(AssistantLook.wash(scheme))
-            .overlay(alignment: .top) { AssistantCardRule() }
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(Color.scRule(scheme))
+                    .frame(height: 1)
+            }
         }
     }
 
@@ -359,30 +406,29 @@ struct AssistantConsentGateView: View {
         + ["E-mail"]
         + (FeatureFlags.thermomix ? ["Hasło Cookidoo"] : [])
 
-    /// `ConsentRow`: tytuł i podpis z zawijaniem, po prawej pole wyboru
-    /// aplikacji (`SCCheckbox`) w szałwii. Potwierdzenia są dwa i niezależne,
-    /// więc to pole wyboru, a nie kółko — kółko z ptaszkiem 28 pt było
-    /// jedynym takim znacznikiem w aplikacji.
-    private func confirmRow(isOn: Binding<Bool>, title: String, caption: String?, first: Bool) -> some View {
-        Button {
-            isOn.wrappedValue.toggle()
-        } label: {
-            AssistantRow(
-                title: title,
-                subtitle: caption,
-                first: first,
-                subtitleWraps: true,
-                verticalPadding: 12,
-                alignment: .top,
-                leading: { EmptyView() },
-                trailing: {
-                    SCCheckbox(on: isOn.wrappedValue, accent: SCPalette.sage)
-                        .padding(.top, 1)
-                }
-            )
-            .contentShape(Rectangle())
+    /// Potwierdzenie = wiersz listy (`EditorialSettingsRow`): kafelek, zdanie
+    /// i podpis z zawijaniem, po prawej pole wyboru aplikacji (`SCCheckbox`)
+    /// w szałwii. Potwierdzenia są dwa i niezależne, więc to pole wyboru,
+    /// a nie kółko.
+    private func confirmRow(
+        isOn: Binding<Bool>,
+        icon: String,
+        color: Color,
+        title: String,
+        caption: String?,
+        isLast: Bool
+    ) -> some View {
+        EditorialSettingsRow(
+            icon: icon,
+            iconColor: color,
+            title: title,
+            subtitle: caption,
+            isLast: isLast,
+            wrapsText: true,
+            action: { isOn.wrappedValue.toggle() }
+        ) {
+            SCCheckbox(on: isOn.wrappedValue, accent: SCPalette.sage)
         }
-        .buttonStyle(.plain)
         .accessibilityAddTraits(isOn.wrappedValue ? [.isSelected] : [])
         .accessibilityLabel(title)
     }

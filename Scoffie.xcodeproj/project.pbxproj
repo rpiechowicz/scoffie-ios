@@ -281,7 +281,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -eu\n\nPROD_URL=\"https://api.scoffie.app\"\nLOCAL_URL=\"http://localhost:3000\"\nBRANCH=\"${GIT_BRANCH:-${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}}\"\n\nif [ -z \"$BRANCH\" ] && [ -f \"$SRCROOT/.git/HEAD\" ]; then\n  HEAD_CONTENT=$(cat \"$SRCROOT/.git/HEAD\")\n  case \"$HEAD_CONTENT\" in\n    \"ref: refs/heads/\"*)\n      BRANCH=\"${HEAD_CONTENT#ref: refs/heads/}\"\n      ;;\n  esac\nfi\n\nAPI_BASE_URL=\"$PROD_URL\"\nif [ \"$CONFIGURATION\" = \"Debug\" ] && [ -n \"$BRANCH\" ] && [ \"$BRANCH\" != \"master\" ] && [ \"$BRANCH\" != \"main\" ]; then\n  API_BASE_URL=\"$LOCAL_URL\"\nfi\n\nPLIST_PATH=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n/usr/libexec/PlistBuddy -c \"Delete :API_BASE_URL\" \"$PLIST_PATH\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :API_BASE_URL string $API_BASE_URL\" \"$PLIST_PATH\"\necho \"Configured API_BASE_URL=$API_BASE_URL for configuration=$CONFIGURATION branch=${BRANCH:-unknown}\"\ntouch \"$SCRIPT_OUTPUT_FILE_0\"\n";
+			shellScript = "set -eu\n\nPROD_URL=\"https://api.scoffie.app\"\nLOCAL_URL=\"http://localhost:3000\"\nBRANCH=\"${GIT_BRANCH:-${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}}\"\n\nif [ -z \"$BRANCH\" ] && [ -f \"$SRCROOT/.git/HEAD\" ]; then\n  HEAD_CONTENT=$(cat \"$SRCROOT/.git/HEAD\")\n  case \"$HEAD_CONTENT\" in\n    \"ref: refs/heads/\"*)\n      BRANCH=\"${HEAD_CONTENT#ref: refs/heads/}\"\n      ;;\n  esac\nfi\n\nAPI_BASE_URL=\"$PROD_URL\"\nif [ \"$CONFIGURATION\" = \"Debug\" ] && [ -n \"$BRANCH\" ] && [ \"$BRANCH\" != \"master\" ] && [ \"$BRANCH\" != \"main\" ]; then\n  API_BASE_URL=\"$LOCAL_URL\"\nfi\n\nPLIST_PATH=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n/usr/libexec/PlistBuddy -c \"Delete :API_BASE_URL\" \"$PLIST_PATH\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :API_BASE_URL string $API_BASE_URL\" \"$PLIST_PATH\"\n\n# 7.10.2026 (audyt bezpieczenstwa 2.5): wyjatek ATS dla sieci lokalnej\n# (http://localhost:3000) jest potrzebny tylko w Debug. Poza Debug zdejmujemy\n# go z Info.plist W PACZCE (podpis idzie po tym kroku). Brak klucza = nic.\nATS_LOCAL=keep\nif [ \"$CONFIGURATION\" != \"Debug\" ]; then\n  /usr/libexec/PlistBuddy -c \"Delete :NSAppTransportSecurity:NSAllowsLocalNetworking\" \"$PLIST_PATH\" 2>/dev/null || true\n  ATS_LOCAL=removed\nfi\necho \"Configured API_BASE_URL=$API_BASE_URL for configuration=$CONFIGURATION branch=${BRANCH:-unknown} NSAllowsLocalNetworking=$ATS_LOCAL\"\ntouch \"$SCRIPT_OUTPUT_FILE_0\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -455,7 +455,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -501,7 +501,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -11,5 +11,13 @@ enum FeatureFlags {
 
     /// Zdrowie (kroki z Apple Zdrowie / Garmina): wiersz w Ustawieniach,
     /// pasek kroków w Kalendarzu, odczyt i wysyłka kroków. Schowane 3.10.2026.
+    /// Od 7.10.2026 (przed premierą — App Review 2.5.1 odrzuca uprawnienie
+    /// HealthKit bez widocznej funkcji Zdrowia) paczka nie ma też uprawnienia
+    /// ani kodu HealthKit. Powrót = `true` + przywrócić uprawnienie
+    /// `com.apple.developer.healthkit` w OBU `.entitlements` (Debug i Release),
+    /// opisy `NSHealthShareUsageDescription` / `NSHealthUpdateUsageDescription`
+    /// w `Scoffie-Info.plist` i warunek `SCOFFIE_HEALTHKIT`
+    /// w `SWIFT_ACTIVE_COMPILATION_CONDITIONS` (bez niego `HealthKitService`
+    /// to zaślepka „niedostępne”).
     static let health = false
 }

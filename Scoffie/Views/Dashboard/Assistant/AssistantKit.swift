@@ -184,8 +184,8 @@ struct AssistantQuotaPill: View {
         .fixedSize()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(isEmpty
-            ? "Pula wiadomości na próbę wyczerpana"
-            : "Zostało \(remaining) z \(limit) wiadomości na próbę")
+            ? "Darmowe wiadomości wykorzystane"
+            : "Zostało \(remaining) z \(limit) darmowych wiadomości")
     }
 }
 

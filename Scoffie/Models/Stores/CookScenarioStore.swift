@@ -158,14 +158,15 @@ final class CookScenarioStore {
 
     /// Przepisy domu są prywatne, więc katalog paczek znika z wylogowaniem
     /// i wyjściem z domu (`SessionStore.clearRuntimeStores`).
+    /// Także ze starego miejsca (7.10.2026), gdyby migracja go nie przeniosła.
     static func clearCache() {
-        try? FileManager.default.removeItem(at: directory)
+        AppCacheDirectory.removeEverywhere(directory.lastPathComponent)
     }
 
+    /// 7.10.2026 (audyt 2.5): w katalogu offline wykluczonym z kopii zapasowej
+    /// (wcześniej sam `Application Support`) — stary katalog przenosi `AppCacheDirectory`.
     private static var directory: URL {
-        FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("cook-scenarios-v1", isDirectory: true)
+        AppCacheDirectory.url(for: "cook-scenarios-v1", isDirectory: true)
     }
 
     /// Katalog paczek jednego konta i domu (klucz bez znaków spoza nazwy pliku).

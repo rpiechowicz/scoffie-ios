@@ -9,9 +9,11 @@
 # `MealCalendarStore.swift` bez `ScoffieApp.swift`) ze scenariuszami
 # w `Scripts/PlanStore/main.swift` i uruchamiamy jako program macOS.
 #
-# Store zapisuje cache w Documents i przy starcie kasuje `saved_plan.json`,
-# więc program biegnie z `CFFIXED_USER_HOME` w katalogu tymczasowym (sam
-# sprawdzian odmawia startu bez tego).
+# Store zapisuje cache w `Application Support/ScoffieCache` (od 7.10.2026;
+# `AppCacheDirectory` przenosi tam stare pliki z Documents) i przy starcie
+# kasuje `saved_plan.json` w Documents, więc program biegnie
+# z `CFFIXED_USER_HOME` w katalogu tymczasowym (sam sprawdzian odmawia startu
+# bez tego).
 #
 # Uruchomienie:  sh Scripts/plan-store-check.sh
 set -e
@@ -34,6 +36,7 @@ xcrun swiftc $PLUGIN_ARGS -o "$OUT" \
   "Scoffie/Models/Stores/UserFacingErrorMapper.swift" \
   "Scoffie/Models/Stores/ConnectivityMonitor.swift" \
   "Scoffie/Models/Stores/DebugLog.swift" \
+  "Scoffie/Models/Stores/AppCacheDirectory.swift" \
   "Scoffie/Models/Plans/SavedMealPlan.swift" \
   "Scoffie/Models/Plans/PlanPortions.swift" \
   "Scoffie/Models/Cook/CookScenario.swift" \

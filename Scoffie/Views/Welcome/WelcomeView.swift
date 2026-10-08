@@ -3,18 +3,34 @@ import SwiftUI
 // First-login welcome flow. Od 24.09.2026 JEDEN przepływ z przewodnikiem
 // „Poznaj aplikację” na początku (Rafał: „daj to wszystko w jednym wielkim
 // stepperze, aby nie przełączać”): powitanie → 5 kroków przewodnika →
-// „Teraz my poznajmy Ciebie” → 5 kroków kreatora, jedna stopka, jeden pasek
-// kroków (11 odcinków), strony jadą na bok bez przenikania między dwoma
+// „Teraz my poznajmy Ciebie” → 4 kroki kreatora, jedna stopka, jeden pasek
+// kroków (10 odcinków), strony jadą na bok bez przenikania między dwoma
 // ekranami. Dawniej `WelcomeFlowView` przenikał `FeatureTourView` w ten widok
 // i pasek „1/5” zaczynał się od nowa.
 //
-// Kreator: five sequential pages — profile → goal →
-// preferences → meals → household — gated by the shared step footer
-// (`SCStepFooter`: pasek kroków, „Wstecz”, akcja główna na płycie
-// `SCSheetFooter` z cieniem krawędzi). Each step persists optimistically (AppStorage) and
-// pushes to the backend; the household creation in step 5 also marks
-// onboarding complete server-side, which routes the app into the
-// dashboard via the standard `RootScreen` evaluator.
+// Kreator: od 7.10.2026 CZTERY kroki, każdy to ten sam widok co wiersz
+// Ustawień (Rafał: „zrób na onboarding user te nowe widoki z ustawień…
+// uspójnij to i popraw maksymalnie pod nowy widok”):
+// 1. „Twoje dane” (`ProfileBodyForm`: imię, sylwetka, treningi),
+// 2. „Dieta i alergeny” (`DietPreferencesForm`: kalorie, makro, cel, dieta,
+//    alergeny — dawne kroki „Cel” i „Dieta i kalorie” w jednym, bo cel
+//    stoi w Ustawieniach w arkuszu diety),
+// 3. „Posiłki w planie” (`MealDayAxisList`),
+// 4. „Gospodarstwo” (`HouseholdKit`).
+// Stopka (`SCStepFooter`: pasek kroków, „Wstecz” obok „Dalej”) stoi
+// w systemowym `safeAreaBar` — pod przyciskami nic poza natywnym miękkim
+// brzegiem przewijania. Zapisy bez zmian: profil przy „Dalej” z kroku 1,
+// preferencje z kroku 2 (`confirmBaselineFirst: false`), pory i godziny
+// lokalnie do utworzenia gospodarstwa w kroku 4, który domyka onboarding
+// na serwerze i przepuszcza aplikację do pulpitu (`RootScreen`).
+//
+// Odpowiedzi WYMAGANE (7.10.2026, Rafał: „wymuszanie, aby user podał dane
+// wszystkie, bo inaczej button będzie dalej wyłączony”; reguły z #360
+// przeniesione na ten kreator): krok 1 — imię, rok (wiek 16…110), wzrost,
+// waga, płeć albo „Nie podaję” i treningi; krok 2 — cel i dieta (alergeny
+// opcjonalne). Czego nie podano, jest `nil`, a nie wartością domyślną —
+// „Dalej” czeka (`isNextEnabled`), a zapis niczego nie wysyła za użytkownika.
+// Wznowienie czyta szkic (`WelcomeDraft`), nie kopię profilu i preferencji.
 //
 // Page transitions are driven by the step number — content slides in
 // from the trailing edge while the previous page fades out, mirroring
@@ -25,7 +41,7 @@ struct WelcomeView: View {
     let errorMessage: String?
     /// Step the flow opens at. New users start at 1 (full onboarding);
     /// already-onboarded users who lost their household land directly on
-    /// step 5 (household creation) — they can't backtrack into the
+    /// the last step (household creation) — they can't backtrack into the
     /// profile / preference steps that they already completed.
     let initialStep: Int
 
@@ -36,11 +52,6 @@ struct WelcomeView: View {
     /// 6 = „Teraz my poznajmy Ciebie”. `nil` = jesteśmy w kreatorze (`step`).
     @State private var tourPhase: Int?
     @AppStorage(TourCompletion.storageKey) private var tourCompleted: Bool = false
-    /// Wysokość płyty stopki — strony przewodnika kończą się nad nią
-    /// (`TourPage` mierzy widoczną stronę pod sufit zdjęcia), a kroki
-    /// kreatora mają własny zapas (`WelcomeLayout.bottomInset`).
-    @State private var footerHeight: CGFloat = 150
-
     private let tourSteps = TourStep.all
     private var tourDonePhase: Int { tourSteps.count + 1 }
 
@@ -49,35 +60,56 @@ struct WelcomeView: View {
     @State private var step: Int
     @State private var direction: Int = 1
     @State private var name: String
+    /// Rok to wyjątek wśród odpowiedzi: koło zawsze stoi na jakimś roku, więc
+    /// „brak” = bieżący rok (wiek 0) poza `ProfileField.acceptedAges`.
     @State private var yearOfBirth: Int
-    @State private var heightCm: Int
-    @State private var weightKg: Double
-    @State private var sex: Sex?
-    @State private var goal: UserGoal
-    @State private var activity: ActivityLevel
-    @State private var diet: DietPreference
+    /// `nil` = jeszcze bez odpowiedzi (7.10.2026).
+    @State private var heightCm: Int?
+    @State private var weightKg: Double?
+    /// Surowa wartość płci jak w „Twoich danych” — „” = „Nie podaję”,
+    /// `nil` = jeszcze bez odpowiedzi (płeć to wymagana ODPOWIEDŹ, nie
+    /// wymagana płeć).
+    @State private var sexRaw: String?
+    /// „Nie podaję” stuknięte w tym kreatorze — dopiero wtedy zapis kasuje
+    /// płeć na serwerze (`saveProfile(clearSex:)`), jak w „Twoich danych”.
+    /// Odtworzone przy wznowieniu samo niczego nie kasuje — zatwierdzone
+    /// wcześniej skasowanie niesie `sexClearPending`
+    /// (`SessionStore.markSexClearPending`, ustawiany przy „Dalej”).
+    @State private var clearsSex = false
+    @State private var goal: UserGoal?
+    @State private var activity: ActivityLevel?
+    @State private var diet: DietPreference?
+    /// Ostatni krok zaliczony „Dalej” (`WelcomeDraft.answeredStep`). Cel,
+    /// aktywność i dieta są w magazynie zawsze — start sesji wpisuje tam
+    /// domyślny wiersz serwera (HEALTHY / 2 / NONE) — więc „podane” znaczy
+    /// tu „zaliczone w kreatorze”.
+    @State private var answeredStep: Int
     @State private var calorieGoal: Int
     @State private var allergens: Set<Allergen>
     /// Wartości alergenów zapisane na koncie, których ten build nie rozumie.
     /// Trzymamy je, żeby zapis z kreatora nie skasował ustawienia zrobionego
     /// na nowszej wersji aplikacji (patrz `SettingsView.unknownAllergens`).
     @State private var unknownAllergens: [String]
-    /// Posiłki, które gospodarstwo planuje. Zbierane w kroku 4, wysyłane
-    /// dopiero w kroku 5 — `households:updateMealTypes` potrzebuje
+    /// Posiłki, które gospodarstwo planuje. Zbierane w kroku 3, wysyłane
+    /// dopiero w kroku 4 — `households:updateMealTypes` potrzebuje
     /// `householdId`, który powstaje razem z gospodarstwem.
     @State private var mealSlots: MealSlotConfiguration
-    /// Godziny posiłków z kroku 4 — tak jak `mealSlots` jadą na serwer
+    /// Godziny posiłków z kroku 3 — tak jak `mealSlots` jadą na serwer
     /// dopiero razem z gospodarstwem (`households:updateMealTimes`).
     @State private var mealSchedule: MealSlotSchedule
     @State private var householdName: String = ""
+    /// Zdjęcie konta (Google) z chronionego magazynu — awatar w „Twoich
+    /// danych” i na liście domowników, jak w Ustawieniach.
+    private let storedAvatarUrl: String?
 
     // Whether the user has manually moved the kcal slider away from the
     // suggested value for the current goal. Until they do, the slider
     // tracks the goal so a user picking "schudnąć" sees the lower
-    // baseline appear in step 3 without having to drag it down.
+    // baseline appear without having to drag it down. „Ustaw” w karcie
+    // kalorii (podpowiedź celu) wraca do śledzenia (7.10.2026).
     @State private var calorieAdjustedManually: Bool = false
 
-    /// Zapisy z kroków 1–3 idą w tle. Gdy któryś padnie, kreator nie
+    /// Zapisy z kroków 1–2 idą w tle. Gdy któryś padnie, kreator nie
     /// zatrzymuje się (dane są w AppStorage), ale mówi o tym i ponawia
     /// przy następnym „Dalej" — wcześniej błąd wychodził dopiero w Ustawieniach.
     @State private var pendingProfileRetry = false
@@ -91,7 +123,7 @@ struct WelcomeView: View {
     /// posiłków ta liczba już raz się przesunęła, a rozjazd nie objawia się
     /// błędem kompilacji, tylko kreatorem, który pyta o rytm dnia kogoś,
     /// kto przyszedł tu wyłącznie założyć nowy dom.
-    static let householdOnlyStep = 5
+    static let householdOnlyStep = 4
 
     private let totalSteps = WelcomeView.householdOnlyStep
 
@@ -115,55 +147,113 @@ struct WelcomeView: View {
         _tourPhase = State(initialValue: showsTour && initialStep == 1 ? startTourPhase : nil)
 
         let defaults = UserDefaults.standard
+        // Profil, cel i dieta z chronionego magazynu (7.10.2026); `defaults`
+        // zostaje dla `auth.userId` i pór posiłków niżej.
+        let protectedStore = SCProtectedSettings.shared
 
-        let storedName = defaults.string(forKey: "settings.user.displayName") ?? initialDisplayName
-        _name = State(initialValue: storedName.isEmpty ? initialDisplayName : storedName)
+        // Szkic kreatora (7.10.2026, z #360): odpowiedzi z kroków zaliczonych
+        // „Dalej”, zapisane synchronicznie RAZEM z numerem kroku. Wznowienie
+        // czyta szkic, nie kopię profilu i preferencji — zapis na serwer idzie
+        // w tle przez kolejkę i po zabiciu aplikacji kopia mogła zostać starsza
+        // niż to, co użytkownik zatwierdził (a cel, aktywność i dieta są
+        // w kopii zawsze — start sesji wpisuje tam domyślny wiersz serwera).
+        let draft = WelcomeDraft.load(forUserId: defaults.string(forKey: "auth.userId"))
+        let answered = draft?.answeredStep ?? 0
+        _answeredStep = State(initialValue: answered)
 
-        let storedYear = defaults.integer(forKey: "settings.profile.yearOfBirth")
-        _yearOfBirth = State(
-            initialValue: storedYear > 0 ? storedYear : BodyMetrics.defaultYearOfBirth
-        )
+        let storedName = protectedStore.string(forKey: "settings.user.displayName") ?? initialDisplayName
+        let resolvedName = draft.map(\.name) ?? storedName
+        _name = State(initialValue: resolvedName.isEmpty ? initialDisplayName : resolvedName)
 
-        let storedHeight = defaults.integer(forKey: "settings.profile.heightCm")
-        _heightCm = State(initialValue: storedHeight > 0 ? storedHeight : BodyMetrics.defaultHeightCm)
+        // Sylwetka i treningi: ze szkicu, a bez niego sylwetka z kopii — tam
+        // leży tylko to, co konto naprawdę ma (nowe konto: pusto, serwer
+        // trzyma `null`). Treningi bez szkicu — brak odpowiedzi: kopia ma
+        // zawsze domyślny wiersz serwera.
+        let currentYear = Calendar.current.component(.year, from: Date())
+        let resolvedYear: Int
+        let resolvedHeight: Int?
+        let resolvedWeight: Double?
+        let resolvedSexRaw: String?
+        let resolvedActivity: ActivityLevel?
+        if let draft {
+            resolvedYear = draft.yearOfBirth ?? currentYear
+            resolvedHeight = draft.heightCm
+            resolvedWeight = draft.weightKg
+            if let sex = draft.sex.flatMap({ Sex(rawValue: $0) }) {
+                resolvedSexRaw = sex.rawValue
+            } else {
+                resolvedSexRaw = draft.sexDeclined ? "" : nil
+            }
+            resolvedActivity = draft.activityLevel.flatMap { ActivityLevel(rawValue: $0) }
+        } else {
+            let storedYear = protectedStore.integer(forKey: "settings.profile.yearOfBirth")
+            let storedHeight = protectedStore.integer(forKey: "settings.profile.heightCm")
+            let storedWeight = protectedStore.double(forKey: "settings.profile.weightKg")
+            resolvedYear = ProfileBodyForm.yearRange.contains(storedYear) ? storedYear : currentYear
+            // Wzrost i waga w zakresie kół „Twoich danych” (`ProfileField`) —
+            // koło poza swoim zakresem nie ma czego pokazać.
+            resolvedHeight = storedHeight > 0
+                ? min(max(storedHeight, ProfileField.heights.lowerBound), ProfileField.heights.upperBound)
+                : nil
+            resolvedWeight = storedWeight > 0
+                ? min(max(storedWeight, ProfileField.weights.lowerBound), ProfileField.weights.upperBound)
+                : nil
+            // Pusta płeć w kopii to NIE „Nie podaję” — konto jej po prostu
+            // nie ma, więc pytanie czeka na odpowiedź.
+            resolvedSexRaw = Sex(rawValue: protectedStore.string(forKey: "settings.profile.sex") ?? "")?.rawValue
+            resolvedActivity = nil
+        }
+        _yearOfBirth = State(initialValue: resolvedYear)
+        _heightCm = State(initialValue: resolvedHeight)
+        _weightKg = State(initialValue: resolvedWeight)
+        _sexRaw = State(initialValue: resolvedSexRaw)
+        _activity = State(initialValue: resolvedActivity)
 
-        let storedWeight = defaults.double(forKey: "settings.profile.weightKg")
-        _weightKg = State(initialValue: storedWeight > 0 ? storedWeight : BodyMetrics.defaultWeightKg)
+        storedAvatarUrl = protectedStore.string(forKey: "settings.user.avatarUrl").flatMap { $0.isEmpty ? nil : $0 }
 
-        let storedSex = defaults.string(forKey: "settings.profile.sex") ?? ""
-        _sex = State(initialValue: Sex(rawValue: storedSex))
-
-        let storedGoal = defaults.string(forKey: "settings.diet.goal") ?? UserGoal.healthy.rawValue
-        let resolvedGoal = UserGoal(rawValue: storedGoal) ?? .healthy
+        // Cel i dieta — wyłącznie z zaliczonego kroku 2 w szkicu.
+        let resolvedGoal: UserGoal? = answered >= 2
+            ? draft?.goal.flatMap { UserGoal(rawValue: $0) }
+            : nil
         _goal = State(initialValue: resolvedGoal)
 
-        let storedActivityRaw = defaults.integer(forKey: "settings.diet.activityLevel")
-        let storedActivity = ActivityLevel(rawValue: storedActivityRaw) ?? .light
-        _activity = State(initialValue: storedActivity)
+        let resolvedDiet: DietPreference? = answered >= 2
+            ? draft?.diet.flatMap { DietPreference(rawValue: $0) }
+            : nil
+        _diet = State(initialValue: resolvedDiet)
 
-        let storedDiet = defaults.string(forKey: "settings.diet.preference") ?? DietPreference.none.rawValue
-        _diet = State(initialValue: DietPreference(rawValue: storedDiet) ?? .none)
-
-        let storedCalorieGoal = defaults.integer(forKey: "settings.diet.calorieGoal")
-        let seedMetrics = BodyMetrics(
-            heightCm: storedHeight > 0 ? storedHeight : BodyMetrics.defaultHeightCm,
-            weightKg: storedWeight > 0 ? storedWeight : BodyMetrics.defaultWeightKg,
-            yearOfBirth: storedYear > 0 ? storedYear : 1992,
-            activityRaw: storedActivity.rawValue,
-            sexRaw: storedSex
+        // Kalorie: ręcznie przesunięte są w szkicu; inaczej podpowiedź z tych
+        // samych danych, z których liczy ją `bodyMetrics` w trakcie — bez celu
+        // nie ma podpowiedzi, a kalorie ustawią się same przy wyborze celu
+        // (`calorieSuggestionToken`).
+        let draftKcal: Int? = answered >= 2 ? draft?.calorieGoal : nil
+        let seedMetrics: BodyMetrics? = {
+            guard let resolvedHeight, let resolvedWeight, let resolvedActivity else { return nil }
+            return BodyMetrics(
+                heightCm: resolvedHeight,
+                weightKg: resolvedWeight,
+                yearOfBirth: resolvedYear,
+                activityRaw: resolvedActivity.rawValue,
+                sexRaw: resolvedSexRaw ?? ""
+            )
+        }()
+        let seedSuggestion: Int? = resolvedGoal?.suggestedCalories(for: seedMetrics)
+        _calorieGoal = State(
+            initialValue: draftKcal ?? seedSuggestion ?? UserGoal.healthy.suggestedCalories
         )
-        let seedSuggestion = resolvedGoal.suggestedCalories(for: seedMetrics)
-        let initialKcal = storedCalorieGoal > 0 ? storedCalorieGoal : seedSuggestion
-        _calorieGoal = State(initialValue: initialKcal)
-        _calorieAdjustedManually = State(
-            initialValue: storedCalorieGoal > 0 && storedCalorieGoal != seedSuggestion
-        )
+        _calorieAdjustedManually = State(initialValue: draftKcal != nil)
 
-        let storedAllergensRaw = defaults.string(forKey: "settings.diet.allergens") ?? ""
-        let storedTokens = storedAllergensRaw
-            .split(separator: ",")
-            .map { String($0).trimmingCharacters(in: .whitespaces).lowercased() }
-            .filter { !$0.isEmpty }
+        // Alergeny: z zaliczonego kroku 2 w szkicu; wcześniej z kopii (to, co
+        // konto już ma, zaznaczone na start).
+        let storedTokens: [String]
+        if answered >= 2, let draftAllergens = draft?.allergens {
+            storedTokens = draftAllergens
+        } else {
+            storedTokens = (protectedStore.string(forKey: "settings.diet.allergens") ?? "")
+                .split(separator: ",")
+                .map { String($0).trimmingCharacters(in: .whitespaces).lowercased() }
+                .filter { !$0.isEmpty }
+        }
         _allergens = State(initialValue: Set(storedTokens.compactMap { Allergen(rawValue: $0) }))
         _unknownAllergens = State(
             initialValue: Array(Set(storedTokens.filter { Allergen(rawValue: $0) == nil })).sorted()
@@ -189,14 +279,12 @@ struct WelcomeView: View {
 
     var body: some View {
         // Bez `NavigationStack` i paska nawigacji (24.09.2026, Rafał: „button
-        // wyloguj wywal”, „header od samej góry tak jak wszystkie”): pasek
-        // trzymał tylko „Wyloguj” i spychał treść 132 pt w dół. Krok zaczyna
-        // się tam, gdzie strona przewodnika, a górny brzeg treści gaśnie pod
-        // paskiem statusu (`scScrollEdgeFade` w każdym kroku).
+        // wyloguj wywal”, „header od samej góry tak jak wszystkie”): krok
+        // zaczyna się tam, gdzie strona przewodnika, a górny brzeg treści gaśnie
+        // pod paskiem statusu (`scScrollEdgeFade` w każdym kroku).
         ZStack {
             // To samo tło, co przewodnik przed kreatorem i każdy ekran
-            // aplikacji — przejście przewodnik → kreator nie zmienia koloru,
-            // a płyta stopki (`scPageBase`) zlewa się z dołem strony.
+            // aplikacji — przejście przewodnik → kreator nie zmienia koloru.
             SCPageBackground(scheme: colorScheme)
                 .ignoresSafeArea()
 
@@ -206,77 +294,96 @@ struct WelcomeView: View {
                     .transition(asymmetricSlide())
             }
             .animation(.easeInOut(duration: 0.34), value: pageKey)
-
-            // Stopka jako nakładka, nie ostatnie dziecko `VStack`: stoi pod
-            // klawiaturą (`ignoresSafeArea(.keyboard)`), a kroki z polami
-            // dalej przewijają się nad klawiaturą. Zapas pod treścią to
-            // `WelcomeLayout.bottomInset` (stopka + jej cień).
-            VStack {
-                Spacer()
-                SCStepFooter(
-                    slot: footerSlot,
-                    onSlotTap: { skipTour() },
-                    notice: tourPhase == nil ? saveWarning : nil,
-                    showsBack: canGoBack,
-                    onBack: { handleBack() },
-                    // Jak w przewodniku: „Wstecz” w jednej linii z „Dalej”.
-                    backPlacement: .besidePrimary,
-                    primaryTitle: primaryTitle,
-                    primaryIcon: tourPhase == nil && step == totalSteps ? "checkmark" : "arrow.right",
-                    isPrimaryEnabled: tourPhase != nil || isNextEnabled,
-                    isPrimaryLoading: tourPhase == nil && isCreatingHousehold && step == totalSteps,
-                    onPrimary: { handlePrimary() }
-                )
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                    footerHeight = height
-                }
-            }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
         }
+        // Stopka w systemowym `safeAreaBar` (7.10.2026; dawniej nakładka
+        // z zapasem pod treścią): przewijana treść kończy się nad przyciskami,
+        // a pod nimi jest tylko natywny miękki brzeg (`scSheetFooterEdge`) —
+        // bez płyty, pasa i cienia. Przy klawiaturze (nazwa domu) stopka
+        // jedzie nad nią, jak każda stopka arkusza.
+        .safeAreaBar(edge: .bottom, spacing: 0) {
+            SCStepFooter(
+                slot: footerSlot,
+                onSlotTap: { skipTour() },
+                notice: tourPhase == nil ? saveWarning : nil,
+                showsBack: canGoBack,
+                onBack: { handleBack() },
+                // Jak w przewodniku i wprowadzeniu Asystenta: „Wstecz” w jednej
+                // linii z „Dalej”.
+                backPlacement: .besidePrimary,
+                primaryTitle: primaryTitle,
+                primaryIcon: tourPhase == nil && step == totalSteps ? "checkmark" : "arrow.right",
+                isPrimaryEnabled: tourPhase != nil || isNextEnabled,
+                isPrimaryLoading: tourPhase == nil && isCreatingHousehold && step == totalSteps,
+                onPrimary: { handlePrimary() }
+            )
+        }
+        .scSheetFooterEdge()
         .sensoryFeedback(.impact(flexibility: .soft), trigger: pageKey)
-        // Suwak kalorii podąża za podpowiedzią, dopóki użytkownik sam go nie
-        // przeciągnie. Podpowiedź zależy nie tylko od celu, ale i od sylwetki
-        // z kroku 1 oraz treningów z kroku 2 — stąd wspólny token zamiast
-        // samego `goal`.
+        // Kalorie idą za podpowiedzią, dopóki użytkownik sam nie ruszy suwaka.
+        // Podpowiedź zależy nie tylko od celu, ale i od sylwetki oraz treningów
+        // z kroku 1 — stąd wspólny token zamiast samego `goal`.
         .onChange(of: calorieSuggestionToken) { _, _ in
-            guard !calorieAdjustedManually else { return }
+            guard !calorieAdjustedManually, let suggestedCalories else { return }
             withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                 calorieGoal = suggestedCalories
             }
         }
+        // Ręczna zmiana odpina kalorie od podpowiedzi, a „Ustaw” (albo suwak
+        // na tej samej wartości) przypina je z powrotem. Bez celu nie ma
+        // podpowiedzi, od której dałoby się odejść (kalorie są wtedy zakryte).
         .onChange(of: calorieGoal) { _, newValue in
-            if newValue != suggestedCalories {
-                calorieAdjustedManually = true
+            if let suggestedCalories {
+                calorieAdjustedManually = newValue != suggestedCalories
             }
+        }
+        // Tylko stuknięcie „Nie podaję” (zmiana), nie stan odtworzony w `init`
+        // — jak w #360. Wybór płci zdejmuje zamiar skasowania.
+        .onChange(of: sexRaw) { _, current in
+            clearsSex = current == ""
         }
     }
 
-    /// Sylwetka z kroków 1 i 2. `nil`, dopóki użytkownik ich nie wypełni —
-    /// wtedy podpowiedź schodzi do płaskiej wartości przypisanej do celu.
+    /// Sylwetka z kroku 1. `nil`, dopóki jej nie podano albo gdy któraś dana
+    /// jest bez sensu — wtedy podpowiedź schodzi do płaskiej wartości
+    /// przypisanej do celu.
     private var bodyMetrics: BodyMetrics? {
-        BodyMetrics(
+        guard let heightCm, let weightKg, let activity else { return nil }
+        return BodyMetrics(
             heightCm: heightCm,
             weightKg: weightKg,
             yearOfBirth: yearOfBirth,
             activityRaw: activity.rawValue,
-            sexRaw: sex?.rawValue ?? ""
+            sexRaw: sexRaw ?? ""
         )
     }
 
-    private var suggestedCalories: Int {
-        goal.suggestedCalories(for: bodyMetrics)
+    /// `nil` bez wybranego celu (7.10.2026) — kalorie liczą się od wyboru.
+    private var suggestedCalories: Int? {
+        goal?.suggestedCalories(for: bodyMetrics)
     }
 
-    /// Rozbicie celu na makro do podglądu w kroku 3. Ten sam rachunek, co
-    /// w Ustawieniach → „Dieta i alergeny" — bez nadpisań, bo w kreatorze
-    /// nie ma czym ich zrobić.
-    private var macroTargets: MacroTargets? {
-        bodyMetrics?.macroTargets(for: goal, calories: calorieGoal)
+    /// Cel w kroku diety: wybór przestawia kalorie W TEJ SAMEJ transakcji
+    /// (animacji stuknięcia), a nie dopiero w `onChange` — dwie animacje po
+    /// sobie (makro z nowym celem i starymi kaloriami, potem z nowymi
+    /// kaloriami innym sprężynowaniem) zawracały liczby i paski makro w
+    /// połowie ruchu (Rafał 7.10.2026: „animacja w makro się buguje”).
+    /// `onChange(of: calorieSuggestionToken)` zostaje dla zmian sylwetki.
+    private var goalWithCalories: Binding<UserGoal?> {
+        Binding(
+            get: { goal },
+            set: { newGoal in
+                goal = newGoal
+                guard !calorieAdjustedManually,
+                      let suggestion = newGoal?.suggestedCalories(for: bodyMetrics)
+                else { return }
+                calorieGoal = suggestion
+            }
+        )
     }
 
     /// Zmienia się przy każdej danej, która wpływa na podpowiedź.
     private var calorieSuggestionToken: String {
-        "\(goal.rawValue)|\(heightCm)|\(weightKg)|\(yearOfBirth)|\(activity.rawValue)|\(sex?.rawValue ?? "")"
+        "\(goal?.rawValue ?? "")|\(heightCm ?? 0)|\(weightKg ?? 0)|\(yearOfBirth)|\(activity?.rawValue ?? 0)|\(sexRaw ?? "-")"
     }
 
     // MARK: - Jeden przepływ: przewodnik + kreator
@@ -300,10 +407,9 @@ struct WelcomeView: View {
                     TourStepView(step: tourSteps[tourPhase - 1])
                 }
             }
-            // Stopka jest nakładką (kroki kreatora przewijają się pod nią nad
-            // klawiaturą), a strona przewodnika liczy wysokość zdjęcia
-            // z widocznej części — kończy się więc nad płytą stopki.
-            .padding(.bottom, footerHeight)
+            // Stopka stoi w `safeAreaBar`, więc strona przewodnika liczy
+            // wysokość zdjęcia kroku już z części NAD nią (dawniej nakładka
+            // i `padding(.bottom, footerHeight)`).
             .ignoresSafeArea(.keyboard)
         } else {
             stepContent(for: step)
@@ -311,8 +417,8 @@ struct WelcomeView: View {
     }
 
     /// Pasek kroków na całość: 5 kroków przewodnika, ekran „Teraz my
-    /// poznajmy Ciebie” i 5 kroków kreatora. Powitanie ma zamiast paska
-    /// „Pomiń…”, a powrót po nowe gospodarstwo — nic („5 z 5” nie ma sensu
+    /// poznajmy Ciebie” i 4 kroki kreatora. Powitanie ma zamiast paska
+    /// „Pomiń…”, a powrót po nowe gospodarstwo — nic („4 z 4” nie ma sensu
     /// dla kogoś, kto innych kroków nie widział).
     private var footerSlot: SCStepFooter.Slot {
         if let tourPhase, tourPhase <= 0 {
@@ -375,30 +481,32 @@ struct WelcomeView: View {
     private func stepContent(for step: Int) -> some View {
         switch step {
         case 1:
-            WelcomeStep1ProfileView(
+            WelcomeProfileStep(
                 name: $name,
+                sexRaw: $sexRaw,
                 yearOfBirth: $yearOfBirth,
                 heightCm: $heightCm,
                 weightKg: $weightKg,
-                sex: $sex,
-                activity: activity
+                activity: $activity,
+                avatarUrl: storedAvatarUrl,
+                seed: avatarSeed
             )
         case 2:
-            WelcomeStep2GoalView(goal: $goal, activity: $activity)
-        case 3:
-            WelcomeStep3PreferencesView(
-                diet: $diet,
+            WelcomeDietStep(
                 calorieGoal: $calorieGoal,
+                goal: goalWithCalories,
+                diet: $diet,
                 allergens: $allergens,
-                macros: macroTargets
+                metrics: bodyMetrics
             )
-        case 4:
-            WelcomeStep4MealsView(mealSlots: $mealSlots, mealSchedule: $mealSchedule)
+        case 3:
+            WelcomeMealsStep(mealSlots: $mealSlots, mealSchedule: $mealSchedule)
         default:
-            WelcomeStep4HouseholdView(
+            WelcomeHouseholdStep(
                 householdName: $householdName,
                 firstName: trimmedName,
-                avatarInitial: avatarInitial,
+                avatarUrl: storedAvatarUrl,
+                seed: avatarSeed,
                 errorMessage: errorMessage,
                 // Ktoś, kogo zaproszono, nie ma po co zakładać własnego
                 // gospodarstwa — a bez tej listy był to jedyny widoczny sposób
@@ -406,9 +514,17 @@ struct WelcomeView: View {
                 pendingInvitations: sessionStore.pendingInvitations,
                 onAcceptInvitation: { token in
                     Task { await sessionStore.acceptPendingInvitation(token: token) }
+                },
+                onDeclineInvitation: { token in
+                    Task { await sessionStore.declineInvitation(token: token) }
                 }
             )
         }
+    }
+
+    /// Ziarno awatara — id konta, jak w Ustawieniach (`MemberAvatar`).
+    private var avatarSeed: String {
+        sessionStore.currentUserId ?? trimmedName
     }
 
     private func asymmetricSlide() -> AnyTransition {
@@ -429,12 +545,17 @@ struct WelcomeView: View {
         switch step {
         case 1:
             return !trimmedName.isEmpty
-                && (1900...Calendar.current.component(.year, from: Date())).contains(yearOfBirth)
-                && (80...260).contains(heightCm)
-                && (30...300).contains(weightKg)
-        case 2, 3, 4:
+                && isYearAnswered
+                && isHeightAnswered
+                && isWeightAnswered
+                && sexRaw != nil
+                && activity != nil
+        case 2:
+            // Alergeny opcjonalne — brak wyboru = brak alergii.
+            return goal != nil && diet != nil
+        case 3:
             return true
-        case 5:
+        case 4:
             // Te same granice, co w Ustawieniach (2…50, `SessionStore.householdNameLengthRange`;
             // serwer — `CreateHouseholdDto` — wpuszcza do 64). Od Fazy 0 backend egzekwuje je także na WebSockecie —
             // 1-znakowa nazwa wracałaby jako VALIDATION_ERROR z generycznym
@@ -445,13 +566,18 @@ struct WelcomeView: View {
         }
     }
 
-    private var trimmedName: String {
-        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    private var isYearAnswered: Bool { ProfileField.isYearAccepted(yearOfBirth) }
+
+    private var isHeightAnswered: Bool {
+        heightCm.map { ProfileField.heights.contains($0) } ?? false
     }
 
-    private var avatarInitial: String {
-        guard let first = trimmedName.first else { return "?" }
-        return String(first).uppercased()
+    private var isWeightAnswered: Bool {
+        weightKg.map { ProfileField.weights.contains($0) } ?? false
+    }
+
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func handleBack() {
@@ -489,23 +615,40 @@ struct WelcomeView: View {
         // delivered shifted / corrupted parameter values to the closure
         // body — using the store reference avoids the indirection.
         let store = sessionStore
+        // Krok zaliczony — PRZED zapisem, bo `savePreferencesStep` czyta
+        // z `answeredStep`, co już padło (alergeny dopiero po kroku 2).
+        // Szkic z odpowiedziami i numerem kroku idzie do pliku od razu,
+        // synchronicznie i przed `advance()` — niezależnie od kolejki zapisów
+        // na serwer (7.10.2026, z #360).
+        if (1...2).contains(step) {
+            answeredStep = max(answeredStep, step)
+            saveDraft(userId: store.currentUserId)
+        }
+        // „Nie podaję” stuknięte w tym kreatorze: zamiar skasowania płci też
+        // synchronicznie, wspólnym znacznikiem z „Twoich danych”
+        // (`sexClearPending`) — zapis w tle czeka w kolejce i zabicie aplikacji
+        // gubiło żądanie. Po wznowieniu `clearsSex` jest `false`, ale znacznik
+        // sam dokłada `null` do następnego zapisu profilu.
+        if step == 1, sexRaw == "", clearsSex {
+            store.markSexClearPending()
+        }
         retryPendingSaves(store)
         switch step {
         case 1:
             Task { @MainActor in await saveProfileStep(store) }
             advance()
-        case 2, 3:
+        case 2:
             Task { @MainActor in await savePreferencesStep(store) }
             advance()
-        case 4:
+        case 3:
             // Posiłki nie mają dokąd pójść na serwerze, dopóki nie ma
-            // gospodarstwa — wybór czeka w `mealSlots` na krok 5. Lokalnie
-            // zapisany od razu: zabicie aplikacji na kroku 5 nie cofa go
+            // gospodarstwa — wybór czeka w `mealSlots` na krok 4. Lokalnie
+            // zapisany od razu: zabicie aplikacji na kroku 4 nie cofa go
             // do domyślnych.
             UserDefaults.standard.set(mealSlots.storageValue, forKey: MealSlotConfiguration.Keys.enabledSlots)
             UserDefaults.standard.set(mealSchedule.storageValue, forKey: MealSlotSchedule.Keys.times)
             advance()
-        case 5:
+        case 4:
             let trimmedHousehold = householdName.trimmingCharacters(in: .whitespacesAndNewlines)
             let slots = mealSlots
             let schedule = mealSchedule
@@ -518,7 +661,7 @@ struct WelcomeView: View {
                     // podwieczorek do już narysowanego tygodnia.
                     await store.saveMealSlotConfiguration(slots)
                     // Godziny tak samo: nowe gospodarstwo startuje z domyślnymi,
-                    // więc jedzie tylko rozkład zmieniony w kroku 4.
+                    // więc jedzie tylko rozkład zmieniony w kroku 3.
                     if !schedule.isDefault {
                         await store.saveMealSlotSchedule(schedule)
                     }
@@ -530,6 +673,27 @@ struct WelcomeView: View {
         }
     }
 
+    /// Stan kroków 1–2 jako szkic (`WelcomeDraft`). Kalorie tylko ręcznie
+    /// przesunięte — inaczej przy wznowieniu liczą się z podpowiedzi.
+    private func saveDraft(userId: String?) {
+        guard let userId, !userId.isEmpty else { return }
+        WelcomeDraft(
+            userId: userId,
+            answeredStep: answeredStep,
+            name: trimmedName,
+            yearOfBirth: isYearAnswered ? yearOfBirth : nil,
+            heightCm: heightCm,
+            weightKg: weightKg,
+            sex: (sexRaw?.isEmpty ?? true) ? nil : sexRaw,
+            sexDeclined: sexRaw == "",
+            activityLevel: activity?.rawValue,
+            goal: goal?.rawValue,
+            diet: diet?.rawValue,
+            allergens: Array(Set(allergens.map(\.rawValue)).union(unknownAllergens)).sorted(),
+            calorieGoal: calorieAdjustedManually ? calorieGoal : nil
+        ).save()
+    }
+
     private func advance() {
         guard step < totalSteps else { return }
         move(to: step + 1)
@@ -539,12 +703,19 @@ struct WelcomeView: View {
 
     @MainActor
     private func saveProfileStep(_ store: SessionStore) async {
+        // Tylko to, co podane (7.10.2026): `nil` = pole pominięte w zapisie.
+        // Po „Dalej” z kroku 1 wszystko jest podane; strażniki chronią
+        // ponowienie.
         let ok = await store.saveProfile(
             displayName: trimmedName,
-            yearOfBirth: yearOfBirth,
-            heightCm: heightCm,
-            weightKg: weightKg,
-            sex: sex?.rawValue
+            yearOfBirth: isYearAnswered ? yearOfBirth : nil,
+            heightCm: isHeightAnswered ? heightCm : nil,
+            weightKg: isWeightAnswered ? weightKg : nil,
+            sex: (sexRaw?.isEmpty ?? true) ? nil : sexRaw,
+            clearSex: sexRaw == "" && clearsSex,
+            // Formularz kreatora, nie lokalna kopia — bez czekania na `users:me`
+            // (7.10.2026, `ensureProfileBaseline`).
+            confirmBaselineFirst: false
         )
         pendingProfileRetry = !ok
         refreshSaveWarning()
@@ -554,12 +725,19 @@ struct WelcomeView: View {
     private func savePreferencesStep(_ store: SessionStore) async {
         // Unia z nieznanymi — kreator nie kasuje alergenu z nowszego buildu.
         let allergenRaws = Array(Set(allergens.map(\.rawValue)).union(unknownAllergens)).sorted()
+        // Tylko odpowiedzi (7.10.2026): kalorie dopiero z celem, alergeny
+        // dopiero po zaliczonym kroku 2 — wcześniej pusta lista byłaby
+        // odpowiedzią udzieloną za użytkownika.
         let ok = await store.saveUserPreferences(
-            diet: diet.rawValue,
-            calorieGoal: calorieGoal,
-            allergens: allergenRaws,
-            goal: goal.rawValue,
-            activityLevel: activity.rawValue
+            diet: diet?.rawValue,
+            calorieGoal: goal != nil ? calorieGoal : nil,
+            allergens: answeredStep >= 2 ? allergenRaws : nil,
+            goal: goal?.rawValue,
+            activityLevel: activity?.rawValue,
+            // Formularz kreatora to świadoma decyzja użytkownika, nie lokalna
+            // kopia — nie czeka na odczyt z serwera (nowe konto i tak ma tam
+            // domyślny wiersz). 7.10.2026, patrz `ensurePreferencesBaseline`.
+            confirmBaselineFirst: false
         )
         pendingPreferencesRetry = !ok
         refreshSaveWarning()
@@ -582,6 +760,73 @@ struct WelcomeView: View {
                 ? "Nie zapisaliśmy tego na serwerze — dane są w telefonie, ponowimy przy następnym kroku."
                 : nil
         }
+    }
+}
+
+/// Szkic kreatora (7.10.2026, z #360): odpowiedzi kroków 1–2 i numer
+/// ostatniego kroku zaliczonego „Dalej”, zapisane RAZEM i synchronicznie.
+///
+/// Po co: zapisy na serwer (i do kopii profilu/preferencji) idą w tle przez
+/// kolejki `SessionStore` — zabicie aplikacji tuż po „Dalej” mogło zostawić
+/// zaliczony krok przy starej kopii (np. serwerowe „Bez diety” zamiast
+/// wybranej diety). Wznowienie czyta więc szkic, nie kopię.
+///
+/// W chronionym magazynie (dane zdrowotne — nie `UserDefaults`), jako JSON
+/// pod jednym kluczem, zwykłym `set` (bez znacznika edycji z ręki — nie
+/// miesza się z licznikami strażnika). Kasowany po zakończeniu onboardingu
+/// (`SessionStore.persistOnboardingCompletedAt`) i przy wylogowaniu /
+/// usunięciu konta (`SCProtectedSettings.removeAll`). Szkic innego konta
+/// (`userId`) jest pomijany.
+nonisolated struct WelcomeDraft: Codable, Equatable {
+    static let storageKey = "onboarding.draft"
+
+    var userId: String
+    var answeredStep: Int
+    var name: String
+    /// `nil` = rok jeszcze niepodany (koło na bieżącym roku).
+    var yearOfBirth: Int?
+    var heightCm: Int?
+    var weightKg: Double?
+    /// `Sex.rawValue`.
+    var sex: String?
+    var sexDeclined: Bool
+    /// `ActivityLevel.rawValue` — treningi są w kroku 1 („Twoje dane”).
+    var activityLevel: Int?
+    /// `UserGoal.rawValue`.
+    var goal: String?
+    /// `DietPreference.rawValue`.
+    var diet: String?
+    /// Surowe wartości, także nieznane temu buildowi.
+    var allergens: [String]
+    /// Tylko ręcznie przesunięty suwak; `nil` = podpowiedź z danych.
+    var calorieGoal: Int?
+}
+
+extension WelcomeDraft {
+    /// Szkic tego konta albo `nil` (brak, uszkodzony, cudzy).
+    @MainActor
+    static func load(forUserId userId: String?) -> WelcomeDraft? {
+        guard let userId, !userId.isEmpty,
+              let json = SCProtectedSettings.shared.string(forKey: storageKey),
+              let data = json.data(using: .utf8),
+              let draft = try? JSONDecoder().decode(WelcomeDraft.self, from: data),
+              draft.userId == userId
+        else { return nil }
+        return draft
+    }
+
+    /// Zapis synchroniczny (plik atomowy w `SCProtectedSettings`).
+    @MainActor
+    func save() {
+        guard let data = try? JSONEncoder().encode(self),
+              let json = String(data: data, encoding: .utf8)
+        else { return }
+        SCProtectedSettings.shared.set(json, forKey: Self.storageKey)
+    }
+
+    @MainActor
+    static func clear() {
+        SCProtectedSettings.shared.removeObject(forKey: storageKey)
     }
 }
 
