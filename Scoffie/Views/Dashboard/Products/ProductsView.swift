@@ -768,7 +768,7 @@ struct ProductsView: View {
                 }
                 toasts.success("Dopisano \(PolishPlural.products(max(added, 1)))")
             } catch {
-                selection.failSubmission(submission.id, error: error)
+                // Wybór zostaje zamrożony („Spróbuj ponownie” albo „Wyczyść”).
                 toasts.error(error)
             }
         }

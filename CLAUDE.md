@@ -271,9 +271,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   `ShoppingAddProductsPage` (`ShoppingRoute.addProducts` → `.addDepartment` / `.customProduct`) — PUSH, nie arkusz na
   arkuszu (makieta pokazywała arkusz). Wybór (`ShoppingAddSelection`) wspólny dla stron, zapis JEDNYM
   `weeklyPlans:addShoppingProducts` („Dodaj N produktów”), po wyjściu z dodawania czyszczony. Wysłany wybór
-  (`ShoppingAddSubmission`, `clientMutationId`) ZAMRAŻA wybór do rozstrzygnięcia: zerwany zapis (czas, sieć, 5xx)
-  ponawia się tym samym id i tą samą treścią („Spróbuj ponownie”); do edycji oddaje go tylko `VALIDATION_ERROR` (429
-  czy 401 przychodzą też z automatycznego ponowienia po zapisie, który przeszedł). Katalog
+  (`ShoppingAddSubmission`, `clientMutationId`) ZAMRAŻA wybór do potwierdzonego sukcesu: po KAŻDYM błędzie ponowienie
+  idzie tym samym id i tą samą treścią („Spróbuj ponownie”), do edycji wraca się tylko przez „Wyczyść” (żaden kod
+  błędu nie dowodzi, że nic nie zapisano — odmowa bywa odpowiedzią na automatyczne ponowienie). Katalog
   (`weeklyPlans:shoppingProducts`, ~530 pozycji) leży w pamięci i w pliku `shopping_products_v1.json` (nie dane osoby,
   nie kasowany przy wylogowaniu), szukanie lokalne (`ShoppingProductSearch`: `IngredientSearch.fold`, aliasy, rdzeń
   bez ostatniej litery). Ilość NIEOBOWIĄZKOWA; produkt, który już stoi na liście, dostaje tylko jednostki swojego

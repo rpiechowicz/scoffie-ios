@@ -255,11 +255,14 @@ final class ShoppingAddSelection {
     private(set) var drafts: [ShoppingProductDraft] = []
     /// Wiersz z rozwiniętym edytorem ilości.
     var editingKey: String?
-    /// Wysłany wybór, którego los nie jest znany: zapis trwa albo zerwał
-    /// się bez odpowiedzi (serwer mógł go przyjąć). Dopóki jest, wybór stoi
-    /// w miejscu, a ponowienie wysyła DOKŁADNIE to samo pod tym samym id —
-    /// zmiana wyboru po zgubionym ACK-u dopisywała mleko drugi raz pod nowym
-    /// id, a sukces kasował produkty wybrane w trakcie zapisu.
+    /// Wysłany wybór, którego sukcesu nie potwierdzono: zapis trwa albo się
+    /// nie udał. Dopóki jest, wybór stoi w miejscu, a ponowienie wysyła
+    /// DOKŁADNIE to samo pod tym samym id; porzuca go tylko „Wyczyść” albo
+    /// wyjście z dodawania. Po KAŻDYM błędzie, bez wyjątków dla kodów:
+    /// odmowa może przyjść z automatycznego ponowienia `emitWithAck` po
+    /// zapisie, który przeszedł (429, a przy zmianie katalogu w trakcie
+    /// nawet walidacja). Zmiana wyboru po takim błędzie dopisywała mleko
+    /// drugi raz pod nowym id, a sukces kasował produkty wybrane w trakcie.
     private(set) var submission: ShoppingAddSubmission?
 
     var isEmpty: Bool { drafts.isEmpty }
@@ -328,20 +331,6 @@ final class ShoppingAddSelection {
         guard submission?.id == id else { return false }
         clear()
         return true
-    }
-
-    /// Zapis się nie udał. Tylko `VALIDATION_ERROR` dowodzi, że nic nie
-    /// zapisano: treść sprawdza się tak samo przy każdej próbie, a operację,
-    /// która przeszła, serwer rozpoznaje po id PRZED liczeniem ilości.
-    /// Każda inna odmowa (429 z limitu, 401, 403, 5xx), przekroczony czas
-    /// i zerwane połączenie mogą przyjść z automatycznego ponowienia po
-    /// zapisie, który przeszedł — wybór zostaje zamrożony do ponowienia tym
-    /// samym id albo „Wyczyść”.
-    func failSubmission(_ id: UUID, error: Error) {
-        guard submission?.id == id else { return }
-        if case let RecipeDataError.server(code, _, _, _) = error, code == "VALIDATION_ERROR" {
-            submission = nil
-        }
     }
 }
 
