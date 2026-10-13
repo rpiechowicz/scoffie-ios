@@ -22,6 +22,13 @@ final class ShoppingListStore {
         let weeks: [String: ShoppingListState]
     }
 
+    /// Katalog produktów na dysku — wspólny dla wszystkich kont (to nie są
+    /// dane osoby, tylko katalog Scoffie), z rewizją serwera.
+    private struct ProductCatalogCachePayload: Codable {
+        let revision: String
+        let products: [ShoppingProduct]
+    }
+
     private let repository: ShoppingListRepository
     private let currentUserId: String
     private let cacheNamespace: String
@@ -52,6 +59,21 @@ final class ShoppingListStore {
     private var reloadRequestedDuringLoad: String?
     var isLoading: Bool = false
     var errorMessage: String?
+
+    /// Ostatnio dopisywane w domu (arkusz „Dodaj produkty”) — z ostatniego
+    /// stanu listy, ze wszystkich tygodni.
+    private(set) var recentProducts: [ShoppingRecentProduct] = []
+    /// Katalog produktów do dopisania — z pliku od razu, z serwera w tle.
+    private(set) var productCatalog: [ShoppingProduct] = []
+    /// Złożone nazwy katalogu do szukania — liczone raz na katalog.
+    private(set) var productSearchIndex = ShoppingProductSearch.Index([])
+    private var productCatalogRevision: String?
+    private var productCatalogFetchedAt: Date?
+    private var productCatalogTask: Task<Void, Never>?
+
+    private static var productCatalogURL: URL {
+        AppCacheDirectory.url(for: "shopping_products_v1.json")
+    }
 
     /// 7.10.2026 (audyt 2.5): katalog offline poza kopią zapasową, nie
     /// `Documents` — stare pliki przenosi `AppCacheDirectory`.
@@ -343,16 +365,123 @@ final class ShoppingListStore {
         return added
     }
 
-    /// Zdejmuje z listy DOPISANĄ część produktu. To, co wniósł plan, zostaje —
-    /// wiersz znika tylko wtedy, gdy nic poza dopisanym go nie trzymało.
-    func removeExtra(_ item: ShoppingItem) async {
-        guard let weekStart, item.hasAddedPart else { return }
+    /// Zdejmuje z listy DOPISANĄ część produktu (z przepisów i ręczną). To,
+    /// co wniósł plan, zostaje — wiersz znika tylko wtedy, gdy nic poza
+    /// dopisanym go nie trzymało. Oddaje, czy się udało (toast ekranu).
+    @discardableResult
+    func removeExtra(_ item: ShoppingItem) async -> Bool {
+        guard let weekStart, item.hasAddedPart else { return false }
         do {
             try await repository.removeExtra(weekStart: weekStart, productKey: item.productKey)
             invalidatedWeeks.insert(weekStart)
             scheduleReload(weekStart: weekStart)
+            return true
         } catch {
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
+            return false
+        }
+    }
+
+    // MARK: - Dopisywanie produktów (arkusz „Dodaj produkty”)
+
+    /// Katalog produktów: najpierw z pliku (od razu, także bez sieci), potem
+    /// z serwera z rewizją, którą mamy — zmieniony przychodzi cały, a ten sam
+    /// nie przychodzi wcale. Z serwera najwyżej raz na 10 minut.
+    func loadProductCatalog() async {
+        if productCatalog.isEmpty { restoreProductCatalog() }
+        if let running = productCatalogTask {
+            await running.value
+            return
+        }
+        if let fetchedAt = productCatalogFetchedAt, Date().timeIntervalSince(fetchedAt) < 600 {
+            return
+        }
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let result = try await self.repository.fetchProductCatalog(revision: self.productCatalogRevision)
+                self.productCatalogFetchedAt = Date()
+                if let products = result.products {
+                    self.setProductCatalog(products, revision: result.revision)
+                    self.persistProductCatalog()
+                }
+            } catch {
+                // Cicho: zostaje katalog z pliku, a bez niego arkusz ma
+                // jeszcze „Ostatnio dodawane” i własne nazwy.
+            }
+        }
+        productCatalogTask = task
+        await task.value
+        productCatalogTask = nil
+    }
+
+    /// Dopisuje wybrane produkty do OGLĄDANEGO tygodnia i od razu przeładowuje
+    /// listę — po powrocie z arkusza mają już na niej stać. Rzuca: błąd
+    /// pokazuje arkusz, a wybór zostaje do ponowienia.
+    @discardableResult
+    func addProducts(_ drafts: [ShoppingProductDraft], mutationId: UUID) async throws -> Int {
+        guard !drafts.isEmpty else { return 0 }
+        guard let weekStart else {
+            // Bez wczytanego tygodnia nie ma do czego dopisać — błąd zostawia
+            // wybór na ekranie, zamiast udawać „Dopisano”.
+            throw RecipeDataError.serverError(message: "Lista zakupów jeszcze się nie wczytała.")
+        }
+        let added = try await repository.addProducts(weekStart: weekStart, drafts: drafts, mutationId: mutationId)
+        invalidatedWeeks.insert(weekStart)
+        await load(weekStart: weekStart, force: true)
+        return added
+    }
+
+    /// Nowa ilość dopisanej ręcznie części wiersza (`nil` = bez ilości).
+    func setManualAmount(_ item: ShoppingItem, amount: ShoppingAmount?) async throws {
+        guard let weekStart, item.manual != nil else { return }
+        try await repository.setProductAmount(weekStart: weekStart, productKey: item.productKey, amount: amount)
+        invalidatedWeeks.insert(weekStart)
+        await load(weekStart: weekStart, force: true)
+    }
+
+    private func setProductCatalog(_ products: [ShoppingProduct], revision: String) {
+        productCatalog = products
+        productCatalogRevision = revision
+        rebuildProductSearchIndex()
+    }
+
+    /// Własne nazwy domu z „ostatnio dodawanych” — w szukaniu tak jak katalog.
+    var householdProducts: [ShoppingProduct] {
+        var seen = Set(productCatalog.map(\.nameKey))
+        return recentProducts.compactMap { recent in
+            guard recent.ingredientId == nil else { return nil }
+            let product = ShoppingProduct(
+                name: recent.name,
+                department: recent.department,
+                ingredientId: nil,
+                pieceOnly: false,
+                aliases: []
+            )
+            return seen.insert(product.nameKey).inserted ? product : nil
+        }
+    }
+
+    /// Indeks szukania: katalog i własne nazwy domu, złożone raz.
+    private func rebuildProductSearchIndex() {
+        productSearchIndex = ShoppingProductSearch.Index(productCatalog + householdProducts)
+    }
+
+    private func restoreProductCatalog() {
+        guard let data = try? Data(contentsOf: Self.productCatalogURL),
+              let payload = try? JSONDecoder().decode(ProductCatalogCachePayload.self, from: data),
+              !payload.products.isEmpty
+        else { return }
+        setProductCatalog(payload.products, revision: payload.revision)
+    }
+
+    private func persistProductCatalog() {
+        guard let revision = productCatalogRevision else { return }
+        let payload = ProductCatalogCachePayload(revision: revision, products: productCatalog)
+        let url = Self.productCatalogURL
+        Self.cacheWriteQueue.async {
+            guard let data = try? JSONEncoder().encode(payload) else { return }
+            try? data.write(to: url, options: .atomic)
         }
     }
 
@@ -444,6 +573,7 @@ final class ShoppingListStore {
         }
 
         return itemSignature(for: items) != itemSignature(for: archive.items)
+            || !rerequestedKeys(currentItems: items, archivedItems: archive.items).isEmpty
     }
 
     func pendingItems(for weekStart: String) -> [ShoppingItem] {
@@ -535,6 +665,10 @@ final class ShoppingListStore {
 
     private func apply(state: ShoppingListState, for weekStart: String) async {
         archivedLists = state.archives
+        if let recent = state.recentProducts, recent != recentProducts {
+            recentProducts = recent
+            rebuildProductSearchIndex()
+        }
         let pendingKeys = Set(pendingToggleTasks.keys).union(inFlightToggleKeys)
         if pendingKeys.isEmpty {
             items = state.items
@@ -558,7 +692,11 @@ final class ShoppingListStore {
     }
 
     private func cacheCurrentState(for weekStart: String) {
-        cachedStateByWeek[weekStart] = ShoppingListState(items: items, archives: archivedLists)
+        cachedStateByWeek[weekStart] = ShoppingListState(
+            items: items,
+            archives: archivedLists,
+            recentProducts: recentProducts
+        )
         persistCache()
     }
 
@@ -668,6 +806,7 @@ final class ShoppingListStore {
 
     private func makePendingItems(currentItems: [ShoppingItem], archivedItems: [ShoppingItem]) -> [ShoppingItem] {
         let archivedByKey = Dictionary(uniqueKeysWithValues: archivedItems.map { ($0.productKey, $0) })
+        let rerequested = rerequestedKeys(currentItems: currentItems, archivedItems: archivedItems)
 
         return currentItems.compactMap { currentItem in
             guard let archivedItem = archivedByKey[currentItem.productKey] else {
@@ -676,13 +815,37 @@ final class ShoppingListStore {
 
             let additionalAmount = currentItem.totalAmount - archivedItem.totalAmount
             guard additionalAmount > 0.000_001 else {
-                return nil
+                // Dopisany PONOWNIE bez ilości („kup jeszcze chleb”) po
+                // zamknięciu listy: ilość się nie zmieniła, ale serwer zdjął
+                // ptaszek. Wraca na listę — bez pigułki, bo nie wiadomo ile.
+                guard rerequested.contains(currentItem.productKey) else { return nil }
+                var pendingItem = currentItem
+                pendingItem.totalAmount = 0
+                pendingItem.unit = ""
+                return pendingItem
             }
 
             var pendingItem = currentItem
             pendingItem.totalAmount = additionalAmount
             return pendingItem
         }
+    }
+
+    /// Pozycje dopisane ponownie po zamknięciu listy, bez zmiany ilości:
+    /// w zamkniętej liście były kupione, teraz nie są, i mają dopisaną część.
+    /// Zamknięta lista ma wszystko kupione, więc odznaczenie robi tu tylko
+    /// dopisanie (serwer zdejmuje ptaszek dopisanemu produktowi).
+    private func rerequestedKeys(currentItems: [ShoppingItem], archivedItems: [ShoppingItem]) -> Set<String> {
+        let archivedByKey = Dictionary(uniqueKeysWithValues: archivedItems.map { ($0.productKey, $0) })
+        var keys = Set<String>()
+        for item in currentItems where !item.isChecked && item.hasAddedPart {
+            guard let archived = archivedByKey[item.productKey],
+                  archived.isChecked,
+                  abs(item.totalAmount - archived.totalAmount) <= 0.000_001
+            else { continue }
+            keys.insert(item.productKey)
+        }
+        return keys
     }
 
     private func previousArchive(for archive: ArchivedShoppingList) -> ArchivedShoppingList? {

@@ -264,8 +264,20 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   płacący: „Zmień” → `PlansSheet` + „Zarządzaj subskrypcją ↗”; domownik: „Kto opłaca”. Prywatność — przypięty nagłówek,
   „Regulamin” (nie „Warunki korzystania”), wersja z `LegalDocMeta` jednym podpisem; „Pobierz moje dane” — karta pliku,
   „Zapisz albo wyślij” (`ShareLink`) w stopce. Wszystko niekompilowane w chwili zapisu (Linux) — sprawdzić na Macu.
-- **Zakupy**: historia → miesiąc → lista = push w arkuszu Zakupów (`ShoppingHistoryRoute`, `ShoppingHistoryPage`,
+- **Zakupy**: historia → miesiąc → lista = push w arkuszu Zakupów (`ShoppingRoute`, `ShoppingHistoryPage`,
   `ShoppingHistoryMonthPage`, `ShoppingArchivePage`, `pruneHistoryPath`); „Usuń całą historię” tylko w „…” Historii.
+- **Własne produkty w Zakupach** (13.10.2026, projekt w artefakcie „Własne produkty w Zakupach”, backend PR #312):
+  szklane „+” w stopce obok „Na dziś” (też na zamkniętej liście; pusta lista ma „Dodaj produkt” w karcie) wpycha
+  `ShoppingAddProductsPage` (`ShoppingRoute.addProducts` → `.addDepartment` / `.customProduct`) — PUSH, nie arkusz na
+  arkuszu (makieta pokazywała arkusz). Wybór (`ShoppingAddSelection`) wspólny dla stron, zapis JEDNYM
+  `weeklyPlans:addShoppingProducts` („Dodaj N produktów”), po wyjściu z dodawania czyszczony. Katalog
+  (`weeklyPlans:shoppingProducts`, ~530 pozycji) leży w pamięci i w pliku `shopping_products_v1.json` (nie dane osoby,
+  nie kasowany przy wylogowaniu), szukanie lokalne (`ShoppingProductSearch`: `IngredientSearch.fold`, aliasy, rdzeń
+  bez ostatniej litery). Ilość NIEOBOWIĄZKOWA; produkt, który już stoi na liście, dostaje tylko jednostki swojego
+  wiersza („jak na liście”) — żadnego drugiego wiersza „Mleko (szt)”. Wiersz bez ilości (`unit == ""`) nie ma pigułki.
+  Dopisane ma pod nazwą `ShoppingAddedMark` (kółko domownika + „dopisane” / „+1 l”); przytrzymanie: „Zmień ilość”
+  (`ShoppingAmountSheet`, małe okno 440 pt) i „Usuń dopisane” / „Usuń z listy”. Ponowne dopisanie BEZ ilości po
+  zamknięciu listy wraca jako pozycja otwartej rundy (`rerequestedKeys` w `ShoppingListStore`).
 - **Gotuj**: JEDNA reguła stuknięcia w timer w doku (`CookDockTimer.dockTapAction`) — „do włączenia” = Start, każdy inny
   stan = arkusz Timery; pauza, wznowienie, „+1 min” (timer po czasie, wyciszony), „Pomiń” i „Gotowe” WYŁĄCZNIE
   w arkuszu. Kapsuła = jeden `Button`, bez menu przytrzymania (i bez `afterMenu`); glif w pierścieniu = stan, ▶ tylko

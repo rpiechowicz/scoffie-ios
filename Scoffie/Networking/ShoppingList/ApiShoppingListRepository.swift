@@ -15,7 +15,30 @@ final class ApiShoppingListRepository: ShoppingListRepository {
             items: state.items.map { $0.toAppModel() },
             archives: state.archives
                 .map { $0.toAppModel() }
-                .sorted { $0.archivedAt > $1.archivedAt }
+                .sorted { $0.archivedAt > $1.archivedAt },
+            recentProducts: state.recentProducts
+        )
+    }
+
+    func fetchProductCatalog(revision: String?) async throws -> (revision: String, products: [ShoppingProduct]?) {
+        let catalog = try await client.fetchProductCatalog(revision: revision)
+        return (catalog.revision, catalog.products?.map { $0.toAppModel() })
+    }
+
+    func addProducts(weekStart: String, drafts: [ShoppingProductDraft], mutationId: UUID) async throws -> Int {
+        try await client.addProducts(
+            weekStart: weekStart,
+            clientMutationId: mutationId.uuidString.lowercased(),
+            items: drafts.map(ShoppingProductInputPayload.init(draft:))
+        ).added
+    }
+
+    func setProductAmount(weekStart: String, productKey: String, amount: ShoppingAmount?) async throws {
+        _ = try await client.setProductAmount(
+            weekStart: weekStart,
+            productKey: productKey,
+            amount: amount?.value,
+            unit: amount?.unit.rawValue
         )
     }
 
