@@ -35,9 +35,13 @@ struct ShoppingAisleSection: View {
     var isTodayItem: (ShoppingItem) -> Bool = { _ in false }
     var onToggleSection: () -> Void = {}
     var onToggleItem: (ShoppingItem) -> Void = { _ in }
-    /// Zdjęcie z listy części DOPISANEJ z przepisu („brakuje mi”). `nil` =
+    /// Zdjęcie z listy części DOPISANEJ (z przepisu albo ręcznie). `nil` =
     /// widok bez takiej akcji (historia, „Na dziś”).
     var onRemoveExtra: ((ShoppingItem) -> Void)? = nil
+    /// „Zmień ilość” części dopisanej ręcznie. `nil` = bez tej akcji.
+    var onEditAmount: ((ShoppingItem) -> Void)? = nil
+    /// Znacznik dopisanego ręcznie pod nazwą produktu.
+    var addedMark: (ShoppingItem) -> ShoppingAddedMark? = { _ in nil }
 
     @Environment(\.colorScheme) private var scheme
 
@@ -236,6 +240,7 @@ struct ShoppingAisleSection: View {
                     name: item.name,
                     amount: item.displayAmount,
                     dishes: dishSummary(item),
+                    addedMark: mode == .readOnly ? nil : addedMark(item),
                     bought: item.isChecked,
                     accent: accent,
                     showsTodayTag: mode == .list && isTodayItem(item),
@@ -248,8 +253,10 @@ struct ShoppingAisleSection: View {
                 // wniósł plan, znika wyłącznie razem z daniem z planu. Menu
                 // nie wisi na pozostałych wierszach wcale: pusty `contextMenu`
                 // i tak podnosi wiersz pod przytrzymanym palcem.
-                .modifier(RemoveExtraMenu(
+                .modifier(AddedPartMenu(
+                    item: item,
                     isEnabled: mode == .list && item.hasAddedPart && onRemoveExtra != nil,
+                    onEdit: item.manual == nil ? nil : onEditAmount.map { edit in { edit(item) } },
                     onRemove: { onRemoveExtra?(item) }
                 ))
             }
@@ -257,16 +264,30 @@ struct ShoppingAisleSection: View {
     }
 }
 
-/// Menu „Usuń dopisane z przepisu” pod przytrzymanym wierszem.
-private struct RemoveExtraMenu: ViewModifier {
+/// Menu pod przytrzymanym wierszem z dopisaną częścią: „Zmień ilość”
+/// (dopisane ręcznie) i zdjęcie dopisanego — „Usuń z listy”, gdy wiersz
+/// istnieje tylko dzięki niemu.
+private struct AddedPartMenu: ViewModifier {
+    let item: ShoppingItem
     let isEnabled: Bool
+    let onEdit: (() -> Void)?
     let onRemove: () -> Void
+
+    private var removeTitle: String {
+        if item.manual == nil { return "Usuń dopisane z przepisu" }
+        return item.isOnlyManual ? "Usuń z listy" : "Usuń dopisane"
+    }
 
     func body(content: Content) -> some View {
         if isEnabled {
             content.contextMenu {
+                if let onEdit {
+                    Button(action: onEdit) {
+                        Label("Zmień ilość", systemImage: "pencil")
+                    }
+                }
                 Button(role: .destructive, action: onRemove) {
-                    Label("Usuń dopisane z przepisu", systemImage: "minus.circle")
+                    Label(removeTitle, systemImage: "minus.circle")
                 }
             }
         } else {

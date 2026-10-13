@@ -10,7 +10,7 @@ import SwiftUI
 // Od 6.10.2026 historia, miesiąc i lista to kolejne ekrany W arkuszu Zakupów
 // (push w jego `NavigationStack`, systemowy pasek z „wstecz”), a nie trzy
 // arkusze ułożone jeden na drugim. Stos trzyma `ProductsView`
-// (`ShoppingHistoryRoute`); ekrany tylko oddają stuknięcia.
+// (`ShoppingRoute`); ekrany tylko oddają stuknięcia.
 struct ShoppingHistoryPage: View {
     let months: [ShoppingHistoryMonth]
     var onOpenMonth: (ShoppingHistoryMonth) -> Void

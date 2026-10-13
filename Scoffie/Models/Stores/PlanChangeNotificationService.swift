@@ -402,6 +402,10 @@ enum PlanChangeNotificationService {
             return "\(actor) odhaczył/a produkt na liście zakupów."
         case "ARCHIVE_LIST":
             return "\(actor) zamknął/ęła listę zakupów."
+        case "ADD_SHOPPING_PRODUCTS":
+            // Domownik dopisał coś do listy — „kup jeszcze to” jest dokładnie
+            // tym, na co druga osoba w sklepie ma zareagować.
+            return "\(actor) dopisał/a produkty do listy zakupów."
         default:
             // Historia list (przywrócenie, usunięcie archiwum) to porządki we
             // własnych danych, nie zdarzenie dla domownika.

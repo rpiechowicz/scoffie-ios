@@ -57,4 +57,7 @@ struct ArchivedShoppingList: Identifiable, Codable, Hashable {
 struct ShoppingListState: Codable {
     let items: [ShoppingItem]
     let archives: [ArchivedShoppingList]
+    /// Ostatnio dopisywane w domu (arkusz „Dodaj produkty”). Opcjonalne —
+    /// stan z cache'u sprzed tego pola dalej się dekoduje.
+    var recentProducts: [ShoppingRecentProduct]? = nil
 }

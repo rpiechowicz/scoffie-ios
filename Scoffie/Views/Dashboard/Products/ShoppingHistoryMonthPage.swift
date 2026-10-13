@@ -11,7 +11,7 @@ import SwiftUI
 //
 // Ekran wepchnięty w arkusz Zakupów (historia → miesiąc → lista), z systemowym
 // paskiem: „wstecz” zdejmuje po jednym poziomie. Listę otwiera `ProductsView`
-// (`ShoppingHistoryRoute.archive`) — ten ekran tylko oddaje stuknięcie.
+// (`ShoppingRoute.archive`) — ten ekran tylko oddaje stuknięcie.
 struct ShoppingHistoryMonthPage: View {
     let month: ShoppingHistoryMonth
     var onOpenArchive: (ShoppingHistoryEntry) -> Void
