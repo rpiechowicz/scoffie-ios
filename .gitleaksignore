@@ -1,0 +1,12 @@
+# Wyjątki skanera sekretów — pojedyncze znaleziska, nie reguły.
+#
+# Format: <commit>:<plik>:<reguła>:<linia>. Wpis gasi DOKŁADNIE jedno
+# znalezisko w jednym commicie; ta sama wartość w innym commicie albo pliku
+# znowu zapali skan. Reguły dostawców (Sentry, Anthropic, AWS…) zostają
+# w całości — dlatego tu, a nie jako allowlista w `.gitleaks.toml`.
+#
+# sentry-access-token w ci_scripts/ci_post_xcodebuild.sh:17 — to nie token,
+# tylko publiczna suma SHA-256 przypiętego sentry-cli 3.8.0
+# (`SENTRY_CLI_SHA256`). Reguła widzi „sentry” + 64 znaki hex. Pełny skan
+# historii padał na tym od 28.09.2026.
+7802b93ffc6eac4ee7402086beecc838d1ef8d03:ci_scripts/ci_post_xcodebuild.sh:sentry-access-token:17
