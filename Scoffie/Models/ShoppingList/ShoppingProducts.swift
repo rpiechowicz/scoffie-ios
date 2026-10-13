@@ -7,59 +7,9 @@ import Observation
 //
 // Katalog przychodzi z `weeklyPlans:shoppingProducts` raz (z rewizją) i leży
 // w pamięci telefonu, więc szukanie działa od razu, także w sklepie bez
-// zasięgu. Dopisuje się dopiero przyciskiem „Dodaj do listy” — wtedy sieć
-// jest potrzebna.
-
-/// Produkt, który da się dopisać: z katalogu (`ingredientId`) albo własny.
-struct ShoppingProduct: Identifiable, Hashable, Codable {
-    let name: String
-    let department: String
-    /// `nil` = własna nazwa domu, spoza katalogu.
-    let ingredientId: String?
-    /// Ma masę sztuki — na liście zawsze w sztukach (jak w planie).
-    let pieceOnly: Bool
-    let aliases: [String]
-
-    var id: String { nameKey }
-    var isCustom: Bool { ingredientId == nil }
-
-    /// Ta sama postać, co część nazwy w `productKey` listy (`mleko::ml` →
-    /// `mleko`) — po niej produkt znajduje swój wiersz na liście.
-    var nameKey: String { Self.nameKey(name) }
-
-    static func nameKey(_ name: String) -> String {
-        name
-            .split(whereSeparator: \.isWhitespace)
-            .joined(separator: " ")
-            .lowercased()
-    }
-
-    /// Nazwa z wielkiej litery, białe znaki zwinięte — jak serwer
-    /// (`cleanProductName` + `toTitleCase`).
-    static func displayName(_ raw: String) -> String {
-        let collapsed = raw.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        guard let first = collapsed.first else { return collapsed }
-        return first.uppercased() + collapsed.dropFirst()
-    }
-}
-
-/// Ostatnio dopisywane w domu (ze stanu listy) — z ostatnią ilością.
-struct ShoppingRecentProduct: Codable, Hashable {
-    let name: String
-    let department: String
-    let ingredientId: String?
-    /// Ilość w jednostce listy (`szt` / `g` / `ml`); `nil` = bez ilości.
-    let amount: Double?
-    let unit: String?
-}
-
-/// Część wiersza dopisana ręcznie (`manual` ze stanu listy).
-struct ShoppingManualPart: Codable, Hashable {
-    /// W jednostce listy; `nil` = „kup to” bez ilości.
-    let amount: Double?
-    let unit: String?
-    let addedById: String?
-}
+// zasięgu. Dopisuje się dopiero przyciskiem „Dodaj N produktów” — wtedy sieć
+// jest potrzebna. Typy danych (`ShoppingProduct`, `ShoppingAmountText`, …)
+// leżą w `ShoppingListData.swift`.
 
 // MARK: - Jednostki
 
@@ -174,33 +124,6 @@ struct ShoppingAmount: Hashable, Codable {
         let next = ((value + Double(direction) * unit.step) * 100).rounded() / 100
         if next < unit.step - 0.000_1 { return nil }
         return ShoppingAmount(value: min(next, unit.maxAmount), unit: unit)
-    }
-}
-
-/// „1,5 kg”, „2 szt”, „1300 ml → 1,3 l” — liczba po polsku z jednostką.
-enum ShoppingAmountText {
-    private static let formatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "pl_PL")
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-        formatter.usesGroupingSeparator = false
-        return formatter
-    }()
-
-    static func format(_ value: Double, unit: String) -> String {
-        let number = formatter.string(from: NSNumber(value: value)) ?? "\(value)"
-        return "\(number) \(unit)"
-    }
-
-    /// Ilość w jednostce listy, z kilogramami i litrami od tysiąca.
-    static func list(_ amount: Double, unit: String) -> String {
-        switch unit {
-        case "g" where amount >= 1000: return format(amount / 1000, unit: "kg")
-        case "ml" where amount >= 1000: return format(amount / 1000, unit: "l")
-        default: return format(amount, unit: unit)
-        }
     }
 }
 

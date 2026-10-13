@@ -31,7 +31,7 @@ struct ShoppingItem: Identifiable, Codable, Hashable {
     /// od tysiąca gramów i mililitrów — kilogramy i litry („1,3 l”).
     var displayAmount: String {
         guard hasAmount else { return "" }
-        if department != ProductConstants.Department.spices,
+        if department != KitchenAmount.spicesDepartment,
            (unit == "g" || unit == "ml"), totalAmount >= 1000 {
             return ShoppingAmountText.list(totalAmount, unit: unit)
         }

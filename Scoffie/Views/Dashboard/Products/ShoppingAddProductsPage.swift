@@ -91,6 +91,8 @@ struct ShoppingAddProductsPage: View {
         .navigationTitle("Dodaj produkty")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        // „Wstecz” i „Wyczyść” w terakocie, jak na stronach `scPushedPage`.
+        .tint(SCPalette.terracotta)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 ShoppingAddNavTitle(title: "Dodaj produkty", subtitle: "Lista \(weekLabel)")
@@ -305,6 +307,8 @@ struct ShoppingAddDepartmentPage: View {
         .navigationTitle(department)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        // „Wstecz” i „Wyczyść” w terakocie, jak na stronach `scPushedPage`.
+        .tint(SCPalette.terracotta)
     }
 }
 
@@ -335,6 +339,18 @@ struct ShoppingCustomProductPage: View {
     private var catalogMatch: ShoppingProduct? {
         let key = ShoppingProduct.nameKey(trimmedName)
         return store.productCatalog.first { $0.nameKey == key }
+    }
+
+    /// Wiersz tego produktu, który już stoi na liście — wtedy ilość idzie
+    /// w jego jednostce, jak w szukaniu (bez drugiego wiersza „Mleko (szt)”).
+    private var listItem: ShoppingItem? {
+        let key = ShoppingProduct.nameKey(trimmedName)
+        guard !key.isEmpty else { return nil }
+        return store.items.first { $0.productNameKey == key }
+    }
+
+    private var allowedUnits: [ShoppingAmountUnit] {
+        ShoppingAmountUnit.allowed(listUnit: listItem?.listUnit, pieceOnly: catalogMatch?.pieceOnly ?? false)
     }
 
     var body: some View {
@@ -410,12 +426,11 @@ struct ShoppingCustomProductPage: View {
 
                         ShoppingAddCard {
                             ShoppingAmountEditor(
-                                amount: amount,
-                                allowed: ShoppingAmountUnit.allowed(
-                                    listUnit: nil,
-                                    pieceOnly: catalogMatch?.pieceOnly ?? false
-                                ),
+                                amount: amount.flatMap { allowedUnits.contains($0.unit) ? $0 : nil },
+                                allowed: allowedUnits,
                                 accent: ProductConstants.departmentColor(for: catalogMatch?.department ?? department),
+                                lockedToList: listItem?.listUnit != nil,
+                                listTotal: listItem.flatMap { $0.hasAmount ? $0.totalAmount : nil },
                                 onChange: { amount = $0 }
                             )
                             .padding(12)
@@ -442,6 +457,8 @@ struct ShoppingCustomProductPage: View {
         .navigationTitle("Własny produkt")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        // „Wstecz” i „Wyczyść” w terakocie, jak na stronach `scPushedPage`.
+        .tint(SCPalette.terracotta)
         .onAppear(perform: seed)
     }
 
@@ -464,7 +481,7 @@ struct ShoppingCustomProductPage: View {
             pieceOnly: false,
             aliases: []
         )
-        let allowed = ShoppingAmountUnit.allowed(listUnit: nil, pieceOnly: product.pieceOnly)
+        let allowed = ShoppingAmountUnit.allowed(listUnit: listItem?.listUnit, pieceOnly: product.pieceOnly)
         selection.put(ShoppingProductDraft(
             product: product,
             amount: amount.flatMap { allowed.contains($0.unit) ? $0 : nil }

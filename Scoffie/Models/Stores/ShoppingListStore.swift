@@ -420,7 +420,12 @@ final class ShoppingListStore {
     /// pokazuje arkusz, a wybór zostaje do ponowienia.
     @discardableResult
     func addProducts(_ drafts: [ShoppingProductDraft], mutationId: UUID) async throws -> Int {
-        guard let weekStart, !drafts.isEmpty else { return 0 }
+        guard !drafts.isEmpty else { return 0 }
+        guard let weekStart else {
+            // Bez wczytanego tygodnia nie ma do czego dopisać — błąd zostawia
+            // wybór na ekranie, zamiast udawać „Dopisano”.
+            throw RecipeDataError.serverError(message: "Lista zakupów jeszcze się nie wczytała.")
+        }
         let added = try await repository.addProducts(weekStart: weekStart, drafts: drafts, mutationId: mutationId)
         invalidatedWeeks.insert(weekStart)
         await load(weekStart: weekStart, force: true)
