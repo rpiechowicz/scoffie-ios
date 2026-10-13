@@ -330,13 +330,16 @@ final class ShoppingAddSelection {
         return true
     }
 
-    /// Zapis się nie udał. Odmowa serwera 4xx (walidacja, limit) to
-    /// pewność, że nic nie zapisano — wybór wraca do edycji. Przekroczony
-    /// czas, zerwane połączenie i 5xx: serwer mógł zapisać, więc wybór
-    /// zostaje zamrożony do ponowienia albo „Wyczyść”.
+    /// Zapis się nie udał. Tylko `VALIDATION_ERROR` dowodzi, że nic nie
+    /// zapisano: treść sprawdza się tak samo przy każdej próbie, a operację,
+    /// która przeszła, serwer rozpoznaje po id PRZED liczeniem ilości.
+    /// Każda inna odmowa (429 z limitu, 401, 403, 5xx), przekroczony czas
+    /// i zerwane połączenie mogą przyjść z automatycznego ponowienia po
+    /// zapisie, który przeszedł — wybór zostaje zamrożony do ponowienia tym
+    /// samym id albo „Wyczyść”.
     func failSubmission(_ id: UUID, error: Error) {
         guard submission?.id == id else { return }
-        if case let RecipeDataError.server(_, _, status?, _) = error, (400..<500).contains(status) {
+        if case let RecipeDataError.server(code, _, _, _) = error, code == "VALIDATION_ERROR" {
             submission = nil
         }
     }
