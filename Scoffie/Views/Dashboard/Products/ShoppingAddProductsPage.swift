@@ -99,7 +99,7 @@ struct ShoppingAddProductsPage: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Wyczyść") { selection.clear() }
-                    .disabled(selection.isEmpty)
+                    .disabled(selection.isEmpty || isAdding)
                     .accessibilityLabel("Odznacz wszystkie wybrane produkty")
             }
         }
@@ -209,6 +209,7 @@ struct ShoppingAddProductsPage: View {
                 isFocused = false
                 onOpenCustom(trimmed)
             }
+            .disabled(selection.isLocked)
             .padding(.top, hits.isEmpty ? 0 : 12)
         }
     }
@@ -448,7 +449,7 @@ struct ShoppingCustomProductPage: View {
                         title: "Gotowe",
                         leadingIcon: "checkmark",
                         trailingIcon: nil,
-                        isEnabled: !trimmedName.isEmpty,
+                        isEnabled: !trimmedName.isEmpty && !selection.isLocked,
                         action: done
                     )
                 }
@@ -541,6 +542,8 @@ private struct ShoppingPickRowHost: View {
                 }
             }
         )
+        // Wysłany wybór stoi, dopóki zapis się nie rozstrzygnie.
+        .disabled(selection.isLocked)
     }
 }
 
@@ -598,9 +601,11 @@ private struct ShoppingAddFooter: View {
 
     var body: some View {
         if !selection.isEmpty {
+            // Zerwany zapis: to samo jeszcze raz, pod tym samym id.
+            let isRetry = selection.isLocked && !isAdding
             SCSoftButton(
-                title: "Dodaj \(PolishPlural.products(selection.count))",
-                leadingIcon: "cart.badge.plus",
+                title: isRetry ? "Spróbuj ponownie" : "Dodaj \(PolishPlural.products(selection.count))",
+                leadingIcon: isRetry ? "arrow.clockwise" : "cart.badge.plus",
                 trailingIcon: nil,
                 isEnabled: !isAdding,
                 isLoading: isAdding,
