@@ -280,8 +280,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   wiersza („jak na liście”) — żadnego drugiego wiersza „Mleko (szt)”. Wiersz bez ilości (`unit == ""`) nie ma pigułki.
   Dopisane ma pod nazwą `ShoppingAddedMark` (kółko domownika + „dopisane” / „+1 l”); przytrzymanie: „Zmień ilość”
   (`ShoppingAmountSheet`, małe okno 440 pt) i „Usuń dopisane” / „Usuń z listy”. Ponowne dopisanie BEZ ilości po
-  zamknięciu listy wraca jako pozycja otwartej rundy (`rerequestedKeys` w `ShoppingListStore`) — po `manual.addedAt`
-  późniejszym niż `archivedAt`, NIE po ptaszku (odhaczony w sklepie zostaje w rundzie do jej zamknięcia).
+  zamknięciu listy wraca jako pozycja otwartej rundy (`rerequestedKeys` w `ShoppingListStore`) — tylko dopóki jest
+  nieodhaczona: archiwum ma unikalny podpis treści, więc runda o tej samej treści nie dostałaby osobnego wpisu historii.
 - **Gotuj**: JEDNA reguła stuknięcia w timer w doku (`CookDockTimer.dockTapAction`) — „do włączenia” = Start, każdy inny
   stan = arkusz Timery; pauza, wznowienie, „+1 min” (timer po czasie, wyciszony), „Pomiń” i „Gotowe” WYŁĄCZNIE
   w arkuszu. Kapsuła = jeden `Button`, bez menu przytrzymania (i bez `afterMenu`); glif w pierścieniu = stan, ▶ tylko

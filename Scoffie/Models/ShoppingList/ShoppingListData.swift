@@ -117,13 +117,6 @@ struct ShoppingManualPart: Codable, Hashable {
     let amount: Double?
     let unit: String?
     let addedById: String?
-    /// Ostatnie dopisanie albo zmiana ilości — ms od epoki, jak `archivedAt`.
-    /// `nil` w pliku listy sprzed tej wersji.
-    var addedAt: Double? = nil
-
-    var addedDate: Date? {
-        addedAt.map { Date(timeIntervalSince1970: $0 / 1000) }
-    }
 }
 
 /// „1,5 kg”, „2 szt”, „1300 ml → 1,3 l” — liczba po polsku z jednostką.
