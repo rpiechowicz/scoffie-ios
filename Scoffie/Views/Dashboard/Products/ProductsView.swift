@@ -752,20 +752,23 @@ struct ProductsView: View {
     /// na listę (dopisane już na niej stoją — store przeładował tydzień),
     /// po błędzie zostaje na stronie z wyborem do ponowienia.
     private func commitAddedProducts() {
-        let drafts = addSelection.drafts
-        let mutationId = addSelection.mutationId
-        guard !drafts.isEmpty, !isAddingProducts else { return }
+        guard !isAddingProducts, let submission = addSelection.beginSubmission() else { return }
         isAddingProducts = true
         let toasts = toasts
         let store = shoppingListStore
+        let selection = addSelection
         Task { @MainActor in
             defer { isAddingProducts = false }
             do {
-                let added = try await store.addProducts(drafts, mutationId: mutationId)
-                addSelection.clear()
-                historyPath.removeAll { $0.isAddFlow }
+                let added = try await store.addProducts(submission.drafts, mutationId: submission.id)
+                // Wyjście z dodawania w trakcie zapisu porzuciło wybór —
+                // nowy, zaczęty od tamtej pory, zostaje na ekranie.
+                if selection.completeSubmission(submission.id) {
+                    historyPath.removeAll { $0.isAddFlow }
+                }
                 toasts.success("Dopisano \(PolishPlural.products(max(added, 1)))")
             } catch {
+                selection.failSubmission(submission.id, error: error)
                 toasts.error(error)
             }
         }

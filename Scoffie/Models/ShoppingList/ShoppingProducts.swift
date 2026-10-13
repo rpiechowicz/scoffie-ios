@@ -240,6 +240,13 @@ struct ShoppingProductDraft: Identifiable, Hashable {
     var id: String { product.nameKey }
 }
 
+/// Wysłane „Dodaj N produktów”: wybór w chwili wysłania i jego
+/// `clientMutationId`.
+struct ShoppingAddSubmission {
+    let id: UUID
+    let drafts: [ShoppingProductDraft]
+}
+
 /// Wybór na wszystkich stronach arkusza naraz (dodawanie, dział, własny
 /// produkt) — licznik w „Dodaj do listy” mówi o całości, a nie o stronie.
 @MainActor
@@ -248,14 +255,17 @@ final class ShoppingAddSelection {
     private(set) var drafts: [ShoppingProductDraft] = []
     /// Wiersz z rozwiniętym edytorem ilości.
     var editingKey: String?
-    /// Identyfikator operacji „Dodaj N produktów” dla serwera
-    /// (`clientMutationId`). Ten sam, dopóki wybór się nie zmienia — więc
-    /// ponowienie po błędzie (a zapis mógł przejść, tylko ACK zginął) nie
-    /// dopisze drugi raz; każda zmiana wyboru to nowa operacja.
-    private(set) var mutationId = UUID()
+    /// Wysłany wybór, którego los nie jest znany: zapis trwa albo zerwał
+    /// się bez odpowiedzi (serwer mógł go przyjąć). Dopóki jest, wybór stoi
+    /// w miejscu, a ponowienie wysyła DOKŁADNIE to samo pod tym samym id —
+    /// zmiana wyboru po zgubionym ACK-u dopisywała mleko drugi raz pod nowym
+    /// id, a sukces kasował produkty wybrane w trakcie zapisu.
+    private(set) var submission: ShoppingAddSubmission?
 
     var isEmpty: Bool { drafts.isEmpty }
     var count: Int { drafts.count }
+    /// Wiersze, ilości i „Własny produkt” nie zmieniają wyboru.
+    var isLocked: Bool { submission != nil }
 
     func draft(for product: ShoppingProduct) -> ShoppingProductDraft? {
         drafts.first { $0.id == product.nameKey }
@@ -268,7 +278,7 @@ final class ShoppingAddSelection {
     /// Stuknięcie w „+” albo w ptaszek. Ilość z „ostatnio dodawanych” idzie
     /// za produktem, ale tylko w jednostce, którą wolno (wiersz na liście).
     func toggle(_ product: ShoppingProduct, suggested: ShoppingAmount? = nil, allowed: [ShoppingAmountUnit]) {
-        mutationId = UUID()
+        guard !isLocked else { return }
         if let index = drafts.firstIndex(where: { $0.id == product.nameKey }) {
             drafts.remove(at: index)
             if editingKey == product.nameKey { editingKey = nil }
@@ -280,7 +290,7 @@ final class ShoppingAddSelection {
 
     /// Dodaje albo podmienia (własny produkt wraca z ekranu „Własny produkt”).
     func put(_ draft: ShoppingProductDraft) {
-        mutationId = UUID()
+        guard !isLocked else { return }
         if let index = drafts.firstIndex(where: { $0.id == draft.id }) {
             drafts[index] = draft
         } else {
@@ -289,15 +299,46 @@ final class ShoppingAddSelection {
     }
 
     func setAmount(_ amount: ShoppingAmount?, for product: ShoppingProduct) {
-        guard let index = drafts.firstIndex(where: { $0.id == product.nameKey }) else { return }
-        mutationId = UUID()
+        guard !isLocked, let index = drafts.firstIndex(where: { $0.id == product.nameKey }) else { return }
         drafts[index].amount = amount
     }
 
+    /// „Wyczyść” i wyjście z dodawania — także porzucenie zerwanej operacji.
     func clear() {
         drafts = []
         editingKey = nil
-        mutationId = UUID()
+        submission = nil
+    }
+
+    /// Co wysłać: nowa operacja z bieżącego wyboru albo — po zerwanym
+    /// zapisie — ta sama, co poprzednio.
+    func beginSubmission() -> ShoppingAddSubmission? {
+        if let submission { return submission }
+        guard !drafts.isEmpty else { return nil }
+        let next = ShoppingAddSubmission(id: UUID(), drafts: drafts)
+        submission = next
+        editingKey = nil
+        return next
+    }
+
+    /// Zapis przeszedł. Czyści tylko, gdy to wciąż ta operacja (wybór
+    /// porzucony w trakcie i zaczęty od nowa zostaje); `false` = nie ta.
+    @discardableResult
+    func completeSubmission(_ id: UUID) -> Bool {
+        guard submission?.id == id else { return false }
+        clear()
+        return true
+    }
+
+    /// Zapis się nie udał. Odmowa serwera 4xx (walidacja, limit) to
+    /// pewność, że nic nie zapisano — wybór wraca do edycji. Przekroczony
+    /// czas, zerwane połączenie i 5xx: serwer mógł zapisać, więc wybór
+    /// zostaje zamrożony do ponowienia albo „Wyczyść”.
+    func failSubmission(_ id: UUID, error: Error) {
+        guard submission?.id == id else { return }
+        if case let RecipeDataError.server(_, _, status?, _) = error, (400..<500).contains(status) {
+            submission = nil
+        }
     }
 }
 

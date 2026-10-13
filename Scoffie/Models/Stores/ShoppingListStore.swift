@@ -573,7 +573,7 @@ final class ShoppingListStore {
         }
 
         return itemSignature(for: items) != itemSignature(for: archive.items)
-            || !rerequestedKeys(currentItems: items, archivedItems: archive.items).isEmpty
+            || !rerequestedKeys(currentItems: items, archive: archive).isEmpty
     }
 
     func pendingItems(for weekStart: String) -> [ShoppingItem] {
@@ -583,7 +583,7 @@ final class ShoppingListStore {
             return items
         }
 
-        return makePendingItems(currentItems: items, archivedItems: archive.items)
+        return makePendingItems(currentItems: items, archivedItems: archive.items, archive: archive)
     }
 
     /// Produkty widoczne na aktywnej liście tygodnia — to, co użytkownik
@@ -747,14 +747,17 @@ final class ShoppingListStore {
             return
         }
 
-        let pendingItems = makePendingItems(currentItems: currentItems, archivedItems: archive.items)
+        let pendingItems = makePendingItems(currentItems: currentItems, archivedItems: archive.items, archive: archive)
         let pendingAmounts = Dictionary(uniqueKeysWithValues: pendingItems.map { ($0.productKey, $0.totalAmount) })
         let previousState = openRevisionsByWeek[weekStart].flatMap { state in
             state.baseArchiveId == archive.id ? state : nil
         }
 
         let checkedPendingItems = items.filter { item in
-            guard let pendingAmount = pendingAmounts[item.productKey], item.isChecked else {
+            // Bez ilości (0) nie ma czego dołożyć: ponowne dopisanie odznacza
+            // na serwerze sam zapis, a ptaszek przy „kup jeszcze chleb” to
+            // decyzja domownika w sklepie — nie do zdejmowania przy synchronizacji.
+            guard let pendingAmount = pendingAmounts[item.productKey], pendingAmount > 0.000_001, item.isChecked else {
                 return false
             }
 
@@ -804,9 +807,15 @@ final class ShoppingListStore {
         )
     }
 
-    private func makePendingItems(currentItems: [ShoppingItem], archivedItems: [ShoppingItem]) -> [ShoppingItem] {
+    /// `archive` = zamknięta lista, wobec której liczymy bieżącą rundę;
+    /// `nil` przy porównaniu dwóch archiwów (ich pozycje nie mają `manual`).
+    private func makePendingItems(
+        currentItems: [ShoppingItem],
+        archivedItems: [ShoppingItem],
+        archive: ArchivedShoppingList? = nil
+    ) -> [ShoppingItem] {
         let archivedByKey = Dictionary(uniqueKeysWithValues: archivedItems.map { ($0.productKey, $0) })
-        let rerequested = rerequestedKeys(currentItems: currentItems, archivedItems: archivedItems)
+        let rerequested = archive.map { rerequestedKeys(currentItems: currentItems, archive: $0) } ?? []
 
         return currentItems.compactMap { currentItem in
             guard let archivedItem = archivedByKey[currentItem.productKey] else {
@@ -831,15 +840,19 @@ final class ShoppingListStore {
         }
     }
 
-    /// Pozycje dopisane ponownie po zamknięciu listy, bez zmiany ilości:
-    /// w zamkniętej liście były kupione, teraz nie są, i mają dopisaną część.
-    /// Zamknięta lista ma wszystko kupione, więc odznaczenie robi tu tylko
-    /// dopisanie (serwer zdejmuje ptaszek dopisanemu produktowi).
-    private func rerequestedKeys(currentItems: [ShoppingItem], archivedItems: [ShoppingItem]) -> Set<String> {
-        let archivedByKey = Dictionary(uniqueKeysWithValues: archivedItems.map { ($0.productKey, $0) })
+    /// Pozycje dopisane ponownie po zamknięciu listy, bez zmiany ilości
+    /// („kup jeszcze chleb”): w zamkniętej liście kupione, a część ręczna
+    /// dopisana PO jej zamknięciu (`manual.addedAt`). Po czasie, nie po
+    /// ptaszku — odhaczony w sklepie chleb dalej należy do nowej rundy,
+    /// zamiast znikać z niej razem z całą rundą. Bez `addedAt` (plik listy
+    /// sprzed tej wersji) — jak dawniej: nieodhaczone z dopisaną częścią.
+    private func rerequestedKeys(currentItems: [ShoppingItem], archive: ArchivedShoppingList) -> Set<String> {
+        let archivedByKey = Dictionary(uniqueKeysWithValues: archive.items.map { ($0.productKey, $0) })
         var keys = Set<String>()
-        for item in currentItems where !item.isChecked && item.hasAddedPart {
-            guard let archived = archivedByKey[item.productKey],
+        for item in currentItems where item.hasAddedPart {
+            let addedAfterClosing = item.manual?.addedDate.map { $0 > archive.archivedAt } ?? !item.isChecked
+            guard addedAfterClosing,
+                  let archived = archivedByKey[item.productKey],
                   archived.isChecked,
                   abs(item.totalAmount - archived.totalAmount) <= 0.000_001
             else { continue }
