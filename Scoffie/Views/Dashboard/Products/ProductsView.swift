@@ -21,6 +21,10 @@ import SwiftUI
 // • „Kupione” i „Zamknij listę” zeszły z karty hero do menu „…” i do jednej
 //   pigułki na końcu listy, która pojawia się dopiero wtedy, gdy jest co
 //   zamykać.
+// • Własne produkty (13.10.2026, artefakt „Własne produkty w Zakupach”):
+//   szklane „+” w stopce obok „Na dziś” wpycha „Dodaj produkty” (katalog,
+//   ostatnio dodawane, działy, własna nazwa). Dopisane stoi w swojej alejce
+//   z kółkiem osoby pod nazwą; przytrzymanie: „Zmień ilość” / „Usuń”.
 struct ProductsView: View {
     /// Odsunięcie tytułu od góry. Na pełnym ekranie odsuwa go od Dynamic
     /// Island; w arkuszu (wejście z nagłówka Planu tygodnia) taki margines
@@ -38,9 +42,17 @@ struct ProductsView: View {
     /// Arkusz „Na dziś” — jedyny arkusz nad Zakupami.
     @State private var showsTodaySheet = false
 
-    /// Stos historii W arkuszu Zakupów: historia → miesiąc → lista to push
-    /// z systemowym „wstecz” (6.10.2026), a nie trzy arkusze jeden na drugim.
-    @State private var historyPath: [ShoppingHistoryRoute] = []
+    /// Stos W arkuszu Zakupów: historia → miesiąc → lista i „Dodaj produkty”
+    /// → dział / własny produkt to push z systemowym „wstecz” (6.10.2026),
+    /// a nie arkusze jeden na drugim.
+    @State private var historyPath: [ShoppingRoute] = []
+
+    /// Wybór w „Dodaj produkty” — wspólny dla jego stron, czyszczony po
+    /// zapisie i po wyjściu z dodawania.
+    @State private var addSelection = ShoppingAddSelection()
+    @State private var isAddingProducts = false
+    /// Wiersz w arkusiku „Zmień ilość”.
+    @State private var amountEditItem: ShoppingItem?
 
     /// Dania tygodnia stojące za produktami. Liczone z planu, nie z serwera —
     /// przeliczane dopiero, gdy plan naprawdę się zmieni (`planSignature`),
@@ -324,13 +336,22 @@ struct ProductsView: View {
                 // aby móc od razu zobaczyć”) — szklany przycisk nad listą,
                 // lista przejeżdża pod nim.
                 .scSheetFooter {
-                    // Animacja zawężona do samego przycisku. Przypięta do
+                    // Animacja zawężona do samych przycisków. Przypięta do
                     // całego ekranu animowała przy otwieraniu arkusza także
                     // jego układ (lista wczytywała się w trakcie wjazdu) —
                     // treść „wjeżdżała z lewej” (Rafał 4.10.2026).
-                    VStack(spacing: 0) {
+                    //
+                    // „+” stoi zawsze w tym samym miejscu, pod kciukiem:
+                    // obok „Na dziś”, a bez niego — sam przy prawej krawędzi.
+                    HStack(spacing: 10) {
                         if listState == .content && showsTodayRow {
                             todayButton
+                                .transition(.opacity)
+                        } else {
+                            Spacer(minLength: 0)
+                        }
+                        if showsAddButton {
+                            addButton
                                 .transition(.opacity)
                         }
                     }
@@ -340,6 +361,7 @@ struct ProductsView: View {
                         if !footerAnimates { transaction.animation = nil }
                     }
                     .animation(footerAnimates ? .smooth(duration: 0.3) : nil, value: listState == .content && showsTodayRow)
+                    .animation(footerAnimates ? .smooth(duration: 0.3) : nil, value: showsAddButton)
                 }
                 .task {
                     // Wjazd arkusza trwa ~0,35 s; potem stopka może już
@@ -370,9 +392,17 @@ struct ProductsView: View {
             // TYLKO na tym pierwszym ekranie — wepchnięte ekrany historii mają
             // systemowy z „wstecz” (`scPushedPage`).
             .toolbar(.hidden, for: .navigationBar)
-            // Historia, miesiąc i lista — kolejne ekrany tego arkusza.
-            .navigationDestination(for: ShoppingHistoryRoute.self) { route in
+            // Historia, miesiąc i lista, a także dodawanie produktów —
+            // kolejne ekrany tego arkusza.
+            .navigationDestination(for: ShoppingRoute.self) { route in
                 historyDestination(route)
+            }
+            // Wyjście z dodawania (wstecz albo zapis) zapomina wybór — tak
+            // jak zamknięcie arkusza zapomina niezapisane.
+            .onChange(of: historyPath) { _, path in
+                if !path.contains(.addProducts), !addSelection.isEmpty {
+                    addSelection.clear()
+                }
             }
             // Skasowana lista albo miesiąc bez list — jego ekran schodzi ze
             // stosu sam, zamiast pokazywać coś, czego już nie ma.
@@ -439,6 +469,24 @@ struct ProductsView: View {
                 todaySheet
                     .presentationDetents([.large])
                     .dashboardLiquidSheet()
+            }
+            // „Zmień ilość” dopisanego — małe okno akcji, nie pełny arkusz.
+            .sheet(item: $amountEditItem) { item in
+                ShoppingAmountSheet(
+                    item: item,
+                    members: sessionStore.householdMembers,
+                    currentUserId: sessionStore.currentUserId,
+                    onSave: { amount in await saveManualAmount(item, amount) },
+                    onRemove: { removeAddedPart(item) }
+                )
+                .presentationDetents([.height(440)])
+                .dashboardLiquidSheet()
+            }
+            // Katalog produktów do „+” — z pliku od razu, z serwera w tle
+            // (najwyżej raz na 10 minut), żeby szukanie działało od pierwszej
+            // litery, także w sklepie bez zasięgu.
+            .task {
+                await shoppingListStore.loadProductCatalog()
             }
         }
     }
@@ -546,7 +594,7 @@ struct ProductsView: View {
             if hasOpenRevision {
                 // Osobne zdanie, nie osobny wygląd listy: użytkownik ma
                 // wiedzieć, dlaczego widzi krótszą listę niż tydzień temu.
-                Text("Nowa lista po zmianie planu — same dołożone produkty.")
+                Text("Nowa lista po zamknięciu poprzedniej — same dołożone produkty.")
                     .font(.sc(size: 12.5, weight: .regular))
                     .foregroundStyle(Color.scFaint(scheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -604,11 +652,9 @@ struct ProductsView: View {
                         isTodayItem: { dishIndex.isForToday($0) },
                         onToggleSection: { toggleAisle(group.department) },
                         onToggleItem: { handleToggle($0) },
-                        onRemoveExtra: { item in
-                            Task { @MainActor in
-                                await shoppingListStore.removeExtra(item)
-                            }
-                        }
+                        onRemoveExtra: { removeAddedPart($0) },
+                        onEditAmount: { amountEditItem = $0 },
+                        addedMark: { ShoppingAddedMark.make(for: $0, members: sessionStore.householdMembers) }
                     )
                 }
             }
@@ -674,6 +720,82 @@ struct ProductsView: View {
 
     /// Sprężyna bez odbicia — akordeon ma się złożyć, a nie sprężynować.
     private static let foldAnimation = Animation.spring(response: 0.34, dampingFraction: 0.92)
+
+    // MARK: - Własne produkty
+
+    /// „+” w stopce: na liście i na zamkniętej liście (dopisanie otwiera
+    /// nową rundę). Pusty stan ma „Dodaj produkt” w swojej karcie.
+    private var showsAddButton: Bool {
+        listState == .content || listState == .archived
+    }
+
+    private var addButton: some View {
+        Button(action: openAddProducts) {
+            Image(systemName: "plus")
+                .font(.sc(size: 20, weight: .semibold))
+                .foregroundStyle(SCPalette.terracotta)
+                .frame(width: 50, height: 50)
+                .scChromeGlass(in: Circle(), tint: SCPalette.terracotta.opacity(0.14))
+                .contentShape(Circle())
+        }
+        .buttonStyle(PlanPressStyle(scale: 0.92))
+        .accessibilityLabel("Dodaj produkt")
+        .accessibilityHint("Produkty z katalogu albo własna nazwa")
+    }
+
+    private func openAddProducts() {
+        guard !historyPath.contains(.addProducts) else { return }
+        historyPath.append(.addProducts)
+    }
+
+    /// „Dodaj N produktów”: jeden zapis dla całego wyboru. Po sukcesie wraca
+    /// na listę (dopisane już na niej stoją — store przeładował tydzień),
+    /// po błędzie zostaje na stronie z wyborem do ponowienia.
+    private func commitAddedProducts() {
+        guard !isAddingProducts, let submission = addSelection.beginSubmission() else { return }
+        isAddingProducts = true
+        let toasts = toasts
+        let store = shoppingListStore
+        let selection = addSelection
+        Task { @MainActor in
+            defer { isAddingProducts = false }
+            do {
+                let added = try await store.addProducts(submission.drafts, mutationId: submission.id)
+                // Wyjście z dodawania w trakcie zapisu porzuciło wybór —
+                // nowy, zaczęty od tamtej pory, zostaje na ekranie.
+                if selection.completeSubmission(submission.id) {
+                    historyPath.removeAll { $0.isAddFlow }
+                }
+                toasts.success("Dopisano \(PolishPlural.products(max(added, 1)))")
+            } catch {
+                // Wybór zostaje zamrożony („Spróbuj ponownie” albo „Wyczyść”).
+                toasts.error(error)
+            }
+        }
+    }
+
+    /// Zdjęcie dopisanej części wiersza (z przepisu i ręcznej). Plan zostaje.
+    private func removeAddedPart(_ item: ShoppingItem) {
+        let toasts = toasts
+        let store = shoppingListStore
+        Task { @MainActor in
+            if await store.removeExtra(item) {
+                toasts.success(item.isOnlyManual ? "Usunięto z listy" : "Usunięto dopisane", item.name)
+            } else {
+                toasts.error("Nie udało się usunąć", "Lista została bez zmian.")
+            }
+        }
+    }
+
+    private func saveManualAmount(_ item: ShoppingItem, _ amount: ShoppingAmount?) async -> Bool {
+        do {
+            try await shoppingListStore.setManualAmount(item, amount: amount)
+            return true
+        } catch {
+            toasts.error(error)
+            return false
+        }
+    }
 
     /// „Na dziś” jako szklany przycisk przyklejony do dołu ekranu — ten sam
     /// wiersz (`ShoppingTodayRow`: braki dziś, „Cała lista” przy filtrze),
@@ -811,25 +933,30 @@ struct ProductsView: View {
     /// stanu”): `ShoppingEmptyHero` — szklany koszyk, wokół działy sklepu
     /// w swoich kolorach — tytuł, jedno zdanie i akcja. Dawniej karta
     /// `RecipeListEmptyState`, ta sama co w pustych listach przepisów.
+    // 13.10.2026: lista nie czeka już na plan — pierwsza akcja pustej listy
+    // to „Dodaj produkt”, a Asystent zostaje drugą drogą.
     private var emptyState: some View {
         Group {
             if weekHasMeals {
                 ShoppingEmptyHero(
                     title: "Lista jest pusta",
-                    message: "Produkty z zaplanowanych dań pojawią się tu same."
+                    message: "Produkty z zaplanowanych dań pojawią się tu same. Coś spoza planu dopiszesz od razu.",
+                    primaryTitle: "Dodaj produkt",
+                    primaryIcon: "plus",
+                    onPrimary: openAddProducts
                 )
             } else {
                 ShoppingEmptyHero(
-                    title: "Tydzień bez planu",
-                    message: "Lista ułoży się sama z dań w Planie.",
-                    primaryTitle: "Ułóż z Asystentem",
-                    primaryIcon: MenuConstans.Assistant.icon,
-                    onPrimary: {
+                    title: "Lista jest pusta",
+                    message: "Dopisz produkty albo zaplanuj dania — lista ułoży się sama.",
+                    primaryTitle: "Dodaj produkt",
+                    primaryIcon: "plus",
+                    onPrimary: openAddProducts,
+                    secondaryTitle: "Ułóż z Asystentem",
+                    onSecondary: {
                         sessionStore.dashboardTab = .assistant
                         dismiss()
-                    },
-                    secondaryTitle: "Wróć do Planu",
-                    onSecondary: { dismiss() }
+                    }
                 )
             }
         }
@@ -934,8 +1061,34 @@ struct ProductsView: View {
     /// rysowaniu — skasowanie listy albo ostatniej listy miesiąca zdejmuje
     /// jego ekran ze stosu (`pruneHistoryPath`).
     @ViewBuilder
-    private func historyDestination(_ route: ShoppingHistoryRoute) -> some View {
+    private func historyDestination(_ route: ShoppingRoute) -> some View {
         switch route {
+        case .addProducts:
+            ShoppingAddProductsPage(
+                selection: addSelection,
+                weekLabel: weekRangeShort,
+                isAdding: isAddingProducts,
+                onOpenDepartment: { historyPath.append(.addDepartment($0)) },
+                onOpenCustom: { historyPath.append(.customProduct($0)) },
+                onCommit: commitAddedProducts
+            )
+        case .addDepartment(let department):
+            ShoppingAddDepartmentPage(
+                department: department,
+                selection: addSelection,
+                isAdding: isAddingProducts,
+                onCommit: commitAddedProducts
+            )
+        case .customProduct(let name):
+            ShoppingCustomProductPage(
+                initialName: name,
+                selection: addSelection,
+                onDone: {
+                    if historyPath.last?.isCustomProduct == true {
+                        historyPath.removeLast()
+                    }
+                }
+            )
         case .history:
             ShoppingHistoryPage(
                 months: historyMonths,
@@ -989,7 +1142,7 @@ struct ProductsView: View {
         let archiveIds = Set(months.flatMap(\.entries).map(\.archiveId))
         let firstGone = historyPath.firstIndex { route in
             switch route {
-            case .history:
+            case .history, .addProducts, .addDepartment, .customProduct:
                 return false
             case .month(let key):
                 return !monthKeys.contains(key)
@@ -1033,8 +1186,9 @@ struct ProductsView: View {
     }
 }
 
-/// Ekrany historii wpychane w arkusz Zakupów (`ProductsView.historyPath`).
-enum ShoppingHistoryRoute: Hashable {
+/// Ekrany wpychane w arkusz Zakupów (`ProductsView.historyPath`): historia
+/// list i dodawanie produktów.
+enum ShoppingRoute: Hashable {
     /// Wszystkie miesiące — z menu „…”.
     case history
     /// Jeden miesiąc (klucz `"2026-09"`) — z historii albo wprost z ekranu
@@ -1042,6 +1196,25 @@ enum ShoppingHistoryRoute: Hashable {
     case month(String)
     /// Jedna zamknięta lista (`archiveId`).
     case archive(String)
+    /// „Dodaj produkty” — z „+” w stopce albo z pustej listy.
+    case addProducts
+    /// Dział katalogu w „Dodaj produkty”.
+    case addDepartment(String)
+    /// Własny produkt (nazwa z pola szukania).
+    case customProduct(String)
+
+    /// Ekrany dodawania — zdejmowane razem po zapisie.
+    var isAddFlow: Bool {
+        switch self {
+        case .addProducts, .addDepartment, .customProduct: return true
+        case .history, .month, .archive: return false
+        }
+    }
+
+    var isCustomProduct: Bool {
+        if case .customProduct = self { return true }
+        return false
+    }
 }
 
 #Preview {

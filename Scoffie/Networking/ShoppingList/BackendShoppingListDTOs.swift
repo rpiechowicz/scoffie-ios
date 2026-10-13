@@ -14,6 +14,8 @@ struct BackendShoppingItemDTO: Codable {
     let addedFrom: [String]?
     /// Przyprawy: „1 łyżeczka” zamiast „6 g”. Starszy backend — `nil`.
     let kitchenMeasure: KitchenMeasure?
+    /// Część dopisana ręcznie. Starszy backend — brak pola.
+    let manual: ShoppingManualPart?
 }
 
 struct BackendShoppingListArchiveItemDTO: Codable {
@@ -39,6 +41,33 @@ struct BackendShoppingListArchiveDTO: Codable {
 struct BackendShoppingListStateDTO: Codable {
     let items: [BackendShoppingItemDTO]
     let archives: [BackendShoppingListArchiveDTO]
+    /// Ostatnio dopisywane w domu. Starszy backend — brak pola.
+    let recentProducts: [ShoppingRecentProduct]?
+}
+
+/// Produkt katalogu z `weeklyPlans:shoppingProducts`.
+struct BackendShoppingProductDTO: Codable {
+    let id: String
+    let name: String
+    let department: String
+    let pieceOnly: Bool
+    let aliases: [String]
+}
+
+/// Katalog produktów; `products == nil` = telefon ma już tę rewizję.
+struct BackendShoppingProductCatalogDTO: Codable {
+    let revision: String
+    let products: [BackendShoppingProductDTO]?
+}
+
+/// Ack `weeklyPlans:addShoppingProducts`.
+struct BackendAddShoppingProductsResultDTO: Codable {
+    let added: Int
+}
+
+/// Ack `weeklyPlans:setShoppingProductAmount` — klucz wiersza po zmianie.
+struct BackendSetShoppingProductAmountResultDTO: Codable {
+    let productKey: String
 }
 
 struct BackendHouseholdDTO: Codable {
@@ -96,7 +125,20 @@ extension BackendShoppingItemDTO {
             department: department,
             isChecked: isChecked,
             addedFrom: addedFrom?.isEmpty == false ? addedFrom : nil,
-            kitchenMeasure: kitchenMeasure
+            kitchenMeasure: kitchenMeasure,
+            manual: manual
+        )
+    }
+}
+
+extension BackendShoppingProductDTO {
+    func toAppModel() -> ShoppingProduct {
+        ShoppingProduct(
+            name: name,
+            department: department,
+            ingredientId: id,
+            pieceOnly: pieceOnly,
+            aliases: aliases
         )
     }
 }

@@ -180,6 +180,83 @@ final class WebSocketShoppingListTransportClient: ShoppingListTransportClient {
         throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:removeShoppingExtra.")
     }
 
+    /// Katalog produktów do arkusza „Dodaj produkty”. Wspólny dla wszystkich
+    /// domów — bez `householdId`; z rewizją, którą telefon już ma.
+    func fetchProductCatalog(revision: String?) async throws -> BackendShoppingProductCatalogDTO {
+        var payload: [String: Any] = ["userId": userId]
+        if let revision { payload["revision"] = revision }
+        let envelope: WsEnvelope<BackendShoppingProductCatalogDTO> = try await socket.emitWithAck(
+            event: "weeklyPlans:shoppingProducts",
+            payload: payload,
+            as: WsEnvelope<BackendShoppingProductCatalogDTO>.self
+        )
+
+        if envelope.ok, let data = envelope.data {
+            return data
+        }
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:shoppingProducts.")
+    }
+
+    /// Ponowienie `emitWithAck` (przekroczony czas) niesie ten sam
+    /// `clientMutationId` — serwer odda wtedy poprzedni wynik, zamiast
+    /// dokładać ilość drugi raz.
+    func addProducts(
+        weekStart: String,
+        clientMutationId: String,
+        items: [ShoppingProductInputPayload]
+    ) async throws -> BackendAddShoppingProductsResultDTO {
+        let householdId = try await resolveHouseholdId()
+        let payload = try makePayload(
+            AddShoppingProductsPayload(
+                userId: userId,
+                householdId: householdId,
+                weekStart: weekStart,
+                data: AddShoppingProductsDataPayload(clientMutationId: clientMutationId, items: items)
+            )
+        )
+        let envelope: WsEnvelope<BackendAddShoppingProductsResultDTO> = try await socket.emitWithAck(
+            event: "weeklyPlans:addShoppingProducts",
+            payload: payload,
+            as: WsEnvelope<BackendAddShoppingProductsResultDTO>.self
+        )
+
+        if envelope.ok, let data = envelope.data {
+            return data
+        }
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:addShoppingProducts.")
+    }
+
+    func setProductAmount(
+        weekStart: String,
+        productKey: String,
+        amount: Double?,
+        unit: String?
+    ) async throws -> BackendSetShoppingProductAmountResultDTO {
+        let householdId = try await resolveHouseholdId()
+        let payload = try makePayload(
+            SetShoppingProductAmountPayload(
+                userId: userId,
+                householdId: householdId,
+                weekStart: weekStart,
+                data: SetShoppingProductAmountDataPayload(
+                    productKey: productKey,
+                    amount: amount,
+                    unit: unit
+                )
+            )
+        )
+        let envelope: WsEnvelope<BackendSetShoppingProductAmountResultDTO> = try await socket.emitWithAck(
+            event: "weeklyPlans:setShoppingProductAmount",
+            payload: payload,
+            as: WsEnvelope<BackendSetShoppingProductAmountResultDTO>.self
+        )
+
+        if envelope.ok, let data = envelope.data {
+            return data
+        }
+        throw envelope.failure(fallback: "Nieznany błąd weeklyPlans:setShoppingProductAmount.")
+    }
+
     func archiveShoppingList(weekStart: String, weekLabel: String) async throws {
         let householdId = try await resolveHouseholdId()
         let payload = try makePayload(
@@ -332,6 +409,43 @@ private struct RemoveExtraPayload: Encodable {
     let householdId: String
     let weekStart: String
     let data: RemoveExtraDataPayload
+}
+
+private struct AddShoppingProductsDataPayload: Encodable {
+    let clientMutationId: String
+    let items: [ShoppingProductInputPayload]
+}
+
+private struct AddShoppingProductsPayload: Encodable {
+    let userId: String
+    let householdId: String
+    let weekStart: String
+    let data: AddShoppingProductsDataPayload
+}
+
+/// Bez ilości = brak `amount` i `unit` (nie `null`), jak przy dopisywaniu.
+private struct SetShoppingProductAmountDataPayload: Encodable {
+    let productKey: String
+    let amount: Double?
+    let unit: String?
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(productKey, forKey: .productKey)
+        try container.encodeIfPresent(amount, forKey: .amount)
+        try container.encodeIfPresent(unit, forKey: .unit)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case productKey, amount, unit
+    }
+}
+
+private struct SetShoppingProductAmountPayload: Encodable {
+    let userId: String
+    let householdId: String
+    let weekStart: String
+    let data: SetShoppingProductAmountDataPayload
 }
 
 private struct SetCheckedPayload: Encodable {

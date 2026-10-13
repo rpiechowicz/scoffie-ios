@@ -17,6 +17,9 @@ struct ShoppingProductRow: View {
     /// Dania, z których wziął się produkt — „Omlet ze szpinakiem · Krem
     /// z pomidorów”. `nil` chowa całą drugą linijkę, nie zostawia pustej.
     var dishes: String?
+    /// Część dopisana ręcznie: kółko osoby i „dopisane” / „+1 l” — za
+    /// daniami w tej samej drugiej linijce (13.10.2026).
+    var addedMark: ShoppingAddedMark? = nil
     let bought: Bool
     /// Kolor działu — niesie go pole wyboru i pigułka z ilością.
     var accent: Color = SCPalette.terracotta
@@ -69,12 +72,8 @@ struct ShoppingProductRow: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
 
-                if let dishes, !dishes.isEmpty {
-                    Text(dishes)
-                        .font(.sc(size: 12, weight: .regular))
-                        .foregroundStyle(Color.scFaint(scheme))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                if hasDishes || addedMark != nil {
+                    subtitle
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -84,9 +83,13 @@ struct ShoppingProductRow: View {
                     .transition(.scale.combined(with: .opacity))
             }
 
-            amountPill
+            // Wiersz bez ilości („kup chleb”) nie ma pigułki — pusta albo
+            // „0” mówiłaby nieprawdę.
+            if !amount.isEmpty {
+                amountPill
+            }
         }
-        .frame(minHeight: dishes == nil ? 48 : 54)
+        .frame(minHeight: hasDishes || addedMark != nil ? 54 : 48)
         .overlay(alignment: .bottom) {
             if !isLast {
                 Rectangle()
@@ -95,6 +98,39 @@ struct ShoppingProductRow: View {
             }
         }
         .animation(.easeInOut(duration: 0.22), value: bought)
+    }
+
+    private var hasDishes: Bool { !(dishes ?? "").isEmpty }
+
+    /// Druga linijka: dania z planu, a za nimi — dopisane ręcznie, z kółkiem
+    /// osoby, która dopisała.
+    private var subtitle: some View {
+        HStack(spacing: 4) {
+            if let dishes, !dishes.isEmpty {
+                Text(dishes)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(0)
+            }
+            if let addedMark {
+                if hasDishes {
+                    Text(verbatim: "·")
+                }
+                HStack(spacing: 4) {
+                    if let member = addedMark.member {
+                        MemberAvatar(member: member, members: addedMark.members, size: 15)
+                    }
+                    Text(addedMark.text)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.scMuted(scheme))
+                        .lineLimit(1)
+                }
+                .fixedSize()
+                .layoutPriority(1)
+            }
+        }
+        .font(.sc(size: 12, weight: .regular))
+        .foregroundStyle(Color.scFaint(scheme))
     }
 
     /// Ilość w pigułce w kolorze działu.
@@ -136,10 +172,12 @@ struct ShoppingProductRow: View {
 
     private var accessibilityLabel: Text {
         let state = bought ? "kupione" : "do kupienia"
+        let head = amount.isEmpty ? name : "\(name), \(amount)"
+        let added = addedMark.map { ". Dopisane: \($0.text)" } ?? ""
         if let dishes, !dishes.isEmpty {
-            return Text("\(name), \(amount), \(state). Do dań: \(dishes)")
+            return Text("\(head), \(state). Do dań: \(dishes)\(added)")
         }
-        return Text("\(name), \(amount), \(state)")
+        return Text("\(head), \(state)\(added)")
     }
 }
 
