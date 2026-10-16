@@ -743,13 +743,29 @@ final class ShoppingListStore {
             // po nieudanym usunięciu w trakcie odhaczania wracał inaczej do
             // starej tablicy BEZ niego — także w kopii na dysku (Codex,
             // 16.10.2026). Inny tydzień na ekranie = tamten tylko do odczytu.
+            let reverted = Set(uncheckedItems.map(\.productKey))
             if self.weekStart == weekStart {
-                let reverted = Set(uncheckedItems.map(\.productKey))
                 for index in items.indices where reverted.contains(items[index].productKey) {
                     items[index].isChecked = false
                 }
                 cacheCurrentState(for: weekStart)
             } else {
+                // Ekran stoi na innym tygodniu — ptaszki schodzą z kopii tamtego
+                // na dysku (`markAllChecked` już ją zapisał), a tydzień idzie do
+                // odczytu z serwera. Bez tego powrót offline albo restart
+                // pokazywał niekupione jako kupione (Codex, 16.10.2026).
+                if let cached = cachedStateByWeek[weekStart] {
+                    var cachedItems = cached.items
+                    for index in cachedItems.indices where reverted.contains(cachedItems[index].productKey) {
+                        cachedItems[index].isChecked = false
+                    }
+                    cachedStateByWeek[weekStart] = ShoppingListState(
+                        items: cachedItems,
+                        archives: cached.archives,
+                        recentProducts: cached.recentProducts
+                    )
+                    persistCache()
+                }
                 invalidatedWeeks.insert(weekStart)
             }
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
