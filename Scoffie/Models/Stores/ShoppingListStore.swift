@@ -378,36 +378,80 @@ final class ShoppingListStore {
     @discardableResult
     func removeExtra(_ item: ShoppingItem) async -> Bool {
         guard let weekStart, item.hasAddedPart else { return false }
+        let removalKey = Self.removalKey(weekStart: weekStart, productKey: item.productKey)
         do {
             try await repository.removeExtra(weekStart: weekStart, productKey: item.productKey)
-            optimisticallyRemoved[item.productKey] = nil
+            optimisticallyRemoved[removalKey] = nil
             invalidatedWeeks.insert(weekStart)
             scheduleReload(weekStart: weekStart)
             return true
         } catch {
-            // Zapis padł — zdjęty od razu wiersz wraca na swoje miejsce.
-            if let hidden = optimisticallyRemoved.removeValue(forKey: item.productKey),
-               !items.contains(where: { $0.productKey == item.productKey }) {
-                items.insert(hidden.item, at: min(hidden.index, items.count))
+            // Zapis padł — zdjęty od razu wiersz wraca: na ekran, gdy to wciąż
+            // ten tydzień, i do kopii tygodnia na dysku (odhaczenie w trakcie
+            // usuwania zapisało ją już BEZ niego). Tydzień i tak idzie do
+            // ponownego odczytu z serwera (Codex, 16.10.2026).
+            if let hidden = optimisticallyRemoved.removeValue(forKey: removalKey) {
+                restoreHiddenRow(hidden)
+            }
+            invalidatedWeeks.insert(weekStart)
+            if self.weekStart == weekStart {
+                scheduleReload(weekStart: weekStart)
             }
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             return false
         }
     }
 
-    /// Wiersze zdjęte z ekranu, zanim serwer potwierdził (`hideRemovedRow`).
-    private var optimisticallyRemoved: [String: (item: ShoppingItem, index: Int)] = [:]
+    /// Wiersz zdjęty z ekranu, zanim serwer potwierdził (`hideRemovedRow`).
+    /// Klucz = tydzień + produkt: w trakcie zapisu można przejść na inny
+    /// tydzień, a ten sam produkt bywa na obu listach.
+    private struct HiddenRow {
+        let weekStart: String
+        let item: ShoppingItem
+        let index: Int
+    }
+
+    private var optimisticallyRemoved: [String: HiddenRow] = [:]
+
+    private static func removalKey(weekStart: String, productKey: String) -> String {
+        "\(weekStart)|\(productKey)"
+    }
 
     /// Przesunięcie w lewo → „Usuń” na wierszu, który istnieje TYLKO dzięki
     /// dopisaniu: wiersz znika od razu (ekran woła to w `withAnimation`),
     /// a `removeExtra` przywraca go, gdy zapis padnie. Wiersz z częścią
     /// z planu zostaje — schodzi z niego tylko dopisane, po przeładowaniu.
     func hideRemovedRow(_ item: ShoppingItem) {
-        guard item.isOnlyManual,
+        guard let weekStart,
+              item.isOnlyManual,
               let index = items.firstIndex(where: { $0.productKey == item.productKey })
         else { return }
-        optimisticallyRemoved[item.productKey] = (items[index], index)
+        optimisticallyRemoved[Self.removalKey(weekStart: weekStart, productKey: item.productKey)] =
+            HiddenRow(weekStart: weekStart, item: items[index], index: index)
         items.remove(at: index)
+    }
+
+    private func restoreHiddenRow(_ hidden: HiddenRow) {
+        let key = hidden.item.productKey
+        if self.weekStart == hidden.weekStart {
+            if !items.contains(where: { $0.productKey == key }) {
+                items.insert(hidden.item, at: min(hidden.index, items.count))
+            }
+            cacheCurrentState(for: hidden.weekStart)
+            return
+        }
+        // Ekran stoi już na innym tygodniu — naprawiamy tylko kopię tamtego.
+        guard let cached = cachedStateByWeek[hidden.weekStart],
+              !cached.items.contains(where: { $0.productKey == key })
+        else { return }
+        var items = cached.items
+        items.insert(hidden.item, at: min(hidden.index, items.count))
+        cachedStateByWeek[hidden.weekStart] = ShoppingListState(
+            items: items,
+            archives: cached.archives,
+            recentProducts: cached.recentProducts
+        )
+        persistCache()
     }
 
     // MARK: - Dopisywanie produktów (arkusz „Dodaj produkty”)
