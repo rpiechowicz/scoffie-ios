@@ -419,10 +419,22 @@ final class ShoppingListStore {
     /// dopisaniu: wiersz znika od razu (ekran woła to w `withAnimation`),
     /// a `removeExtra` przywraca go, gdy zapis padnie. Wiersz z częścią
     /// z planu zostaje — schodzi z niego tylko dopisane, po przeładowaniu.
+    ///
+    /// Tylko gdy stan wiersza jest PEWNY: bez odhaczenia w locie (czekające
+    /// albo wysyłane) i bez „odhacz wszystko”. Inaczej ukryty wiersz omijał
+    /// cofnięcie nieudanego ptaszka, a nieudane usunięcie przywracało go
+    /// z ptaszkiem, którego serwer nie ma (Codex, 16.10.2026) — wtedy wiersz
+    /// po prostu czeka na potwierdzenie usunięcia.
     func hideRemovedRow(_ item: ShoppingItem) {
+        let key = item.productKey
         guard let weekStart,
               item.isOnlyManual,
-              let index = items.firstIndex(where: { $0.productKey == item.productKey })
+              !isBatchUpdating,
+              !isReconcilingPendingChecks,
+              pendingToggleTasks[key] == nil,
+              !inFlightToggleKeys.contains(key),
+              !pendingResetProductKeys.contains(key),
+              let index = items.firstIndex(where: { $0.productKey == key })
         else { return }
         optimisticallyRemoved[Self.removalKey(weekStart: weekStart, productKey: item.productKey)] =
             HiddenRow(weekStart: weekStart, item: items[index], index: index)
