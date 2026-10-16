@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(UIKit)
 import UIKit
+#endif
 import UserNotifications
 
 enum NotificationActorFormatter {
@@ -140,7 +142,10 @@ enum PlanChangeNotificationService {
         guard let household = householdId, !household.isEmpty else { return }
         // Na wierzchu mówi o tym kapsuła (`PlanChangeNotice`) — od razu.
         // Baner po minucie byłby drugą kopią tej samej wiadomości.
+        // (`canImport` — `Scripts/plan-store-check.sh` buduje ten plik na macOS.)
+        #if canImport(UIKit)
         guard UIApplication.shared.applicationState != .active else { return }
+        #endif
 
         let actor = NotificationActorFormatter.firstName(from: changedByDisplayName)
         guard let single = singleChangeText(
