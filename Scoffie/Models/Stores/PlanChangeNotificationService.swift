@@ -137,10 +137,11 @@ enum PlanChangeNotificationService {
     ) {
         guard isNotificationsEnabled, isPlanNotificationsEnabled else { return }
         guard let household = householdId, !household.isEmpty else { return }
-        // Zapas planuje się ZAWSZE; kasuje go dopiero kapsuła przyjęta na
-        // wierzchu (`ScoffieApp`, `scBackgroundToast(onDelivered:)`). Wcześniej
-        // stan `.active` gasił zapas od razu, a kapsuła czeka 1,2 s i bywa
-        // odrzucona przez pełną kolejkę — zmiana mogła przepaść (Codex).
+        // Zapas planuje się ZAWSZE, także przy aplikacji na wierzchu, gdzie
+        // mówi już kapsuła (`PlanChangeNotice`): wtedy `willPresent` kładzie
+        // go po cichu do Centrum powiadomień zamiast banera. Gaszenie zapasu
+        // przy kapsule gubiło zmianę (aplikacja schowana w 1,2 s, pełna
+        // kolejka toastów, kapsuła innej zmiany) — Codex, 16.10.2026.
 
         let actor = NotificationActorFormatter.firstName(from: changedByDisplayName)
         guard let single = singleChangeText(
