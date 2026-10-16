@@ -13,8 +13,8 @@ import Observation
 
 // MARK: - Jednostki
 
-/// Jednostki ilości w arkuszu. Serwer trzyma ilość w jednostce listy
-/// (`szt` / `g` / `ml`) — kilogramy i litry są tylko wygodą wpisywania.
+/// Jednostki, w których ilość jedzie na serwer. Serwer trzyma ją w jednostce
+/// listy (`szt` / `g` / `ml`) — kilogramy i litry są tylko wygodą zapisu.
 enum ShoppingAmountUnit: String, CaseIterable, Codable, Identifiable {
     case piece = "szt"
     case gram = "g"
@@ -24,64 +24,111 @@ enum ShoppingAmountUnit: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
 
-    /// Krok stepera — tyle, ile zwykle dokłada się w sklepie.
-    var step: Double {
-        switch self {
-        case .piece: return 1
-        case .gram: return 100
-        case .kilogram: return 0.5
-        case .milliliter: return 250
-        case .liter: return 0.5
-        }
-    }
-
-    /// Pierwsza wartość po wybraniu jednostki.
-    var defaultAmount: Double {
-        switch self {
-        case .piece: return 1
-        case .gram: return 100
-        case .kilogram: return 1
-        case .milliliter: return 500
-        case .liter: return 1
-        }
-    }
-
-    /// Sufit, ten sam co na serwerze (`SHOPPING_PRODUCT_INPUT_LIMITS`).
-    var maxAmount: Double {
-        switch self {
-        case .piece: return 99
-        case .gram, .milliliter: return 20_000
-        case .kilogram, .liter: return 20
-        }
-    }
-
     /// Jednostka listy, do której serwer sprowadza tę jednostkę.
+    var listUnit: String { kind.listUnit }
+
+    var kind: ShoppingAmountKind {
+        switch self {
+        case .piece: return .pieces
+        case .gram, .kilogram: return .weight
+        case .milliliter, .liter: return .volume
+        }
+    }
+}
+
+/// JAK się to kupuje: na sztuki, na wagę albo na objętość (16.10.2026).
+///
+/// Wcześniej arkusz dawał każdemu produktowi pięć jednostek naraz („szt g kg
+/// ml l”) z krokiem 250 ml — Rafał: „nie ma sensu kupować 222 ml piwa, tylko
+/// sztuki”. Teraz produkt dostaje rodzaje, które mają sens w sklepie (dział
+/// i masa sztuki), a gramy z kilogramami (i mililitry z litrami) to JEDEN
+/// rodzaj, który sam przechodzi w większą jednostkę. Krok idzie po drabinie
+/// ilości, jakie się kupuje (50 g … 1 kg … 1,5 kg), a nie po stałym kroku.
+enum ShoppingAmountKind: String, CaseIterable, Identifiable {
+    case pieces
+    case weight
+    case volume
+
+    var id: String { rawValue }
+
+    /// Etykieta przełącznika.
+    var chipTitle: String {
+        switch self {
+        case .pieces: return "szt"
+        case .weight: return "g · kg"
+        case .volume: return "ml · l"
+        }
+    }
+
     var listUnit: String {
         switch self {
-        case .piece: return "szt"
-        case .gram, .kilogram: return "g"
-        case .milliliter, .liter: return "ml"
+        case .pieces: return "szt"
+        case .weight: return "g"
+        case .volume: return "ml"
         }
     }
 
-    /// Jednostki do wyboru. Produkt, który JUŻ stoi na liście, dostaje
-    /// tylko jednostki swojego wiersza — inaczej dopisanie zrobiłoby drugi
-    /// wiersz „Mleko (szt)” obok „Mleko (ml)”. Produkt z masą sztuki — same
-    /// sztuki, jak w planie.
-    static func allowed(listUnit: String?, pieceOnly: Bool) -> [ShoppingAmountUnit] {
-        if pieceOnly { return [.piece] }
+    /// Pierwsza ilość po wybraniu rodzaju (w jednostce listy).
+    var defaultListValue: Double {
+        switch self {
+        case .pieces: return 1
+        case .weight: return 500
+        case .volume: return 1000
+        }
+    }
+
+    /// Ilości, po których chodzi stepper (w jednostce listy). Sufit = ten
+    /// sam co na serwerze (`SHOPPING_PRODUCT_INPUT_LIMITS`: 99 szt, 20 kg, 20 l).
+    var ladder: [Double] { Self.ladders[self] ?? [] }
+
+    private static let ladders: [ShoppingAmountKind: [Double]] = [
+        .pieces: rungs([(1, 99, 1)]),
+        // 50 g … 250 g co 50, do 1 kg co 100, do 5 kg co pół, dalej co kilogram.
+        .weight: rungs([(50, 250, 50), (300, 900, 100), (1000, 4500, 500), (5000, 20_000, 1000)]),
+        // Butelki i kartony: 0,33 l i 0,75 l też są szczeblami.
+        .volume: [100, 200, 250, 330, 500, 750] + rungs([(1000, 2500, 500), (3000, 20_000, 1000)])
+    ]
+
+    /// Szczeble z odcinków (od, do włącznie, krok).
+    private static func rungs(_ spans: [(from: Double, through: Double, by: Double)]) -> [Double] {
+        var values: [Double] = []
+        for span in spans {
+            values.append(contentsOf: stride(from: span.from, through: span.through, by: span.by))
+        }
+        return values
+    }
+
+    /// Rodzaje do wyboru — pierwszy jest domyślny.
+    ///
+    /// Produkt, który JUŻ stoi na liście, dostaje tylko rodzaj swojego
+    /// wiersza — inaczej dopisanie zrobiłoby drugi wiersz „Mleko (szt)” obok
+    /// „Mleko (ml)”. Produkt z masą sztuki — same sztuki, jak w planie.
+    /// Reszta idzie za działem sklepu: napoje, alkohol, chemia, pieczywo,
+    /// słodycze, przekąski, konserwy, mrożonki, przyprawy i oleje kupuje się
+    /// na sztuki (butelka, puszka, paczka); mięso i ryby na wagę; warzywa,
+    /// owoce, nabiał i produkty sypkie — na sztuki albo na wagę. Objętość
+    /// zostaje tylko dla wiersza z planu w mililitrach.
+    static func allowed(listUnit: String?, pieceOnly: Bool, department: String) -> [ShoppingAmountKind] {
         switch listUnit {
-        case "g": return [.gram, .kilogram]
-        case "ml": return [.milliliter, .liter]
-        case "szt": return [.piece]
-        default: return allCases
+        case "szt": return [.pieces]
+        case "g": return [.weight]
+        case "ml": return [.volume]
+        default: break
         }
-    }
-
-    /// Jednostka na start: litr dla płynów z listy, inaczej pierwsza z wolnych.
-    static func preferred(in allowed: [ShoppingAmountUnit]) -> ShoppingAmountUnit {
-        if allowed == [.milliliter, .liter] { return .liter }
-        return allowed.first ?? .piece
+        if pieceOnly { return [.pieces] }
+        switch department {
+        case ProductConstants.Department.meat,
+             ProductConstants.Department.fish:
+            return [.weight, .pieces]
+        case ProductConstants.Department.vegetables,
+             ProductConstants.Department.fruits,
+             ProductConstants.Department.dairy,
+             ProductConstants.Department.grains,
+             ProductConstants.Department.other:
+            return [.pieces, .weight]
+        default:
+            return [.pieces]
+        }
     }
 }
 
@@ -90,40 +137,70 @@ struct ShoppingAmount: Hashable, Codable {
     var value: Double
     var unit: ShoppingAmountUnit
 
-    /// Ilość w jednostce listy (dla podglądu sumy).
+    var kind: ShoppingAmountKind { unit.kind }
+
+    /// Ilość w jednostce listy (dla podglądu sumy i dla stepera).
     var listValue: Double {
         switch unit {
-        case .kilogram, .liter: return value * 1000
+        case .kilogram, .liter: return (value * 1000 * 100).rounded() / 100
         default: return value
         }
     }
 
     var text: String { ShoppingAmountText.format(value, unit: unit.rawValue) }
 
+    /// Pierwsza ilość danego rodzaju.
+    static func initial(_ kind: ShoppingAmountKind) -> ShoppingAmount {
+        make(listValue: kind.defaultListValue, kind: kind)
+    }
+
     /// Z jednostki listy na wygodną: 1500 g → 1,5 kg, 1000 ml → 1 l.
     static func fromList(amount: Double?, unit: String?) -> ShoppingAmount? {
-        guard let amount, amount > 0, let unit else { return nil }
+        guard let amount, amount > 0 else { return nil }
         switch unit {
-        case "g":
-            return amount >= 1000 && (amount / 500).rounded() == amount / 500
-                ? ShoppingAmount(value: amount / 1000, unit: .kilogram)
-                : ShoppingAmount(value: amount, unit: .gram)
-        case "ml":
-            return amount >= 1000 && (amount / 500).rounded() == amount / 500
-                ? ShoppingAmount(value: amount / 1000, unit: .liter)
-                : ShoppingAmount(value: amount, unit: .milliliter)
-        case "szt":
-            return ShoppingAmount(value: amount, unit: .piece)
-        default:
-            return nil
+        case "g": return make(listValue: amount, kind: .weight)
+        case "ml": return make(listValue: amount, kind: .volume)
+        case "szt": return make(listValue: amount, kind: .pieces)
+        default: return nil
         }
     }
 
-    /// O krok w górę albo w dół. W dół poniżej jednego kroku = bez ilości.
+    /// Ilość w jednostce listy → do pokazania: od tysiąca kilogramy i litry.
+    static func make(listValue: Double, kind: ShoppingAmountKind) -> ShoppingAmount {
+        switch kind {
+        case .pieces:
+            return ShoppingAmount(value: listValue, unit: .piece)
+        case .weight:
+            return listValue >= 1000
+                ? ShoppingAmount(value: listValue / 1000, unit: .kilogram)
+                : ShoppingAmount(value: listValue, unit: .gram)
+        case .volume:
+            return listValue >= 1000
+                ? ShoppingAmount(value: listValue / 1000, unit: .liter)
+                : ShoppingAmount(value: listValue, unit: .milliliter)
+        }
+    }
+
+    /// Następna ilość z drabiny w górę albo w dół. W dół poniżej pierwszego
+    /// szczebla = bez ilości. Ilość spoza drabiny (zapisana wcześniej, np.
+    /// 1,3 kg) przeskakuje na najbliższy szczebel w daną stronę.
     func stepped(by direction: Int) -> ShoppingAmount? {
-        let next = ((value + Double(direction) * unit.step) * 100).rounded() / 100
-        if next < unit.step - 0.000_1 { return nil }
-        return ShoppingAmount(value: min(next, unit.maxAmount), unit: unit)
+        let ladder = kind.ladder
+        let current = listValue
+        let next: Double?
+        if direction > 0 {
+            next = ladder.first { $0 > current + 0.000_1 } ?? ladder.last
+        } else {
+            next = ladder.last { $0 < current - 0.000_1 }
+        }
+        guard let next else { return nil }
+        return Self.make(listValue: next, kind: kind)
+    }
+
+    /// Czy da się jeszcze dołożyć (sufit drabiny).
+    var canStepUp: Bool {
+        guard let top = kind.ladder.last else { return false }
+        return listValue < top - 0.000_1
     }
 }
 
@@ -279,15 +356,15 @@ final class ShoppingAddSelection {
     }
 
     /// Stuknięcie w „+” albo w ptaszek. Ilość z „ostatnio dodawanych” idzie
-    /// za produktem, ale tylko w jednostce, którą wolno (wiersz na liście).
-    func toggle(_ product: ShoppingProduct, suggested: ShoppingAmount? = nil, allowed: [ShoppingAmountUnit]) {
+    /// za produktem, ale tylko w rodzaju, który wolno (wiersz na liście).
+    func toggle(_ product: ShoppingProduct, suggested: ShoppingAmount? = nil, allowed: [ShoppingAmountKind]) {
         guard !isLocked else { return }
         if let index = drafts.firstIndex(where: { $0.id == product.nameKey }) {
             drafts.remove(at: index)
             if editingKey == product.nameKey { editingKey = nil }
             return
         }
-        let amount = suggested.flatMap { allowed.contains($0.unit) ? $0 : nil }
+        let amount = suggested.flatMap { allowed.contains($0.kind) ? $0 : nil }
         drafts.append(ShoppingProductDraft(product: product, amount: amount))
     }
 

@@ -35,11 +35,22 @@ struct ShoppingAmountSheet: View {
         return rest > 0.000_1 ? rest : nil
     }
 
-    private var allowed: [ShoppingAmountUnit] {
+    private var allowed: [ShoppingAmountKind] {
         let pieceOnly = store.productCatalog.first { $0.nameKey == item.productNameKey }?.pieceOnly ?? false
-        // Z planem w wierszu — tylko jego jednostka; sam dopisany produkt
-        // może zmienić jednostkę (wtedy przeskoczy do swojego wiersza).
-        return ShoppingAmountUnit.allowed(listUnit: otherPart != nil ? item.listUnit : nil, pieceOnly: pieceOnly)
+        // Z planem w wierszu — tylko jego rodzaj; sam dopisany produkt może
+        // zmienić rodzaj (wtedy przeskoczy do swojego wiersza).
+        var kinds = ShoppingAmountKind.allowed(
+            listUnit: otherPart != nil ? item.listUnit : nil,
+            pieceOnly: pieceOnly,
+            department: item.department
+        )
+        // Wpis sprzed 16.10.2026 bywa w rodzaju, którego dział już nie daje
+        // (piwo w mililitrach) — zostaje do wyboru, żeby ilość nie zniknęła.
+        if let current = item.manual?.unit.flatMap({ ShoppingAmount.fromList(amount: 1, unit: $0)?.kind }),
+           !kinds.contains(current) {
+            kinds.append(current)
+        }
+        return kinds
     }
 
     private var addedBy: HouseholdMemberSnapshot? {

@@ -699,6 +699,11 @@ struct ScoffieApp: App {
                 sessionStore.subscriptionStore?.backgroundNotice,
                 onShown: { sessionStore.subscriptionStore?.clearBackgroundNotice() }
             )
+            // Domownik zmienił plan — kapsuła od razu, z każdej zakładki.
+            .scBackgroundToast(
+                sessionStore.mealCalendarStore?.remoteChangeNotice,
+                onShown: { sessionStore.mealCalendarStore?.clearRemoteChangeNotice() }
+            )
             .scConnectivityToast()
             .scSessionCurtain(sessionStore.sessionCurtain, colorScheme: appTheme.colorScheme)
             // Motyw podany JAWNIE: warstwa toastów mieszka w osobnym oknie,

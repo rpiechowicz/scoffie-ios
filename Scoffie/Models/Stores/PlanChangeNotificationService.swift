@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import UserNotifications
 
 enum NotificationActorFormatter {
@@ -137,6 +138,9 @@ enum PlanChangeNotificationService {
     ) {
         guard isNotificationsEnabled, isPlanNotificationsEnabled else { return }
         guard let household = householdId, !household.isEmpty else { return }
+        // Na wierzchu mówi o tym kapsuła (`PlanChangeNotice`) — od razu.
+        // Baner po minucie byłby drugą kopią tej samej wiadomości.
+        guard UIApplication.shared.applicationState != .active else { return }
 
         let actor = NotificationActorFormatter.firstName(from: changedByDisplayName)
         guard let single = singleChangeText(
@@ -383,6 +387,9 @@ enum PlanChangeNotificationService {
             return "\(actor) usunął/ęła plan posiłków na ten tydzień."
         case "SAVE_PLAN":
             return "\(actor) ustawił/a plan posiłków na ten tydzień."
+        case "APPLY_WEEK":
+            // Zapis karty asystenta — dawniej bez gałęzi, więc bez powiadomienia.
+            return "\(actor) zaktualizował/a plan posiłków."
         default:
             return nil
         }
