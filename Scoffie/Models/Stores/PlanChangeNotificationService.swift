@@ -1,7 +1,4 @@
 import Foundation
-#if canImport(UIKit)
-import UIKit
-#endif
 import UserNotifications
 
 enum NotificationActorFormatter {
@@ -140,12 +137,10 @@ enum PlanChangeNotificationService {
     ) {
         guard isNotificationsEnabled, isPlanNotificationsEnabled else { return }
         guard let household = householdId, !household.isEmpty else { return }
-        // Na wierzchu mówi o tym kapsuła (`PlanChangeNotice`) — od razu.
-        // Baner po minucie byłby drugą kopią tej samej wiadomości.
-        // (`canImport` — `Scripts/plan-store-check.sh` buduje ten plik na macOS.)
-        #if canImport(UIKit)
-        guard UIApplication.shared.applicationState != .active else { return }
-        #endif
+        // Zapas planuje się ZAWSZE; kasuje go dopiero kapsuła przyjęta na
+        // wierzchu (`ScoffieApp`, `scBackgroundToast(onDelivered:)`). Wcześniej
+        // stan `.active` gasił zapas od razu, a kapsuła czeka 1,2 s i bywa
+        // odrzucona przez pełną kolejkę — zmiana mogła przepaść (Codex).
 
         let actor = NotificationActorFormatter.firstName(from: changedByDisplayName)
         guard let single = singleChangeText(
