@@ -53,6 +53,8 @@ struct ProductsView: View {
     @State private var isAddingProducts = false
     /// Wiersz w arkusiku „Zmień ilość”.
     @State private var amountEditItem: ShoppingItem?
+    /// Wiersz z odsłoniętym „Usuń” (przesunięcie w lewo) — najwyżej jeden.
+    @State private var swipeState = SCSwipeState()
 
     /// Dania tygodnia stojące za produktami. Liczone z planu, nie z serwera —
     /// przeliczane dopiero, gdy plan naprawdę się zmieni (`planSignature`),
@@ -331,6 +333,10 @@ struct ProductsView: View {
                 }
                 .scrollIndicators(.hidden)
                 .ignoresSafeArea(.container, edges: .top)
+                // Przewinięcie zamyka odsłonięte „Usuń”, jak w Poczcie.
+                .onScrollPhaseChange { _, phase in
+                    if phase == .interacting { swipeState.close() }
+                }
                 // „Na dziś” przyklejone do dołu (Rafał 4.10.2026: „produkty
                 // na dziś osadź w buttonie, który będzie na dole przyklejony,
                 // aby móc od razu zobaczyć”) — szklany przycisk nad listą,
@@ -654,7 +660,8 @@ struct ProductsView: View {
                         onToggleItem: { handleToggle($0) },
                         onRemoveExtra: { removeAddedPart($0) },
                         onEditAmount: { amountEditItem = $0 },
-                        addedMark: { ShoppingAddedMark.make(for: $0, members: sessionStore.householdMembers) }
+                        addedMark: { ShoppingAddedMark.make(for: $0, members: sessionStore.householdMembers) },
+                        swipeState: swipeState
                     )
                 }
             }
@@ -778,6 +785,10 @@ struct ProductsView: View {
     private func removeAddedPart(_ item: ShoppingItem) {
         let toasts = toasts
         let store = shoppingListStore
+        // Wiersz tylko z dopisanego znika od razu — nie czeka na serwer.
+        withAnimation(.smooth(duration: 0.28)) {
+            store.hideRemovedRow(item)
+        }
         Task { @MainActor in
             if await store.removeExtra(item) {
                 toasts.success(item.isOnlyManual ? "Usunięto z listy" : "Usunięto dopisane", item.name)

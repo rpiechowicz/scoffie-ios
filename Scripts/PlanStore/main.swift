@@ -32,6 +32,21 @@ extension Color {
     static func scLabel(_ scheme: ColorScheme) -> Color { .primary }
 }
 
+/// Kapsuła zmiany planu (`PlanChangeNotice`) — prawdziwy `SCToast.swift`
+/// ciągnie `SCPalette`, `SCToastHost` i UIKit; tu wystarczy sama treść.
+struct SCToast: Equatable {
+    enum Style: Hashable { case success, info, warning, error }
+    let style: Style
+    let title: String
+    let message: String?
+
+    init(style: Style, title: String, message: String? = nil) {
+        self.style = style
+        self.title = title
+        self.message = message
+    }
+}
+
 // MARK: - Bezpiecznik: pliki store'u tylko w katalogu tymczasowym
 
 // `MealCalendarStore` zapisuje `meal_plans_<ns>.json` w `Application Support/

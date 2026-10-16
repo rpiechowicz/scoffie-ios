@@ -350,8 +350,14 @@ struct ShoppingCustomProductPage: View {
         return store.items.first { $0.productNameKey == key }
     }
 
-    private var allowedUnits: [ShoppingAmountUnit] {
-        ShoppingAmountUnit.allowed(listUnit: listItem?.listUnit, pieceOnly: catalogMatch?.pieceOnly ?? false)
+    /// Rodzaje ilości idą za działem — „karma dla kota” w Inne: sztuki albo
+    /// waga, płyn w Napojach: same sztuki.
+    private var allowedKinds: [ShoppingAmountKind] {
+        ShoppingAmountKind.allowed(
+            listUnit: listItem?.listUnit,
+            pieceOnly: catalogMatch?.pieceOnly ?? false,
+            department: catalogMatch?.department ?? department
+        )
     }
 
     var body: some View {
@@ -427,8 +433,8 @@ struct ShoppingCustomProductPage: View {
 
                         ShoppingAddCard {
                             ShoppingAmountEditor(
-                                amount: amount.flatMap { allowedUnits.contains($0.unit) ? $0 : nil },
-                                allowed: allowedUnits,
+                                amount: amount.flatMap { allowedKinds.contains($0.kind) ? $0 : nil },
+                                allowed: allowedKinds,
                                 accent: ProductConstants.departmentColor(for: catalogMatch?.department ?? department),
                                 lockedToList: listItem?.listUnit != nil,
                                 listTotal: listItem.flatMap { $0.hasAmount ? $0.totalAmount : nil },
@@ -482,10 +488,14 @@ struct ShoppingCustomProductPage: View {
             pieceOnly: false,
             aliases: []
         )
-        let allowed = ShoppingAmountUnit.allowed(listUnit: listItem?.listUnit, pieceOnly: product.pieceOnly)
+        let allowed = ShoppingAmountKind.allowed(
+            listUnit: listItem?.listUnit,
+            pieceOnly: product.pieceOnly,
+            department: product.department
+        )
         selection.put(ShoppingProductDraft(
             product: product,
-            amount: amount.flatMap { allowed.contains($0.unit) ? $0 : nil }
+            amount: amount.flatMap { allowed.contains($0.kind) ? $0 : nil }
         ))
         onDone()
     }
@@ -506,7 +516,11 @@ private struct ShoppingPickRowHost: View {
 
     var body: some View {
         let listItem = store.items.row(for: product)
-        let allowed = ShoppingAmountUnit.allowed(listUnit: listItem?.listUnit, pieceOnly: product.pieceOnly)
+        let allowed = ShoppingAmountKind.allowed(
+            listUnit: listItem?.listUnit,
+            pieceOnly: product.pieceOnly,
+            department: product.department
+        )
 
         ShoppingProductPickRow(
             product: product,
@@ -529,9 +543,8 @@ private struct ShoppingPickRowHost: View {
                         selection.editingKey = product.nameKey
                         // Edytor otwiera się z ilością do poprawienia, nie
                         // z pustym polem — najczęściej wystarczy „+”.
-                        if selection.draft(for: product)?.amount == nil {
-                            let unit = ShoppingAmountUnit.preferred(in: allowed)
-                            selection.setAmount(ShoppingAmount(value: unit.defaultAmount, unit: unit), for: product)
+                        if selection.draft(for: product)?.amount == nil, let kind = allowed.first {
+                            selection.setAmount(.initial(kind), for: product)
                         }
                     }
                 }

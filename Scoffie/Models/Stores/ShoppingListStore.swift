@@ -380,13 +380,34 @@ final class ShoppingListStore {
         guard let weekStart, item.hasAddedPart else { return false }
         do {
             try await repository.removeExtra(weekStart: weekStart, productKey: item.productKey)
+            optimisticallyRemoved[item.productKey] = nil
             invalidatedWeeks.insert(weekStart)
             scheduleReload(weekStart: weekStart)
             return true
         } catch {
+            // Zapis padł — zdjęty od razu wiersz wraca na swoje miejsce.
+            if let hidden = optimisticallyRemoved.removeValue(forKey: item.productKey),
+               !items.contains(where: { $0.productKey == item.productKey }) {
+                items.insert(hidden.item, at: min(hidden.index, items.count))
+            }
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
             return false
         }
+    }
+
+    /// Wiersze zdjęte z ekranu, zanim serwer potwierdził (`hideRemovedRow`).
+    private var optimisticallyRemoved: [String: (item: ShoppingItem, index: Int)] = [:]
+
+    /// Przesunięcie w lewo → „Usuń” na wierszu, który istnieje TYLKO dzięki
+    /// dopisaniu: wiersz znika od razu (ekran woła to w `withAnimation`),
+    /// a `removeExtra` przywraca go, gdy zapis padnie. Wiersz z częścią
+    /// z planu zostaje — schodzi z niego tylko dopisane, po przeładowaniu.
+    func hideRemovedRow(_ item: ShoppingItem) {
+        guard item.isOnlyManual,
+              let index = items.firstIndex(where: { $0.productKey == item.productKey })
+        else { return }
+        optimisticallyRemoved[item.productKey] = (items[index], index)
+        items.remove(at: index)
     }
 
     // MARK: - Dopisywanie produktów (arkusz „Dodaj produkty”)
