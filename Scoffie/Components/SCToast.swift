@@ -237,9 +237,10 @@ final class SCToastCenter {
 
     // MARK: Sterowanie
 
-    /// `false` = toast odrzucony (pełna kolejka) — tylko wtedy jego treść nie
-    /// dotrze na ekran. Zdublowany z wiszącym albo czekającym liczy się jako
-    /// przyjęty: tę samą treść użytkownik zobaczy.
+    /// `true` = ta treść jest NA EKRANIE od tej chwili (pokazana albo już
+    /// wisi). Zakolejkowana za innym toastem i odrzucona przy pełnej kolejce =
+    /// `false` — kolejka ginie razem z procesem, więc zapasowe powiadomienie
+    /// systemowe ma wtedy zostać (Codex, 16.10.2026).
     @discardableResult
     func show(_ toast: SCToast) -> Bool {
         // Ten sam komunikat, który właśnie wisi, nie miga drugi raz — tylko
@@ -253,14 +254,14 @@ final class SCToastCenter {
         // To samo, co mówi już pasek trwały, nie ma po co przyjeżdżać drugi
         // raz jako komunikat na czas.
         if transient == nil, persistent == toast { return true }
-        guard queue.last != toast else { return true }
+        guard queue.last != toast else { return false }
         guard transient != nil else {
             present(toast)
             return true
         }
         guard queue.count < Self.queueLimit else { return false }
         queue.append(toast)
-        return true
+        return false
     }
 
     /// Ustawia albo gasi pasek stanu. `nil` znaczy „stan minął".
@@ -434,7 +435,7 @@ extension View {
 /// przebudowywałaby całe drzewo aplikacji.
 private struct SCBackgroundToastBridge: ViewModifier {
     let toast: () -> SCToast?
-    /// `true` = kolejka przyjęła toast (`SCToastCenter.show`).
+    /// `true` = toast jest na ekranie od tej chwili (`SCToastCenter.show`).
     let onShown: (_ accepted: Bool) -> Void
 
     @Environment(\.toasts) private var toasts
@@ -472,9 +473,9 @@ extension View {
         modifier(SCBackgroundToastBridge(toast: toast, onShown: { _ in onShown() }))
     }
 
-    /// To samo, ale z wiadomością, czy kolejka toast przyjęła (`false` =
-    /// pełna kolejka) — dla zdarzeń, które mają zapasowe powiadomienie
-    /// systemowe i kasują je dopiero po pokazaniu kapsuły.
+    /// To samo, ale z wiadomością, czy toast stanął na ekranie od razu
+    /// (`false` = czeka w kolejce albo odrzucony) — dla zdarzeń, które mają
+    /// zapasowe powiadomienie systemowe i kasują je dopiero po pokazaniu.
     func scBackgroundToast(
         _ toast: @autoclosure @escaping () -> SCToast?,
         onDelivered: @escaping (_ accepted: Bool) -> Void
