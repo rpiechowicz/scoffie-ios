@@ -285,7 +285,6 @@ final class ShoppingListStore {
         for task in pendingToggleTasks.values { task.cancel() }
         pendingToggleTasks.removeAll()
         pendingToggleOriginalState.removeAll()
-        let originalItems = items
         isBatchUpdating = true
         for index in items.indices {
             items[index].isChecked = true
@@ -296,8 +295,7 @@ final class ShoppingListStore {
             guard let self else { return }
             await self.syncMarkAllChecked(
                 weekStart: weekStart,
-                uncheckedItems: uncheckedItems,
-                originalItems: originalItems
+                uncheckedItems: uncheckedItems
             )
         }
     }
@@ -704,8 +702,7 @@ final class ShoppingListStore {
 
     private func syncMarkAllChecked(
         weekStart: String,
-        uncheckedItems: [ShoppingItem],
-        originalItems: [ShoppingItem]
+        uncheckedItems: [ShoppingItem]
     ) async {
         do {
             for item in uncheckedItems {
@@ -729,8 +726,20 @@ final class ShoppingListStore {
         } catch {
             pendingArchiveWeekLabel = nil
             isBatchUpdating = false
-            items = originalItems
-            cacheCurrentState(for: weekStart)
+            // Cofamy SAME ptaszki tej operacji, nie całą tablicę ze zdjęcia
+            // sprzed niej: wiersz zdjęty przesunięciem „Usuń” i przywrócony
+            // po nieudanym usunięciu w trakcie odhaczania wracał inaczej do
+            // starej tablicy BEZ niego — także w kopii na dysku (Codex,
+            // 16.10.2026). Inny tydzień na ekranie = tamten tylko do odczytu.
+            if self.weekStart == weekStart {
+                let reverted = Set(uncheckedItems.map(\.productKey))
+                for index in items.indices where reverted.contains(items[index].productKey) {
+                    items[index].isChecked = false
+                }
+                cacheCurrentState(for: weekStart)
+            } else {
+                invalidatedWeeks.insert(weekStart)
+            }
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
