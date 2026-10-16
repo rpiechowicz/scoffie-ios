@@ -700,9 +700,17 @@ struct ScoffieApp: App {
                 onShown: { sessionStore.subscriptionStore?.clearBackgroundNotice() }
             )
             // Domownik zmienił plan — kapsuła od razu, z każdej zakładki.
+            // Zapasowe powiadomienie systemowe (zaplanowane przy zdarzeniu)
+            // znika dopiero, gdy kapsuła NAPRAWDĘ weszła na wierzchu —
+            // aplikacja schowana w trakcie albo pełna kolejka zostawiają je.
             .scBackgroundToast(
                 sessionStore.mealCalendarStore?.remoteChangeNotice,
-                onShown: { sessionStore.mealCalendarStore?.clearRemoteChangeNotice() }
+                onDelivered: { accepted in
+                    sessionStore.mealCalendarStore?.clearRemoteChangeNotice()
+                    if accepted, UIApplication.shared.applicationState == .active {
+                        PlanChangeNotificationService.cancelPendingFallback(prefix: NotificationIdentifierPrefix.plan)
+                    }
+                }
             )
             .scConnectivityToast()
             .scSessionCurtain(sessionStore.sessionCurtain, colorScheme: appTheme.colorScheme)

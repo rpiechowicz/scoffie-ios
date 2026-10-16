@@ -237,25 +237,30 @@ final class SCToastCenter {
 
     // MARK: Sterowanie
 
-    func show(_ toast: SCToast) {
+    /// `false` = toast odrzucony (pełna kolejka) — tylko wtedy jego treść nie
+    /// dotrze na ekran. Zdublowany z wiszącym albo czekającym liczy się jako
+    /// przyjęty: tę samą treść użytkownik zobaczy.
+    @discardableResult
+    func show(_ toast: SCToast) -> Bool {
         // Ten sam komunikat, który właśnie wisi, nie miga drugi raz — tylko
         // przedłuża pobyt. Store potrafi ustawić `errorMessage` dwa razy pod
         // rząd (rollback, a zaraz po nim kolejny nieudany load), a użytkownik
         // ma z tego zobaczyć jedno zdanie, nie dwa identyczne.
         if transient == toast {
             armTimer(for: toast)
-            return
+            return true
         }
         // To samo, co mówi już pasek trwały, nie ma po co przyjeżdżać drugi
         // raz jako komunikat na czas.
-        if transient == nil, persistent == toast { return }
-        guard queue.last != toast else { return }
+        if transient == nil, persistent == toast { return true }
+        guard queue.last != toast else { return true }
         guard transient != nil else {
             present(toast)
-            return
+            return true
         }
-        guard queue.count < Self.queueLimit else { return }
+        guard queue.count < Self.queueLimit else { return false }
         queue.append(toast)
+        return true
     }
 
     /// Ustawia albo gasi pasek stanu. `nil` znaczy „stan minął".
@@ -429,7 +434,8 @@ extension View {
 /// przebudowywałaby całe drzewo aplikacji.
 private struct SCBackgroundToastBridge: ViewModifier {
     let toast: () -> SCToast?
-    let onShown: () -> Void
+    /// `true` = kolejka przyjęła toast (`SCToastCenter.show`).
+    let onShown: (_ accepted: Bool) -> Void
 
     @Environment(\.toasts) private var toasts
 
@@ -447,12 +453,12 @@ private struct SCBackgroundToastBridge: ViewModifier {
         // do końca sesji i połykało wszystko następne.
         content.onChange(of: toast(), initial: true) { _, new in
             guard let new else { return }
-            toasts.show(new)
+            let accepted = toasts.show(new)
             // Skasowanie jest NIEZBĘDNE, nie sprzątaniem: `SCToast` porównuje
             // się po treści i ignoruje identyfikator, więc bez powrotu do
             // `nil` drugie takie samo powiadomienie nie zmieniłoby wartości
             // i przepadłoby po cichu.
-            onShown()
+            onShown(accepted)
         }
     }
 }
@@ -463,7 +469,17 @@ extension View {
         _ toast: @autoclosure @escaping () -> SCToast?,
         onShown: @escaping () -> Void
     ) -> some View {
-        modifier(SCBackgroundToastBridge(toast: toast, onShown: onShown))
+        modifier(SCBackgroundToastBridge(toast: toast, onShown: { _ in onShown() }))
+    }
+
+    /// To samo, ale z wiadomością, czy kolejka toast przyjęła (`false` =
+    /// pełna kolejka) — dla zdarzeń, które mają zapasowe powiadomienie
+    /// systemowe i kasują je dopiero po pokazaniu kapsuły.
+    func scBackgroundToast(
+        _ toast: @autoclosure @escaping () -> SCToast?,
+        onDelivered: @escaping (_ accepted: Bool) -> Void
+    ) -> some View {
+        modifier(SCBackgroundToastBridge(toast: toast, onShown: onDelivered))
     }
 }
 
