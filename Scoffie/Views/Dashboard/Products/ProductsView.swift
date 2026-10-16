@@ -785,10 +785,6 @@ struct ProductsView: View {
     private func removeAddedPart(_ item: ShoppingItem) {
         let toasts = toasts
         let store = shoppingListStore
-        // Wiersz tylko z dopisanego znika od razu — nie czeka na serwer.
-        withAnimation(.smooth(duration: 0.28)) {
-            store.hideRemovedRow(item)
-        }
         Task { @MainActor in
             if await store.removeExtra(item) {
                 toasts.success(item.isOnlyManual ? "Usunięto z listy" : "Usunięto dopisane", item.name)

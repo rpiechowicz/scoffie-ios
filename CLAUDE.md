@@ -288,8 +288,9 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   Dopisane ma pod nazwą `ShoppingAddedMark` (kółko domownika + „dopisane” / „+1 l”). Zdjęcie dopisanego: PRZESUNIĘCIE
   W LEWO → czerwone „Usuń” (16.10.2026, „chcę, aby można było usunąć” — samo przytrzymanie nikt nie znajdował;
   `Components/SCSwipeToRemove.swift`, własne, bo `swipeActions` działa tylko w `List`; jeden otwarty wiersz na ekran
-  `SCSwipeState`, stuknięcie i przewinięcie go zamykają, NIE odhaczają, pełne przesunięcie usuwa od razu; wiersz tylko
-  z dopisanego znika od razu — `ShoppingListStore.hideRemovedRow`, wraca przy błędzie) i dalej przytrzymanie: „Zmień
+  `SCSwipeState`, stuknięcie i przewinięcie go zamykają, NIE odhaczają, pełne przesunięcie usuwa od razu; wiersz znika
+  po potwierdzeniu serwera — natychmiastowe chowanie z przywracaniem przy błędzie WYCOFANE po dziewięciu rundach
+  Codexa, gubiło wiersz albo ptaszek w kopii na dysku; nie wracać) i dalej przytrzymanie: „Zmień
   ilość” (`ShoppingAmountSheet`, małe okno 440 pt) i „Usuń dopisane” / „Usuń z listy”. Ponowne dopisanie BEZ ilości po
   zamknięciu listy wraca jako pozycja otwartej rundy (`rerequestedKeys` w `ShoppingListStore`) — tylko dopóki jest
   nieodhaczona: archiwum ma unikalny podpis treści, więc runda o tej samej treści nie dostałaby osobnego wpisu historii.
@@ -299,11 +300,11 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   obiad” (`PlanChangeNotice`; treść bez rodzaju gramatycznego, nazwa dania z planu po odświeżeniu, `recipeId`
   z serwera). Porcje i „dla kogo” (`changeKind` `DETAILS_CHANGED`/`NOOP`) i „zjedzone” milczą; `nil` = stary backend →
   ogłasza. Wczytany, ale niesłuchany tydzień odświeża się po cichu (`loadWeekPlanFromBackend(observe: false)` — nie
-  zabiera nasłuchu zakładce). Powiadomienie lokalne (zapas, po 60/150 s) planuje się ZAWSZE i kasuje je dopiero kapsuła
-  pokazana na wierzchu (`scBackgroundToast(onDelivered:)`; `SCToastCenter.show` oddaje `true` tylko, gdy treść stoi na
-  ekranie od razu — kolejka za innym toastem i odrzucenie = `false`, zapas zostaje) —
-  gaszenie zapasu „bo aplikacja aktywna” gubiło zmianę, gdy ktoś schował aplikację w 1,2 s; zna `APPLY_WEEK` (zapis
-  karty asystenta — wcześniej bez żadnego sygnału). Push z serwera wymaga klucza APNs na Railwayu.
+  zabiera nasłuchu zakładce). Powiadomienie lokalne (zapas, po 60/150 s) planuje się ZAWSZE i NIE jest kasowane przez
+  kapsułę; na wierzchu `willPresent` kładzie lokalne powiadomienie planu tylko do Centrum powiadomień (`.list`), push
+  dalej baner i dźwięk. Gaszenie zapasu przy kapsule gubiło zmianę w kolejnych przypadkach (aplikacja schowana w 1,2 s,
+  pełna kolejka toastów, kapsuła innej zmiany) — nie wracać. Zapas zna `APPLY_WEEK` (zapis karty asystenta — wcześniej
+  bez żadnego sygnału). Push z serwera wymaga klucza APNs na Railwayu.
 - **Gotuj**: JEDNA reguła stuknięcia w timer w doku (`CookDockTimer.dockTapAction`) — „do włączenia” = Start, każdy inny
   stan = arkusz Timery; pauza, wznowienie, „+1 min” (timer po czasie, wyciszony), „Pomiń” i „Gotowe” WYŁĄCZNIE
   w arkuszu. Kapsuła = jeden `Button`, bez menu przytrzymania (i bez `afterMenu`); glif w pierścieniu = stan, ▶ tylko
