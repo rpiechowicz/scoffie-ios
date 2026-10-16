@@ -166,17 +166,21 @@ struct ShoppingAmount: Hashable, Codable {
     }
 
     /// Ilość w jednostce listy → do pokazania: od tysiąca kilogramy i litry.
+    /// Tylko z PEŁNYCH gramów/mililitrów — serwer przyjmuje najwyżej trzy
+    /// miejsca po przecinku, a 1000,5 g dawało 1,0005 kg, którego zapis
+    /// odbijał się walidacją (Codex, 16.10.2026). Ułamek zostaje w g/ml.
     static func make(listValue: Double, kind: ShoppingAmountKind) -> ShoppingAmount {
+        let wholeThousands = listValue >= 1000 && abs(listValue - listValue.rounded()) < 0.000_1
         switch kind {
         case .pieces:
             return ShoppingAmount(value: listValue, unit: .piece)
         case .weight:
-            return listValue >= 1000
-                ? ShoppingAmount(value: listValue / 1000, unit: .kilogram)
+            return wholeThousands
+                ? ShoppingAmount(value: listValue.rounded() / 1000, unit: .kilogram)
                 : ShoppingAmount(value: listValue, unit: .gram)
         case .volume:
-            return listValue >= 1000
-                ? ShoppingAmount(value: listValue / 1000, unit: .liter)
+            return wholeThousands
+                ? ShoppingAmount(value: listValue.rounded() / 1000, unit: .liter)
                 : ShoppingAmount(value: listValue, unit: .milliliter)
         }
     }
