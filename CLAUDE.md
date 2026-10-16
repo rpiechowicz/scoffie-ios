@@ -300,7 +300,8 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   z serwera). Porcje i „dla kogo” (`changeKind` `DETAILS_CHANGED`/`NOOP`) i „zjedzone” milczą; `nil` = stary backend →
   ogłasza. Wczytany, ale niesłuchany tydzień odświeża się po cichu (`loadWeekPlanFromBackend(observe: false)` — nie
   zabiera nasłuchu zakładce). Powiadomienie lokalne (zapas, po 60/150 s) planuje się ZAWSZE i kasuje je dopiero kapsuła
-  przyjęta na wierzchu (`scBackgroundToast(onDelivered:)`, `SCToastCenter.show` oddaje `false` przy pełnej kolejce) —
+  pokazana na wierzchu (`scBackgroundToast(onDelivered:)`; `SCToastCenter.show` oddaje `true` tylko, gdy treść stoi na
+  ekranie od razu — kolejka za innym toastem i odrzucenie = `false`, zapas zostaje) —
   gaszenie zapasu „bo aplikacja aktywna” gubiło zmianę, gdy ktoś schował aplikację w 1,2 s; zna `APPLY_WEEK` (zapis
   karty asystenta — wcześniej bez żadnego sygnału). Push z serwera wymaga klucza APNs na Railwayu.
 - **Gotuj**: JEDNA reguła stuknięcia w timer w doku (`CookDockTimer.dockTapAction`) — „do włączenia” = Start, każdy inny
