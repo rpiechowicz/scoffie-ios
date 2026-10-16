@@ -37,6 +37,22 @@ enum PlanChangeNotice {
     ) -> SCToast? {
         guard let last = events.last else { return nil }
         let actor = NotificationActorFormatter.firstName(from: last.changedByDisplayName)
+
+        // Paczka z kilku osób albo kilku tygodni: bez przypisywania operacji
+        // ostatniemu autorowi — „Kasia: wyczyszczony plan”, gdy plan
+        // wyczyścił Adam, byłoby nieprawdą (Codex, 16.10.2026).
+        let authors = events.reduce(into: [String]()) { names, event in
+            let name = NotificationActorFormatter.firstName(from: event.changedByDisplayName)
+            if !names.contains(name) { names.append(name) }
+        }
+        let authorIds = Set(events.map { $0.changedByUserId ?? "" })
+        if authorIds.count > 1 {
+            return SCToast(style: .info, title: "Zmiany w planie", message: listed(authors))
+        }
+        if Set(events.map(\.weekStart)).count > 1 {
+            return SCToast(style: .info, title: "\(actor): zmiany w planie", message: nil)
+        }
+
         let actions = Set(events.compactMap { $0.action?.uppercased() })
         let week = weekLabel(last.weekStart, now: now)
 
@@ -74,6 +90,12 @@ enum PlanChangeNotice {
             title: added ? "\(actor): nowe danie w planie" : "\(actor): zmiana w planie",
             message: message.isEmpty ? nil : message
         )
+    }
+
+    /// „Ania i Kasia”, „Ania, Kasia i Marek”.
+    private static func listed(_ names: [String]) -> String {
+        guard names.count > 1, let last = names.last else { return names.first ?? "" }
+        return names.dropLast().joined(separator: ", ") + " i " + last
     }
 
     /// Przesunięcie dnia od poniedziałku (`MON` = 0).
