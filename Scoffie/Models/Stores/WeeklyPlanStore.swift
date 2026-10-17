@@ -154,6 +154,11 @@ struct BackendWeekChangedDTO: Codable {
     let changedByDisplayName: String?
     let dayOfWeek: String?
     let mealType: String?
+    /// `CREATED` / `REPLACED` / `DETAILS_CHANGED` / `NOOP` przy `UPSERT_SLOT`
+    /// (backend od 16.10.2026; starszy — `nil`).
+    let changeKind: String?
+    /// Przepis z `UPSERT_SLOT` — po nim kapsuła podaje nazwę dania.
+    let recipeId: String?
     let changeVersion: Int64?
 }
 

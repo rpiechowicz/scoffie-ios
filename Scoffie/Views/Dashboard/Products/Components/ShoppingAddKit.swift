@@ -150,8 +150,12 @@ struct ShoppingProductPickRow: View {
 
     private var accent: Color { ProductConstants.departmentColor(for: product.department) }
 
-    private var allowedUnits: [ShoppingAmountUnit] {
-        ShoppingAmountUnit.allowed(listUnit: listItem?.listUnit, pieceOnly: product.pieceOnly)
+    private var allowedKinds: [ShoppingAmountKind] {
+        ShoppingAmountKind.allowed(
+            listUnit: listItem?.listUnit,
+            pieceOnly: product.pieceOnly,
+            department: product.department
+        )
     }
 
     var body: some View {
@@ -160,7 +164,7 @@ struct ShoppingProductPickRow: View {
             if let draft, isEditing {
                 ShoppingAmountEditor(
                     amount: draft.amount,
-                    allowed: allowedUnits,
+                    allowed: allowedKinds,
                     accent: accent,
                     lockedToList: listItem?.listUnit != nil,
                     listTotal: listItem.flatMap(listTotal(for:)),
@@ -302,12 +306,15 @@ struct ShoppingProductPickRow: View {
 // MARK: - Edytor ilości
 
 /// Ilość dopisywanego produktu: wartość w kolorze działu, szklany stepper
-/// (minus | plus — jak `SCStepper`), jednostki do wyboru i „Bez ilości”.
-/// Gdy produkt już stoi na liście, jednostka jest jego wiersza („jak na
-/// liście”), a pod wartością — co będzie razem.
+/// (minus | plus — jak `SCStepper`), rodzaj ilości i „Bez ilości”.
+/// Rodzaj (sztuki / waga / objętość) pokazuje się tylko, gdy produkt ma
+/// więcej niż jeden sensowny (`ShoppingAmountKind.allowed`) — piwo ma same
+/// sztuki i żadnego wyboru. Gramy przechodzą w kilogramy same, krok idzie po
+/// drabinie ilości, jakie się kupuje. Gdy produkt już stoi na liście, rodzaj
+/// jest jego wiersza („jak na liście”), a pod wartością — co będzie razem.
 struct ShoppingAmountEditor: View {
     let amount: ShoppingAmount?
-    let allowed: [ShoppingAmountUnit]
+    let allowed: [ShoppingAmountKind]
     var accent: Color = SCPalette.terracotta
     var lockedToList: Bool = false
     /// Ilość, którą wiersz listy już ma (w jednostce listy).
@@ -344,8 +351,8 @@ struct ShoppingAmountEditor: View {
 
             HStack(spacing: 6) {
                 if allowed.count > 1 {
-                    ForEach(allowed) { unit in
-                        unitChip(unit)
+                    ForEach(allowed) { kind in
+                        kindChip(kind)
                     }
                 }
                 if lockedToList {
@@ -383,12 +390,11 @@ struct ShoppingAmountEditor: View {
             Rectangle()
                 .fill(Color.scTileStroke(scheme))
                 .frame(width: 1, height: 18)
-            stepButton("plus", enabled: amount.map { $0.value < $0.unit.maxAmount } ?? true) {
+            stepButton("plus", enabled: amount?.canStepUp ?? !allowed.isEmpty) {
                 if let amount {
                     onChange(amount.stepped(by: 1))
-                } else {
-                    let unit = ShoppingAmountUnit.preferred(in: allowed)
-                    onChange(ShoppingAmount(value: unit.defaultAmount, unit: unit))
+                } else if let kind = allowed.first {
+                    onChange(.initial(kind))
                 }
             }
         }
@@ -411,13 +417,13 @@ struct ShoppingAmountEditor: View {
         .accessibilityLabel(systemName == "plus" ? "Więcej" : "Mniej")
     }
 
-    private func unitChip(_ unit: ShoppingAmountUnit) -> some View {
-        let isOn = amount?.unit == unit
+    private func kindChip(_ kind: ShoppingAmountKind) -> some View {
+        let isOn = amount?.kind == kind
         return Button {
             guard !isOn else { return }
-            onChange(ShoppingAmount(value: unit.defaultAmount, unit: unit))
+            onChange(.initial(kind))
         } label: {
-            Text(unit.rawValue)
+            Text(kind.chipTitle)
                 .font(.sc(size: 13, weight: .semibold))
                 .foregroundStyle(isOn ? SCPalette.terracotta : Color.scMuted(scheme))
                 .frame(minWidth: 40)

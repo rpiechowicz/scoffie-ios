@@ -42,6 +42,9 @@ struct ShoppingAisleSection: View {
     var onEditAmount: ((ShoppingItem) -> Void)? = nil
     /// Znacznik dopisanego ręcznie pod nazwą produktu.
     var addedMark: (ShoppingItem) -> ShoppingAddedMark? = { _ in nil }
+    /// Przesunięcie w lewo → „Usuń” na wierszach z dopisaną częścią (16.10.2026).
+    /// `nil` = bez gestu (historia, „Na dziś”).
+    var swipeState: SCSwipeState? = nil
 
     @Environment(\.colorScheme) private var scheme
 
@@ -247,7 +250,11 @@ struct ShoppingAisleSection: View {
                     isLast: index == ordered.count - 1,
                     isDisabled: disablesTaps,
                     isReadOnly: mode == .readOnly,
-                    onToggle: { onToggleItem(item) }
+                    onToggle: {
+                        // Stuknięcie przy odsłoniętym „Usuń” tylko je zamyka.
+                        guard swipeState?.admitsTap() ?? true else { return }
+                        onToggleItem(item)
+                    }
                 )
                 // Tylko pozycja z dopisaną częścią ma co zdjąć — to, co
                 // wniósł plan, znika wyłącznie razem z daniem z planu. Menu
@@ -255,11 +262,39 @@ struct ShoppingAisleSection: View {
                 // i tak podnosi wiersz pod przytrzymanym palcem.
                 .modifier(AddedPartMenu(
                     item: item,
-                    isEnabled: mode == .list && item.hasAddedPart && onRemoveExtra != nil,
+                    isEnabled: canRemove(item),
                     onEdit: item.manual == nil ? nil : onEditAmount.map { edit in { edit(item) } },
                     onRemove: { onRemoveExtra?(item) }
                 ))
+                // Ta sama akcja pod przesunięciem w lewo — tam jej się szuka.
+                .modifier(AddedPartSwipe(
+                    item: item,
+                    state: canRemove(item) ? swipeState : nil,
+                    onRemove: { onRemoveExtra?(item) }
+                ))
             }
+        }
+    }
+
+    /// Czy wiersz ma co zdjąć (dopisane ręcznie albo z przepisu) — i czy ten
+    /// widok w ogóle pozwala zdejmować.
+    private func canRemove(_ item: ShoppingItem) -> Bool {
+        mode == .list && item.hasAddedPart && onRemoveExtra != nil
+    }
+}
+
+/// „Usuń” pod przesunięciem w lewo — dla wiersza z dopisaną częścią.
+/// `state == nil` = wiersz bez gestu.
+private struct AddedPartSwipe: ViewModifier {
+    let item: ShoppingItem
+    let state: SCSwipeState?
+    let onRemove: () -> Void
+
+    func body(content: Content) -> some View {
+        if let state {
+            content.scSwipeToRemove(id: item.productKey, state: state, onRemove: onRemove)
+        } else {
+            content
         }
     }
 }

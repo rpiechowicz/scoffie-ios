@@ -86,7 +86,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             // zostać w Centrum powiadomień na później.
             completionHandler([.list])
         case .weeklyPlan:
-            completionHandler([.banner, .sound])
+            // Push — baner i dźwięk. Zapas LOKALNY (`PlanChangeNotificationService`)
+            // przy aplikacji na wierzchu tylko do Centrum powiadomień: tę samą
+            // zmianę powiedziała już kapsuła (`PlanChangeNotice`). Bez kasowania
+            // zapasu — każda próba „skasuj, gdy kapsuła się pokazała” gubiła
+            // zmianę w innym przypadku brzegowym (Codex, 16.10.2026).
+            if notification.request.trigger is UNPushNotificationTrigger {
+                completionHandler([.banner, .sound])
+            } else {
+                completionHandler([.list])
+            }
         case .shoppingList:
             completionHandler([.list])
         case .assistantTurn:
@@ -698,6 +707,13 @@ struct ScoffieApp: App {
             .scBackgroundToast(
                 sessionStore.subscriptionStore?.backgroundNotice,
                 onShown: { sessionStore.subscriptionStore?.clearBackgroundNotice() }
+            )
+            // Domownik zmienił plan — kapsuła od razu, z każdej zakładki.
+            // Zapasowe powiadomienie lokalne zostaje zawsze (na wierzchu idzie
+            // tylko do Centrum powiadomień — `willPresent`).
+            .scBackgroundToast(
+                sessionStore.mealCalendarStore?.remoteChangeNotice,
+                onShown: { sessionStore.mealCalendarStore?.clearRemoteChangeNotice() }
             )
             .scConnectivityToast()
             .scSessionCurtain(sessionStore.sessionCurtain, colorScheme: appTheme.colorScheme)

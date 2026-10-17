@@ -31,6 +31,26 @@ class MealCalendarStore {
     /// odpowiedź nie może nadpisać nowszej — wygrywa tylko ostatni odczyt.
     private var weekLoadGeneration: [String: Int] = [:]
     private var pendingWeekReloadTask: Task<Void, Never>?
+    /// Ciche odświeżenia tygodni, których nikt nie słucha (po jednym na tydzień).
+    private var quietWeekReloadTasks: [String: Task<Void, Never>] = [:]
+
+    /// Zmiana planu zrobiona przez DOMOWNIKA, gdy aplikacja jest na wierzchu —
+    /// kapsuła u góry ekranu (`scBackgroundToast` w korzeniu), zaraz po
+    /// zdarzeniu, bez względu na zgodę na powiadomienia i na to, który tydzień
+    /// jest otwarty. Wcześniej jedynym sygnałem było ciche powiadomienie
+    /// lokalne po minucie — i to tylko dla oglądanego tygodnia — a push nie
+    /// wychodził wcale (16.10.2026: „user2 nie dostał powiadomienia w planie”).
+    private(set) var remoteChangeNotice: SCToast?
+    /// Zdarzenia jednej serii (asystent albo domownik klikający kratki) —
+    /// zbierane chwilę, żeby seria była jedną kapsułą, a nie kolejką.
+    private var pendingRemoteChanges: [BackendWeekChangedDTO] = []
+    private var remoteNoticeTask: Task<Void, Never>?
+
+    /// Bez tego drugie identyczne powiadomienie nie zmieniłoby wartości
+    /// (`SCToast` porównuje się po treści) i przepadłoby po cichu.
+    func clearRemoteChangeNotice() {
+        remoteChangeNotice = nil
+    }
     /// Błędy łączności NIE trafiają tu wcale — `inlineMessage` oddaje na nie
     /// `nil` i melduje je w `ConnectivityMonitor`, który mówi o braku sieci
     /// raz, u góry ekranu, i dopiero gdy brak się utrzyma.
@@ -125,11 +145,16 @@ class MealCalendarStore {
         save()
     }
 
+    /// `observe: false` = odczyt w tle tygodnia, który ktoś z domu zmienił, gdy
+    /// nikt go nie słuchał (np. jutro w niedzielę na Pulpicie) — bez
+    /// zabierania nasłuchu tygodniowi, na który patrzy zakładka.
     @MainActor
-    func loadWeekPlanFromBackend(weekStart: String, dates: [Date]) async {
+    func loadWeekPlanFromBackend(weekStart: String, dates: [Date], observe: Bool = true) async {
         guard let weeklyPlanRepository else { return }
-        observedWeekStart = weekStart
-        observedWeekDates = dates
+        if observe {
+            observedWeekStart = weekStart
+            observedWeekDates = dates
+        }
         let generation = (weekLoadGeneration[weekStart] ?? 0) + 1
         weekLoadGeneration[weekStart] = generation
         do {
@@ -628,15 +653,16 @@ class MealCalendarStore {
     @MainActor
     private func handleRemoteWeekPlanChanged(event: BackendWeekChangedDTO) async {
         let changedByOtherUser = event.changedByUserId != nil && event.changedByUserId != currentUserId
-        guard event.weekStart == observedWeekStart else { return }
-        guard !observedWeekDates.isEmpty else { return }
         if let changeVersion = event.changeVersion {
             let previous = lastWeekChangeVersionByWeek[event.weekStart] ?? 0
             guard changeVersion > previous else { return }
             lastWeekChangeVersionByWeek[event.weekStart] = changeVersion
         }
-        scheduleWeekReload(weekStart: event.weekStart, dates: observedWeekDates)
-        if changedByOtherUser {
+        // Powiadomienie o zmianie domownika NIE zależy od oglądanego tygodnia.
+        // Dawniej stało za strażnikiem tygodnia: obiad dopisany na przyszły
+        // tydzień, gdy drugi telefon patrzył na ten, nie dawał żadnego znaku.
+        if changedByOtherUser, PlanChangeNotice.isWorthTelling(event) {
+            collectRemoteChange(event)
             PlanChangeNotificationService.notifyRemotePlanChange(
                 action: event.action,
                 weekStart: event.weekStart,
@@ -646,6 +672,73 @@ class MealCalendarStore {
                 mealType: event.mealType
             )
         }
+        guard event.weekStart == observedWeekStart else {
+            // Tydzień wczytany wcześniej, ale teraz niesłuchany — bez tego
+            // pokazywałby stary plan do następnego dnia (`loadDayWindow`).
+            if weekLoadGeneration[event.weekStart] != nil {
+                scheduleQuietWeekReload(weekStart: event.weekStart)
+            }
+            return
+        }
+        guard !observedWeekDates.isEmpty else { return }
+        scheduleWeekReload(weekStart: event.weekStart, dates: observedWeekDates)
+    }
+
+    private func scheduleQuietWeekReload(weekStart: String) {
+        guard let monday = PlanWeek.date(fromKey: weekStart) else { return }
+        quietWeekReloadTasks[weekStart]?.cancel()
+        quietWeekReloadTasks[weekStart] = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 250_000_000)
+            } catch {
+                return
+            }
+            guard let self else { return }
+            self.quietWeekReloadTasks[weekStart] = nil
+            // Zakładka zdążyła przejąć ten tydzień — odświeży go sama.
+            guard self.observedWeekStart != weekStart else { return }
+            await self.loadWeekPlanFromBackend(
+                weekStart: weekStart,
+                dates: PlanWeek.dates(from: monday),
+                observe: false
+            )
+        }
+    }
+
+    /// Zbiera zdarzenia jednej serii i po krótkiej ciszy wystawia JEDNĄ
+    /// kapsułę. Nazwa dania bierze się z planu po odświeżeniu (serwer podaje
+    /// `recipeId`), więc kapsuła czeka dłużej niż odświeżenie tygodnia.
+    private func collectRemoteChange(_ event: BackendWeekChangedDTO) {
+        pendingRemoteChanges.append(event)
+        remoteNoticeTask?.cancel()
+        remoteNoticeTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 1_200_000_000)
+            } catch {
+                return
+            }
+            guard let self else { return }
+            let events = self.pendingRemoteChanges
+            self.pendingRemoteChanges = []
+            self.remoteNoticeTask = nil
+            self.remoteChangeNotice = PlanChangeNotice.toast(
+                for: events,
+                recipeTitle: { self.recipeTitle(for: $0) }
+            )
+        }
+    }
+
+    /// Tytuł dania z planu (po odświeżeniu) — dzień i pora z pozycji.
+    private func recipeTitle(for event: BackendWeekChangedDTO) -> String? {
+        guard let recipeId = event.recipeId.flatMap({ UUID(uuidString: $0) }),
+              let dayOfWeek = event.dayOfWeek,
+              let mealType = event.mealType,
+              let slot = MealSlot(backendMealType: mealType),
+              let monday = PlanWeek.date(fromKey: event.weekStart),
+              let offset = PlanChangeNotice.dayOffset(dayOfWeek),
+              let date = PlanWeek.calendar.date(byAdding: .day, value: offset, to: monday)
+        else { return nil }
+        return meals(for: date, slot: slot).first { $0.recipe.id == recipeId }?.recipe.name
     }
 
     private func scheduleWeekReload(weekStart: String, dates: [Date]) {

@@ -276,12 +276,35 @@ runda 6.10.2026 zmieniła to w całej aplikacji. Gdy akapit niżej mówi coś in
   błędu nie dowodzi, że nic nie zapisano — odmowa bywa odpowiedzią na automatyczne ponowienie). Katalog
   (`weeklyPlans:shoppingProducts`, ~530 pozycji) leży w pamięci i w pliku `shopping_products_v1.json` (nie dane osoby,
   nie kasowany przy wylogowaniu), szukanie lokalne (`ShoppingProductSearch`: `IngredientSearch.fold`, aliasy, rdzeń
-  bez ostatniej litery). Ilość NIEOBOWIĄZKOWA; produkt, który już stoi na liście, dostaje tylko jednostki swojego
+  bez ostatniej litery). Ilość NIEOBOWIĄZKOWA; produkt, który już stoi na liście, dostaje tylko rodzaj ilości swojego
   wiersza („jak na liście”) — żadnego drugiego wiersza „Mleko (szt)”. Wiersz bez ilości (`unit == ""`) nie ma pigułki.
-  Dopisane ma pod nazwą `ShoppingAddedMark` (kółko domownika + „dopisane” / „+1 l”); przytrzymanie: „Zmień ilość”
-  (`ShoppingAmountSheet`, małe okno 440 pt) i „Usuń dopisane” / „Usuń z listy”. Ponowne dopisanie BEZ ilości po
+  Rodzaje ilości (16.10.2026, Rafał: „nie ma sensu kupować 222 ml piwa, tylko sztuki”) = `ShoppingAmountKind`
+  (sztuki / waga / objętość) z działu sklepu: napoje, alkohol, chemia, pieczywo, cukiernia, przekąski, konserwy,
+  mrożonki, przyprawy, oleje — TYLKO sztuki (bez przełącznika); mięso i ryby — waga, potem sztuki; warzywa, owoce,
+  nabiał, zboża, Inne — sztuki albo waga; produkt z masą sztuki — sztuki; objętość tylko dla wiersza z planu w ml.
+  Gramy ↔ kilogramy (ml ↔ l) to JEDEN rodzaj, który sam przechodzi w większą jednostkę od tysiąca; stepper chodzi
+  po DRABINIE ilości ze sklepu (`ShoppingAmountKind.ladder`: 50 g…250 g co 50, do 1 kg co 100, do 5 kg co 0,5 kg;
+  0,33 l i 0,75 l są szczeblami), nie stałym krokiem. Pięć chipów „szt g kg ml l” USUNIĘTE — nie wracać.
+  Dopisane ma pod nazwą `ShoppingAddedMark` (kółko domownika + „dopisane” / „+1 l”). Zdjęcie dopisanego: PRZESUNIĘCIE
+  W LEWO → czerwone „Usuń” (16.10.2026, „chcę, aby można było usunąć” — samo przytrzymanie nikt nie znajdował;
+  `Components/SCSwipeToRemove.swift`, własne, bo `swipeActions` działa tylko w `List`; jeden otwarty wiersz na ekran
+  `SCSwipeState`, stuknięcie i przewinięcie go zamykają, NIE odhaczają, pełne przesunięcie usuwa od razu; wiersz znika
+  po potwierdzeniu serwera — natychmiastowe chowanie z przywracaniem przy błędzie WYCOFANE po dziewięciu rundach
+  Codexa, gubiło wiersz albo ptaszek w kopii na dysku; nie wracać) i dalej przytrzymanie: „Zmień
+  ilość” (`ShoppingAmountSheet`, małe okno 440 pt) i „Usuń dopisane” / „Usuń z listy”. Ponowne dopisanie BEZ ilości po
   zamknięciu listy wraca jako pozycja otwartej rundy (`rerequestedKeys` w `ShoppingListStore`) — tylko dopóki jest
   nieodhaczona: archiwum ma unikalny podpis treści, więc runda o tej samej treści nie dostałaby osobnego wpisu historii.
+- **Zmiana planu u domownika** (16.10.2026, „user2 nie widział przepisu i nie dostał powiadomienia w planie”):
+  `MealCalendarStore.remoteChangeNotice` = kapsuła u góry (`scBackgroundToast` w `ScoffieApp`) ~1,2 s po serii zmian
+  innej osoby, z KAŻDEGO tygodnia i bez zgody na powiadomienia — „Ania: nowe danie w planie · Kurczak curry · środa,
+  obiad” (`PlanChangeNotice`; treść bez rodzaju gramatycznego, nazwa dania z planu po odświeżeniu, `recipeId`
+  z serwera). Porcje i „dla kogo” (`changeKind` `DETAILS_CHANGED`/`NOOP`) i „zjedzone” milczą; `nil` = stary backend →
+  ogłasza. Wczytany, ale niesłuchany tydzień odświeża się po cichu (`loadWeekPlanFromBackend(observe: false)` — nie
+  zabiera nasłuchu zakładce). Powiadomienie lokalne (zapas, po 60/150 s) planuje się ZAWSZE i NIE jest kasowane przez
+  kapsułę; na wierzchu `willPresent` kładzie lokalne powiadomienie planu tylko do Centrum powiadomień (`.list`), push
+  dalej baner i dźwięk. Gaszenie zapasu przy kapsule gubiło zmianę w kolejnych przypadkach (aplikacja schowana w 1,2 s,
+  pełna kolejka toastów, kapsuła innej zmiany) — nie wracać. Zapas zna `APPLY_WEEK` (zapis karty asystenta — wcześniej
+  bez żadnego sygnału). Push z serwera wymaga klucza APNs na Railwayu.
 - **Gotuj**: JEDNA reguła stuknięcia w timer w doku (`CookDockTimer.dockTapAction`) — „do włączenia” = Start, każdy inny
   stan = arkusz Timery; pauza, wznowienie, „+1 min” (timer po czasie, wyciszony), „Pomiń” i „Gotowe” WYŁĄCZNIE
   w arkuszu. Kapsuła = jeden `Button`, bez menu przytrzymania (i bez `afterMenu`); glif w pierścieniu = stan, ▶ tylko

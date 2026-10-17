@@ -285,7 +285,6 @@ final class ShoppingListStore {
         for task in pendingToggleTasks.values { task.cancel() }
         pendingToggleTasks.removeAll()
         pendingToggleOriginalState.removeAll()
-        let originalItems = items
         isBatchUpdating = true
         for index in items.indices {
             items[index].isChecked = true
@@ -296,8 +295,7 @@ final class ShoppingListStore {
             guard let self else { return }
             await self.syncMarkAllChecked(
                 weekStart: weekStart,
-                uncheckedItems: uncheckedItems,
-                originalItems: originalItems
+                uncheckedItems: uncheckedItems
             )
         }
     }
@@ -378,6 +376,11 @@ final class ShoppingListStore {
     @discardableResult
     func removeExtra(_ item: ShoppingItem) async -> Bool {
         guard let weekStart, item.hasAddedPart else { return false }
+        // Wiersz znika po potwierdzeniu serwera (przeładowanie), nie od razu.
+        // Natychmiastowe chowanie (16.10.2026) wymagało przywracania przy
+        // błędzie i w dziewięciu rundach Codexa co chwila gubiło wiersz
+        // albo ptaszek w kopii na dysku (odhaczanie w trakcie, inny tydzień,
+        // restart) — pewność listy jest ważniejsza niż pół sekundy.
         do {
             try await repository.removeExtra(weekStart: weekStart, productKey: item.productKey)
             invalidatedWeeks.insert(weekStart)
@@ -639,8 +642,7 @@ final class ShoppingListStore {
 
     private func syncMarkAllChecked(
         weekStart: String,
-        uncheckedItems: [ShoppingItem],
-        originalItems: [ShoppingItem]
+        uncheckedItems: [ShoppingItem]
     ) async {
         do {
             for item in uncheckedItems {
@@ -664,8 +666,36 @@ final class ShoppingListStore {
         } catch {
             pendingArchiveWeekLabel = nil
             isBatchUpdating = false
-            items = originalItems
-            cacheCurrentState(for: weekStart)
+            // Cofamy SAME ptaszki tej operacji, nie całą tablicę ze zdjęcia
+            // sprzed niej: wiersz zdjęty przesunięciem „Usuń” i przywrócony
+            // po nieudanym usunięciu w trakcie odhaczania wracał inaczej do
+            // starej tablicy BEZ niego — także w kopii na dysku (Codex,
+            // 16.10.2026). Inny tydzień na ekranie = tamten tylko do odczytu.
+            let reverted = Set(uncheckedItems.map(\.productKey))
+            if self.weekStart == weekStart {
+                for index in items.indices where reverted.contains(items[index].productKey) {
+                    items[index].isChecked = false
+                }
+                cacheCurrentState(for: weekStart)
+            } else {
+                // Ekran stoi na innym tygodniu — ptaszki schodzą z kopii tamtego
+                // na dysku (`markAllChecked` już ją zapisał), a tydzień idzie do
+                // odczytu z serwera. Bez tego powrót offline albo restart
+                // pokazywał niekupione jako kupione (Codex, 16.10.2026).
+                if let cached = cachedStateByWeek[weekStart] {
+                    var cachedItems = cached.items
+                    for index in cachedItems.indices where reverted.contains(cachedItems[index].productKey) {
+                        cachedItems[index].isChecked = false
+                    }
+                    cachedStateByWeek[weekStart] = ShoppingListState(
+                        items: cachedItems,
+                        archives: cached.archives,
+                        recentProducts: cached.recentProducts
+                    )
+                    persistCache()
+                }
+                invalidatedWeeks.insert(weekStart)
+            }
             errorMessage = UserFacingErrorMapper.inlineMessage(from: error)
         }
     }
